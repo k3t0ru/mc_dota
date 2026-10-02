@@ -1,0 +1,14 @@
+{
+	"schemaVersion": 1,
+	"id": "mcdota",
+	"version": "${version}",
+	"name": "Minecraft x Dota",
+	"description": "Plays Minecraft on top of a running Dota 2 custom game: transparent window, shared camera.",
+	"authors": [ "Roman", "Claude (AI)" ],
+	"license": "CC0-1.0",
+	"icon": "assets/mcdota/icon.png",
+	"environment": "client",
+	"entrypoints": { "client": [ "dev.mcdota.McDotaClient" ] },
+	"mixins": [ { "config": "mcdota.client.mixins.json", "environment": "client" } ],
+	"depends": { "fabricloader": ">=0.19.5", "minecraft": "~1.21.11", "java": ">=21", "fabric-api": "*" }
+}

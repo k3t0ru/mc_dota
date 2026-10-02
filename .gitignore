@@ -4,3 +4,6 @@ maps/hero_demo_main.vpk
 # compiled from content/ by tools/build_assets.sh
 *_c
 mc_server/
+mcmod/.gradle/
+mcmod/build/
+mcmod/run/

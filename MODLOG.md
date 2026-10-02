@@ -67,3 +67,19 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - New Panorama files are visible only after RESTARTING the dota2.exe process (models — after a map restart).
 - Fast start: in cheat mode ForceHero(Steve) + PreGame 0, SetCustomGameSetupAutoLaunchDelay(0): map → hero in 2 s.
   Launch: dota2.exe -novid -console -condebug -windowed -noborder -w 1600 -h 900 +sv_cheats 1 +dota_launch_custom_game mc_dungeons hero_demo_main
+
+## 2026-10-02: Fabric mod mcmod/ (Minecraft overlay over Dota) — WORKS
+- Template fabric-example-mod branch 1.21.11; Loom 1.18 needs Java 25 → plugin id 'fabric-loom' 1.14.10 (Java 21).
+  Build: `cd mcmod && ./gradlew --no-daemon build`, run: `runClient` (straight into run/saves/mcdota = a copy of the server world).
+- Composition: GLFW_TRANSPARENT_FRAMEBUFFER and a colour-keyed GL window STAY OPAQUE on Intel UHD (GL is presented past DWM).
+  Working approach: Minecraft clears the frame to magenta (no sky pass), glReadPixels before blitToScreen →
+  a separate WS_EX_LAYERED|TRANSPARENT|TOPMOST|NOACTIVATE window (UpdateLayeredWindow, per-pixel alpha) on top of
+  the "Dota 2" window (FindWindow + GetWindowRect every second), nearest upscale 1920x1080 → Dota size.
+  The MC window itself is borderless at x=-20000: it keeps focus and input.
+- Gotchas: @ModifyArg on clearColorAndDepthTextures with method="*" also caught the entity-outline clear (argb 0) → the whole
+  frame went magenta; filter argb!=0. Vignette darkens the key to (246,0,246) → tolerance. glfwSetWindowSize inside
+  the Window constructor → NPE (resize before Minecraft.window exists) → do it in CLIENT_STARTED.
+  First launch shows the accessibility screen: options.txt onboardAccessibility:false. pauseOnLostFocus:false.
+- Screen 3840x2160, Dota is stretched to the whole screen. With the monitor off WGC/ddagrab give no frames — F2 in MC works.
+  Full-desktop capture: ffmpeg -f lavfi -i "ddagrab=0:framerate=5,hwdownload,format=bgra" -frames:v 1 out.png
+- Next: camera sync MC→Dota (Panorama polls the bridge), empty MC world (void + barriers along Dota's terrain), Dota camera = MC eye.
