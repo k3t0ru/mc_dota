@@ -126,3 +126,14 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - "Floats right after loading" = Steve spawned next to creeps/towers, Dota damage → knockback + hurt tilt in MC.
   Fix: tp to 0,0 on join, knockback_resistance 1, damageTiltStrength 0, bobView off, heal on join.
 - Perf: overlay 54-57 fps, MC 56-59 fps; the bottleneck is Dota on Intel UHD (~37 fps).
+
+## 2026-10-02 18:57: cameras matched (measured, not by eye)
+- Panorama probe: GameUI.GetCameraPosition/GetCameraLookAtPosition + Game.WorldToScreenX/Y.
+  * "floating": SetCameraTargetPosition(pos, lerp) — lerp is a transition time; called every frame → the camera crept along
+    with ~1 s smoothing (at lagged the target by 60-70 units). lerp 0.001 → at == the target exactly.
+  * Dota's focal at 1600x900 = 692 px = 66° vertical → MC fov 66 (was 74). Yaw/pitch/dist/eye height matched exactly.
+- Dota cube model was half underground: OBJ is Y-up, ModelDoc rotated it. gen_blocks writes v x z -y.
+- Calibration (tools/calib.sh, CALIBRATE=true in Lua): MC blocks and Dota cubes match to the pixel at rest.
+- Overlay delay in motion: sweep 125/175/225/275 → 150 ms. Live knob: mcmod/run/mcdota_delay.txt.
+- Invisible walls removed (trees/GridNav made walls almost everywhere), autojump off (user's request), creep loot kept.
+- Verified: 15 stand-ins (creeps, Roshan); /damage 10 on Roshan's stand-in → −57 HP in Dota.

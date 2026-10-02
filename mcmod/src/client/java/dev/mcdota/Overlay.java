@@ -30,7 +30,8 @@ public final class Overlay implements Runnable {
 	public volatile int cx, cy; // centre of Dota's window on screen (mouse anchor)
 	// Dota plays poses back PLAYBACK_MS (fpcam.js, 150) after Minecraft had them, and needs ~1 frame to draw; Minecraft frames are shown
 	// DELAY ms late from a small ring buffer: both layers then move together instead of blocks sliding over the map
-	private static final int DELAY = Integer.getInteger("mcdota.delay", 125), RING = 16;
+	private static final int RING = 24;
+	private static volatile int delay = Integer.getInteger("mcdota.delay", 150); // live knob: run/mcdota_delay.txt
 	private final int[][] ring = new int[RING][];
 	private final long[] stamp = new long[RING];
 	private int head, lw, lh;
@@ -102,13 +103,17 @@ public final class Overlay implements Runnable {
 			}
 			long now = System.currentTimeMillis();
 			if (now - lastLog >= 5000) {
-				org.slf4j.LoggerFactory.getLogger("mcdota").info("overlay {} fps, minecraft {} fps, size {}x{} -> {}x{}",
-					frames * 1000 / (now - lastLog), net.minecraft.client.Minecraft.getInstance().getFps(), lw, lh, W, H);
+				org.slf4j.LoggerFactory.getLogger("mcdota").info("overlay {} fps, minecraft {} fps, size {}x{} -> {}x{}, delay {} ms",
+					frames * 1000 / (now - lastLog), net.minecraft.client.Minecraft.getInstance().getFps(), lw, lh, W, H, delay);
 				frames = 0;
 				lastLog = now;
 			}
 			if (now - lastFind > 1000) { // follow Dota's window
 				lastFind = now;
+				try {
+					delay = Integer.parseInt(java.nio.file.Files.readString(java.nio.file.Path.of("mcdota_delay.txt")).trim());
+				} catch (Exception ignored) { // no file: keep the default
+				}
 				dota = u.FindWindow(null, "Dota 2");
 				RECT r = new RECT();
 				if (dota != null && u.GetWindowRect(dota, r)) {
@@ -136,7 +141,7 @@ public final class Overlay implements Runnable {
 			synchronized (this) {
 				int pick = -1; // newest frame that is at least DELAY old
 				for (int i = 0; i < RING; i++)
-					if (stamp[i] != 0 && stamp[i] <= now - DELAY && (pick < 0 || stamp[i] > stamp[pick])) pick = i;
+					if (stamp[i] != 0 && stamp[i] <= now - delay && (pick < 0 || stamp[i] > stamp[pick])) pick = i;
 				if (pick >= 0 && stamp[pick] != shown && W > 0 && ring[pick].length == lw * lh) {
 					have = true;
 					shown = stamp[pick];

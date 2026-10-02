@@ -74,7 +74,7 @@ BLOCKS = {
 h = SIZE / 2
 V = [(x, y, z) for x in (-h, h) for y in (-h, h) for z in (0, SIZE)]
 FACES = [(0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)]
-obj = [f"v {x} {y} {z}" for x, y, z in V] + ["vt 0 0", "vt 1 0", "vt 1 1", "vt 0 1", "usemtl block"]
+obj = [f"v {x} {z} {-y}" for x, y, z in V] + ["vt 0 0", "vt 1 0", "vt 1 1", "vt 0 1", "usemtl block"]  # OBJ is Y-up; ModelDoc makes it Z-up
 obj += ["f " + " ".join(f"{i + 1}/{t + 1}" for t, i in enumerate(face)) for face in FACES]
 with open(os.path.join(MDL, "block.obj"), "w") as f:
     f.write("\n".join(obj) + "\n")

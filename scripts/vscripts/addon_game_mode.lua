@@ -22,6 +22,7 @@ PICKAXES = {
 
 STEVE = "npc_dota_hero_kunkka" -- ponytail: Steve overrides Kunkka's slot; own hero needs a model from Workshop Tools
 GRID = 96 -- one Dota block cell = one Minecraft block (so Steve is hero-sized), cells are aligned to MC.anchor
+CALIBRATE = false -- true: show Dota's own block cubes so they can be lined up with Minecraft's (camera calibration)
 TERRAIN_R = 40 -- cells around the anchor whose height/walkability is mirrored into Minecraft
 MC_FLOOR = -60 -- Minecraft y of the block layer standing on the floor
 
@@ -109,6 +110,8 @@ function MC:SetupHero( hero )
 	if not MC.world_done then
 		MC.world_done = true
 		MC.anchor = hero:GetAbsOrigin() -- Minecraft (0,0) maps here
+		-- Dota's own camera controls would fight Minecraft's (launch args alone get overridden by the user's config)
+		SendToConsole( "dota_camera_edgemove 0; dota_camera_speed 0; dota_camera_lock 0; dota_camera_fov_min 90; dota_camera_fov_max 90" )
 		MC:SendTerrain()
 		-- ponytail: thinks on the game mode entity never fired here, so timers live on their own entity
 		local timer = SpawnEntityFromTableSynchronous( "info_target", { targetname = "mc_timer" } )
@@ -138,14 +141,13 @@ MC.heights = {} -- "bx,bz" -> Minecraft y of the ground surface there
 
 function MC:HeightAt( z ) return MC_FLOOR + math.floor( ( z - MC.anchor.z ) / GRID + 0.5 ) end
 
--- Minecraft's invisible floor follows Dota's terrain; where Dota can't be walked (trees, cliffs) it gets a wall
+-- Minecraft's invisible floor follows Dota's terrain (1-block steps; autojump takes them)
 function MC:SendTerrain()
 	for bx = -TERRAIN_R, TERRAIN_R do
 		for bz = -TERRAIN_R, TERRAIN_R do
 			local pos = MC:CellPos( bx, bz )
 			local y = MC:HeightAt( pos.z )
 			MC.heights[ bx .. "," .. bz ] = y
-			if not GridNav:IsTraversable( pos ) or GridNav:IsNearbyTree( pos, 40, true ) then y = y + 3 end
 			if y ~= MC_FLOOR then MCBridge:Send( string.format( "h %d %d %d", bx, bz, y ) ) end
 		end
 	end
@@ -162,7 +164,7 @@ function MC:SpawnBlock( name, pos, fromMC )
 	MC.cells[ key ] = b
 	b:AddNewModifier( b, nil, "modifier_mc_block", {} )
 	b:SetHullRadius( GRID * 0.375 ) -- neighbours' hulls overlap: Dota heroes can't squeeze between blocks
-	b:AddNoDraw() -- ponytail: Minecraft draws the block; Dota keeps only the collision (Dota-only players would see nothing)
+	if not CALIBRATE then b:AddNoDraw() end -- ponytail: Minecraft draws the block; Dota keeps only the collision (Dota-only players would see nothing)
 	if not fromMC then MCBridge:Send( string.format( "block %d %d %d %s", bx, MC_FLOOR, bz, def.mc ) ) end
 	return b
 end
@@ -240,4 +242,5 @@ function MC:OnKilled( e )
 end
 
 -- each Dota script file has its own environment; share these with abilities and mc_bridge.lua
+_G.CALIBRATE = CALIBRATE
 _G.MC, _G.BLOCKS, _G.PICKAXES, _G.GRID, _G.STEVE, _G.FROM_MC, _G.MC_FLOOR = MC, BLOCKS, PICKAXES, GRID, STEVE, FROM_MC, MC_FLOOR
