@@ -30,3 +30,18 @@ Log: `game/dota/console.log`, look for `[mc] loaded` and `[mc] world blocks:`.
 - [ ] First launch: check KV loading, block spawning, mining, crafting
 - [ ] Workshop Tools: own map (biomes, dungeon), Panorama (crafting UI, hotbar), Steve model (blocky)
 - [ ] Furnace/smelting, creeper, enchanting, emeralds, hub/camp, saves (between sessions)
+
+## 2026-10-02: test run 1 (results)
+- Works: Lua loads, Steve (Kunkka override) spawns, 140 blocks, mining a log → Log item, chat -give (sv_cheats 1 before launch).
+- Bug: npc_spawned fires while the hero is at (0,0,0) → table/world were at the map centre. Fixed (SetContextThink 1 frame); NOT re-verified.
+- Ward relationship does NOT stop hero auto-attack on blocks → blocks moved to DOTA_TEAM_NEUTRALS (not verified).
+- hero_demo_main = a full Dota map (lanes/towers). Needs our own map.
+- Workshop Tools installed (content/ appeared).
+
+## Idea from the user: asymmetric PvP
+Steve team in real Minecraft (first person) vs Dota heroes (top-down), seeing each other.
+Planned route (passthrough via official APIs, no client modding):
+Dota custom game (Lua, CreateHTTPRequestScriptVM) ↔ local bridge ↔ Paper plugin on a Minecraft server.
+Steve = proxy unit in Dota; a Dota hero = an entity in MC; damage/blocks are synced as events.
+Caveat: Minecraft is installed via TLauncher; the Minecraft side needs a licensed Java account.
+The "Minecraft in Elden Ring" method was never published (only chasm's description of passthrough).
