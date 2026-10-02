@@ -198,8 +198,3 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Look-up limit returned (MIN_PITCH 3): above the horizon Dota has nothing to show anyway.
 - Camera height jerking on high/low ground: offset = wanted - (Dota's ground = lookAt.z - last offset), with no slow
   feedback loop. Verified: want z == actual z while walking.
-
-## 2026-10-02 22:55: camera prediction (Panorama)
-- Pose stream ~100 ms late. fpcam.js extrapolates from the two newest poses to now + LEAD_MS (33, ~1 Dota frame), cap 200 ms.
-- Measured (yaw error at display time, continuous sine turning): without prediction 20-24°, with 3.6-5.8° (~5×).
-  The log prints "[mc] yaw error on screen" every 60 samples. Sudden mouse jerks still lag (no history to predict from).
