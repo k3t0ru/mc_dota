@@ -3,3 +3,4 @@ maps/hero_demo_main.vpk
 
 # compiled from content/ by tools/build_assets.sh
 *_c
+mc_server/

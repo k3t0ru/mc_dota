@@ -201,4 +201,25 @@
 		"VisionNighttimeRange"	"800"
 		"Creature"	{ "HPGain" "70" "DamageGain" "6" "XPGain" "15" }
 	}
+	"npc_mc_steve_proxy"
+	{
+		"BaseClass"	"npc_dota_creature"
+		"Model"	"models/heroes/kunkka/kunkka.vmdl"
+		"ModelScale"	"0.84"
+		"Level"	"1"
+		"StatusHealth"	"1000"
+		"StatusHealthRegen"	"0"
+		"ArmorPhysical"	"0"
+		"AttackCapabilities"	"DOTA_UNIT_CAP_NO_ATTACK"
+		"MovementCapabilities"	"DOTA_UNIT_CAP_MOVE_GROUND"
+		"MovementSpeed"	"550"
+		"MovementTurnRate"	"10"
+		"BoundsHullName"	"DOTA_HULL_SIZE_HERO"
+		"VisionDaytimeRange"	"1200"
+		"VisionNighttimeRange"	"1200"
+		"BountyXP"	"200"
+		"BountyGoldMin"	"100"
+		"BountyGoldMax"	"100"
+		"ConsideredHero"	"1"
+	}
 }

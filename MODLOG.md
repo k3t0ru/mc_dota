@@ -45,3 +45,15 @@ Dota custom game (Lua, CreateHTTPRequestScriptVM) ↔ local bridge ↔ Paper plu
 Steve = proxy unit in Dota; a Dota hero = an entity in MC; damage/blocks are synced as events.
 Caveat: Minecraft is installed via TLauncher; the Minecraft side needs a licensed Java account.
 The "Minecraft in Elden Ring" method was never published (only chasm's description of passthrough).
+
+## 2026-10-02: MC ⇄ Dota bridge (works)
+- Vanilla server 1.21.11 (Java 21; 26.3 needs Java 25) in `mc_server/` (gitignored), online-mode, RCON 127.0.0.1:25575.
+  Start: `cd mc_server && java -Xmx2G -jar server.jar nogui`. The user accepted the EULA.
+- Bridge: `python bridge/bridge.py` (HTTP 127.0.0.1:27100/sync, text lines). `MC_FAKE_STEVE=1`: a fake Steve walking in a circle.
+- Verified: FakeSteve → unit in Dota moves; `-createhero axe` → a husk named "axe" in MC follows him;
+  `damage` of 20 in MC → −200 HP for Axe in Dota.
+- Lessons: (1) every Dota script file has its own env → share globals via `_G` (otherwise MC=nil in other files);
+  (2) no `debug` in the sandbox → xpcall(debug.traceback) gives "error in error handling", use pcall;
+  (3) thinks: timers live on an info_target, wrapped in safe(); (4) peaceful forbids summoning monsters → difficulty easy.
+- Not verified: a real MC client (needs a licensed account), Dota damage → `damage <player>` in MC.
+- Next: block sync (Dota 128 = 2×2 MC blocks), hero/Steve models (resource pack + blocky Steve), our own arena map.

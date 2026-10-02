@@ -22,6 +22,7 @@ STEVE = "npc_dota_hero_kunkka" -- ponytail: Steve overrides Kunkka's slot; own h
 GRID = 128
 NIGHT_MOBS = { "npc_mc_zombie", "npc_mc_zombie", "npc_mc_skeleton" }
 
+require( "mc_bridge" )
 LinkLuaModifier( "modifier_mc_block", "modifier_mc_block", LUA_MODIFIER_MOTION_NONE )
 
 function Precache( context )
@@ -53,7 +54,6 @@ function MC:Init()
 	local mode = GameRules:GetGameModeEntity()
 	mode:SetDamageFilter( Dynamic_Wrap( MC, "DamageFilter" ), MC )
 	mode:SetExecuteOrderFilter( Dynamic_Wrap( MC, "OrderFilter" ), MC )
-	mode:SetThink( "NightThink", MC, "mc_night", 5 )
 
 	ListenToGameEvent( "npc_spawned", Dynamic_Wrap( MC, "OnSpawned" ), MC )
 	ListenToGameEvent( "entity_killed", Dynamic_Wrap( MC, "OnKilled" ), MC )
@@ -111,6 +111,19 @@ function MC:SetupHero( hero )
 
 	if not MC.world_done then
 		MC.world_done = true
+		MC.anchor = hero:GetAbsOrigin() -- Minecraft (0,0) maps here
+		-- ponytail: thinks on the game mode entity never fired here, so timers live on their own entity
+		local timer = SpawnEntityFromTableSynchronous( "info_target", { targetname = "mc_timer" } )
+		local function safe( f ) -- log the real error instead of the engine's "error in error handling"
+			return function()
+				local ok, r = pcall( f )
+				if ok then return r end
+				print( "[mc] ERROR " .. tostring( r ) )
+				return 1
+			end
+		end
+		timer:SetContextThink( "mc_night", safe( function() return MC:NightThink() end ), 5 )
+		timer:SetContextThink( "mc_bridge", safe( function() return MCBridge:Tick() end ), 1 )
 		MC:GenerateWorld( hero:GetAbsOrigin() )
 	end
 end
@@ -170,6 +183,10 @@ end
 function MC:DamageFilter( f )
 	if not f.entindex_victim_const or not f.entindex_attacker_const then return true end
 	local victim = EntIndexToHScript( f.entindex_victim_const )
+	if victim.mc_player then
+		MCBridge:OnSteveDamaged( victim, f.damage )
+		return false
+	end
 	local def = victim.mc_block
 	if not def then return true end
 
@@ -231,3 +248,6 @@ function MC:NightThink()
 	end
 	return 8
 end
+
+-- each Dota script file has its own environment; share these with abilities and mc_bridge.lua
+_G.MC, _G.BLOCKS, _G.PICKAXES, _G.GRID, _G.STEVE = MC, BLOCKS, PICKAXES, GRID, STEVE
