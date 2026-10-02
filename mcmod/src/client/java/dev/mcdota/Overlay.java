@@ -59,7 +59,7 @@ public final class Overlay implements Runnable {
 	// Tolerance covers face shading, ambient occlusion and the vignette.
 	private static boolean hole(int p) {
 		int r = (p >> 16) & 255, g = (p >> 8) & 255, b = p & 255;
-		return r > 90 && b > 90 && g < 40 && Math.abs(r - b) < 24;
+		return r > 30 && b > 30 && g * 3 < r && Math.abs(r - b) <= Math.max(24, r / 4);
 	}
 
 	// translucent GUI (hotbar, chat) blended over the magenta clear comes out pink: show it as plain grey instead

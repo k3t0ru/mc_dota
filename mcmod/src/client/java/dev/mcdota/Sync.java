@@ -62,18 +62,16 @@ public final class Sync {
 		}
 	}
 
-	// column x,z gets its ground at hh half blocks above y 0: magenta podzol on top (a magenta slab for a half step),
-	// dirt under lowered ground, all-magenta raised ground (Dota's cliff faces show through it)
-	private static void terrain(MinecraftServer server, String x, String z, int hh) {
+	// column x,z gets its ground at hh half blocks above y 0 (a magenta slab for a half step). Everything visible from
+	// above is magenta podzol: the top, and the side wall down to the lowest neighbour (otherwise dirt pokes out where
+	// Dota's ground drops). Below that it stays dirt/stone, so digging shows real blocks.
+	private static void terrain(MinecraftServer server, String x, String z, int hh, int low) {
 		hh = Math.max(-100, Math.min(100, hh)); // stay well inside the world (bottom is y -64)
-		int full = Math.floorDiv(hh, 2); // solid blocks reach up to y = full - 1
-		boolean half = hh % 2 != 0;
-		if (full > 0) run(server, String.format("fill %s 0 %s %s %d %s minecraft:podzol", x, z, x, full - 1, z));
-		if (full < 0) {
-			run(server, String.format("fill %s %d %s %s -1 %s minecraft:air", x, full, z, x, z));
-			run(server, String.format("setblock %s %d %s minecraft:podzol", x, full - 1, z));
-		}
-		if (half) run(server, String.format("setblock %s %d %s minecraft:mud_brick_slab", x, full, z));
+		low = Math.max(-100, Math.min(hh, low));
+		int full = Math.floorDiv(hh, 2), bottom = Math.floorDiv(low, 2) - 1; // solid up to full - 1; skin from bottom
+		if (full < 0) run(server, String.format("fill %s %d %s %s -1 %s minecraft:air", x, full, z, x, z));
+		run(server, String.format("fill %s %d %s %s %d %s minecraft:podzol", x, Math.min(bottom, full - 1), z, x, full - 1, z));
+		if (hh % 2 != 0) run(server, String.format("setblock %s %d %s minecraft:mud_brick_slab", x, full, z));
 	}
 
 	// server thread
@@ -91,8 +89,10 @@ public final class Sync {
 						seen.add(tag);
 						boolean fresh = standIns.put(p[1], tag) == null;
 						if (fresh) run(server, String.format("summon minecraft:husk %s " + y + " %s {NoAI:1b,Silent:1b,"
-							+ "PersistenceRequired:1b,DeathLootTable:\"minecraft:empty\",Tags:[\"dota\",\"%s\"],CustomName:\"%s\",attributes:[{id:\"minecraft:max_health\",base:%d}],"
-							+ "Health:%df}", p[3], p[4], tag, p[2], (int) HERO_HP, (int) HERO_HP));
+							+ "PersistenceRequired:1b,DeathLootTable:\"minecraft:empty\",Tags:[\"dota\",\"%s\"],attributes:[{id:\"minecraft:max_health\",base:%d}],"
+							+ "Health:%df}", p[3], p[4], tag, (int) HERO_HP, (int) HERO_HP));
+						// the Dota unit is what you see (magenta silhouettes came out pink and shaky: Minecraft lights mobs its own way)
+						if (fresh) run(server, "effect give @e[tag=" + tag + "] minecraft:invisibility infinite 0 true");
 						run(server, String.format("tp @e[tag=%s,limit=1] %s %s %s", tag, p[3], y, p[4]));
 					}
 					case "dmg" -> run(server, "damage @p " + p[1] + " minecraft:mob_attack");
@@ -105,10 +105,12 @@ public final class Sync {
 							run(server, String.format("fill %d 0 %d %d 30 %d minecraft:air", x, -r, x + 3, r - 1));
 						}
 						run(server, "kill @e[type=minecraft:item]");
+						run(server, "kill @e[tag=dota]"); // stand-ins of the previous Dota game
+						standIns.clear();
 					}
 					case "block" -> run(server, String.format("setblock %s %s %s minecraft:%s", p[1], p[2], p[3], p[4]));
 					case "unblock" -> run(server, String.format("setblock %s %s %s minecraft:air", p[1], p[2], p[3]));
-					case "h" -> terrain(server, p[1], p[2], Integer.parseInt(p[3]));
+					case "h" -> terrain(server, p[1], p[2], Integer.parseInt(p[3]), Integer.parseInt(p[4]));
 					default -> { }
 				}
 			}

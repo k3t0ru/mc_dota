@@ -71,9 +71,15 @@ function MCBridge:Apply( body )
 		if rx then MC:RemoveBlock( tonumber( rx ), tonumber( rz ) ) end
 
 		local lx, ly, yawc, pitch, dist, lz, sent = line:match( "^cam (%S+) (%S+) (%S+) (%S+) (%S+) (%S+) (%S+)" )
+		if lx and self.steve and GameRules:GetGameTime() - ( self.eyeLog or 0 ) > 2 then -- debug: eye height over real ground
+			self.eyeLog = GameRules:GetGameTime()
+			local p = self.steve:GetAbsOrigin()
+			local eyeZ = tonumber( lz ) + tonumber( dist ) * math.sin( math.rad( tonumber( pitch ) ) )
+			print( string.format( "[mc] eye %.0f above Dota ground (ground %.0f, anchor %.0f, cell %s)", eyeZ - GetGroundHeight( p, nil ), GetGroundHeight( p, nil ), MC.anchor.z, MC:CellOf( p ) .. "," .. select( 2, MC:CellOf( p ) ) ) )
+		end
 		if lx then -- Panorama wants the look-at height above the ground under it
 			local off = tonumber( lz ) - GetGroundHeight( Vector( tonumber( lx ), tonumber( ly ), 0 ), nil )
-			CustomGameEventManager:Send_ServerToAllClients( "mc_cam", { v = table.concat( { lx, ly, yawc, pitch, dist, string.format( "%.1f", off ), sent }, " " ) } )
+			CustomGameEventManager:Send_ServerToAllClients( "mc_cam", { v = table.concat( { lx, ly, yawc, pitch, dist, string.format( "%.1f", off ), sent, lz }, " " ) } )
 		end
 	end
 end

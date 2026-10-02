@@ -6,7 +6,7 @@
 #   dmg <amount>        (Dota hit Steve)          set <x> <y> <z> <kind>       (block placed in MC)
 #   block <x> <y> <z> <kind> / unblock <x> <y> <z>  break <x> <y> <z>          (block gone in MC)
 #   reset               (new Dota game: clear MC's arena)
-#   h <x> <z> <hh>      (terrain: ground height of a column in half blocks above the flat floor)
+#   h <x> <z> <hh> <low> (terrain: column height and its lowest neighbour's, half blocks above the flat floor)
 # hero lines may carry a 7th field: the MC y the unit stands at (any Dota unit, creeps too)
 # Dota gets back: steve <name> <x> <z> <hp> <maxhp> <yaw>, hit .., mcblock <x> <y> <z> <kind>, mcbreak <x> <y> <z>,
 #                 cam <lookX> <lookY> <yaw> <pitch> <dist> <lookZ>   (lookZ absolute; Lua turns it into a height offset)

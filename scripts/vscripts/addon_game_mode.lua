@@ -111,8 +111,9 @@ function MC:SetupHero( hero )
 		MC.world_done = true
 		MC.anchor = hero:GetAbsOrigin() -- Minecraft (0,0) maps here
 		-- Dota's own camera controls would fight Minecraft's (launch args alone get overridden by the user's config)
-		SendToConsole( "dota_camera_edgemove 0; dota_camera_speed 0; dota_camera_lock 0; dota_camera_fov_min 90; dota_camera_fov_max 90" )
+		SendToConsole( "dota_camera_edgemove 0; dota_camera_speed 0; dota_camera_lock 0; dota_camera_fov_min 90; dota_camera_fov_max 90; dota_camera_z_interp_speed 100000" )
 		MC:SendTerrain()
+		if MC.lowest then print( string.format( "[mc] lowest cell %d,%d at %d half blocks", MC.lowest.x, MC.lowest.z, MC.lowest.h ) ) end
 		-- ponytail: thinks on the game mode entity never fired here, so timers live on their own entity
 		local timer = SpawnEntityFromTableSynchronous( "info_target", { targetname = "mc_timer" } )
 		local function safe( f ) -- log the real error instead of the engine's "error in error handling"
@@ -145,13 +146,23 @@ function MC:HeightAt( z ) return MC_FLOOR + math.floor( MC:HalfHeightAt( z ) / 2
 
 -- Minecraft's invisible floor follows Dota's terrain (1-block steps; autojump takes them)
 function MC:SendTerrain()
+	local H = {}
+	local function hh( bx, bz )
+		local k = bx .. "," .. bz
+		if H[ k ] == nil then
+			local z = MC:CellPos( bx, bz ).z
+			H[ k ] = math.abs( z - MC.anchor.z ) > 1500 and 0 or MC:HalfHeightAt( z ) -- off the map edge the height is garbage
+		end
+		return H[ k ]
+	end
 	for bx = -TERRAIN_R, TERRAIN_R do
 		for bz = -TERRAIN_R, TERRAIN_R do
-			local pos = MC:CellPos( bx, bz )
-			local hh = MC:HalfHeightAt( pos.z )
-			if math.abs( pos.z - MC.anchor.z ) > 1500 then hh = 0 end -- off the map edge the ground height is garbage
-			MC.heights[ bx .. "," .. bz ] = MC_FLOOR + math.floor( hh / 2 )
-			if hh ~= 0 then MCBridge:Send( string.format( "h %d %d %d", bx, bz, hh ) ) end
+			local h = hh( bx, bz )
+			-- lowest neighbour: this column's side wall is exposed down to there and must be magenta too
+			local low = math.min( h, hh( bx + 1, bz ), hh( bx - 1, bz ), hh( bx, bz + 1 ), hh( bx, bz - 1 ) )
+			MC.heights[ bx .. "," .. bz ] = MC_FLOOR + math.floor( h / 2 )
+			if h < ( MC.lowest or { h = 0 } ).h then MC.lowest = { h = h, x = bx, z = bz } end
+			if h ~= 0 or low ~= 0 then MCBridge:Send( string.format( "h %d %d %d %d", bx, bz, h, low ) ) end
 		end
 	end
 end

@@ -15,7 +15,8 @@ public final class Arena {
 		"gamerule doMobSpawning false", "gamerule spawn_mobs false",
 		"time set noon", "gamerule doDaylightCycle false", "gamerule advance_time false", // night would darken the magenta
 		"effect give @p minecraft:instant_health 1 10 true", "effect give @p minecraft:saturation 1 20 true", // fresh start
-		"tp @p 0.5 0 0.5", // start where the Dota hero spawns (MC 0,0), not wherever the last session ended
+		"tp @p 0.5 0 0.5",
+		"kill @e[tag=dota]", // stand-ins saved in the world by an earlier session (they come back invisible) // start where the Dota hero spawns (MC 0,0), not wherever the last session ended
 		"attribute @p minecraft:knockback_resistance base set 1", // Dota hits hurt but don't shove the camera around
 		// ponytail: test kit while the world starts empty; real progression comes later
 		"clear @p", "give @p minecraft:diamond_sword", "give @p minecraft:diamond_pickaxe",

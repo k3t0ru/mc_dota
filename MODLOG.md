@@ -147,3 +147,13 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Terrain: "h x z hh" in half blocks, R=64; garbage height at the map edge (|dz|>1500) → 0 (otherwise 1261 commands "out of this world").
 - Autojump on, step_height NOT raised (user's request). No loot from stand-ins; Steve's kills → "xp" → /xp add (DeathXP/10).
 - Verified: no terrain errors, clean Dota ground under MC, digging down (dirt shaft, 4 dirt in the inventory).
+
+## 2026-10-02 20:38: user screenshots (orange edges, pink silhouettes, labels, outline, lowland height)
+- Orange edges = dirt in the side walls where Dota's ground drops. Now "h x z hh low": magenta skin down to the lowest neighbour.
+- Black triangles = ambient occlusion on magenta → AO off; hole() widened to dark magenta (g*3<r, |r-b|<=max(24,r/4)).
+- Magenta stand-ins came out pink (mob lighting) and shaky → back to invisible husks (/effect), no CustomName (there were labels),
+  husk texture override removed. Old stand-ins from past sessions are killed on join/reset (they were visible).
+- No outline on podzol/mud_brick_slab (OutlineMixin on LevelRenderer.extractBlockOutline).
+- "Higher than the floor in lowlands / up first, then down off a cliff": Dota measures the height offset from its smoothed
+  "camera ground". Fix: dota_camera_z_interp_speed 100000 + feedback in Panorama (zFix += (wanted - GetCameraLookAtPosition z)*0.5).
+  Measured: want z == fact; in the lowland (8,13) feet on -1.5 (-3 half blocks), eye 139 above Dota's ground (155 - rounding).
