@@ -211,10 +211,10 @@ public final class Progress {
 	// --- traders --------------------------------------------------------------------------------------------------
 
 	private record Trader(String name, String profession, List<String> offers) { }
-	private static final Map<String, int[]> spots = new java.util.concurrent.ConcurrentHashMap<>(); // profession -> x, z
+	private static final Map<String, double[]> spots = new java.util.concurrent.ConcurrentHashMap<>(); // profession -> x, z (exact)
 
 	// sync thread: Dota placed a trader
-	public static void trader(int x, int z, String profession) { spots.put(profession, new int[] { x, z }); }
+	public static void trader(double x, double z, String profession) { spots.put(profession, new double[] { x, z }); }
 
 	private static final List<Trader> TRADERS = new ArrayList<>();
 
@@ -281,21 +281,23 @@ public final class Progress {
 		if (++ticks % 40 != 0 || server.getPlayerList().getPlayers().isEmpty()) return;
 		ServerLevel level = server.overworld();
 		for (Trader t : TRADERS) {
-			int[] at = spots.get(t.profession);
-			if (at == null || !level.hasChunk(at[0] >> 4, at[1] >> 4)) continue;
-			int tx = at[0], tz = at[1];
-			int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING, tx, tz);
+			double[] at = spots.get(t.profession);
+			if (at == null) continue;
+			double tx = at[0], tz = at[1];
+			int bx = (int) Math.floor(tx), bz = (int) Math.floor(tz);
+			if (!level.hasChunk(bx >> 4, bz >> 4)) continue;
+			int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING, bx, bz);
 			String tag = "mcdota_trader_" + t.profession;
 			Entity e = null;
 			for (Entity c : level.getAllEntities()) if (c.getTags().contains(tag)) { e = c; break; }
 			if (e == null) {
-				Sync.run(server, String.format(Locale.ROOT, "summon minecraft:villager %.1f %d %.1f {NoAI:1b,Invulnerable:1b,"
+				Sync.run(server, String.format(Locale.ROOT, "summon minecraft:villager %.2f %d %.2f {NoAI:1b,Invulnerable:1b,"
 					+ "PersistenceRequired:1b,Silent:1b,Rotation:[90f,0f],Tags:[\"mcdota_trader\",\"%s\"],CustomName:\"%s\","
 					+ "VillagerData:{profession:\"minecraft:%s\",level:5,type:\"minecraft:plains\"},Offers:{Recipes:[%s]},"
 					+ "active_effects:[{id:\"minecraft:invisibility\",duration:-1,amplifier:0b,show_particles:0b}]}",
-					tx + 0.5, y, tz + 0.5, tag, t.name, t.profession, String.join(",", t.offers)));
-			} else if ((int) Math.floor(e.getY()) != y || (int) Math.floor(e.getX()) != tx || (int) Math.floor(e.getZ()) != tz) {
-				e.teleportTo(tx + 0.5, y, tz + 0.5);
+					tx, y, tz, tag, t.name, t.profession, String.join(",", t.offers)));
+			} else if ((int) Math.floor(e.getY()) != y || Math.abs(e.getX() - tx) > 0.1 || Math.abs(e.getZ() - tz) > 0.1) {
+				e.teleportTo(tx, y, tz);
 			}
 		}
 	}

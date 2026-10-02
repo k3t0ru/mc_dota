@@ -281,22 +281,30 @@ end
 -- Traders (Minecraft cells; they look west). Dota draws them; Minecraft keeps an invisible villager on each spot to trade
 -- with (Progress.java has the offers). The basic shop stands by the spawn, the secret one at Dota's own secret shop.
 BASE_TRADERS = { "fletcher", "librarian", "toolsmith", "mason" }
-TRADERS = {}
+TRADERS = {} -- { Minecraft x, z (exact, not cells), profession }
 function MC:SpawnTraders()
-	-- the basic shop: a row across the way out of the base, a few cells from the spawn toward the map centre (right at the
-	-- spawn they stood inside the fountain), each on the first walkable cell along that way
+	-- the basic shop: a neat half circle around the spawn, opening toward the map centre (the way out of the base), every
+	-- trader facing the spawn. One radius for all, the smallest (from 9 cells: closer is inside the fountain) where every
+	-- spot is walkable, so the arc stays even.
 	local a = MC.anchor
 	local out = ( Vector( 0, 0, a.z ) - a ):Normalized() -- Dota's map centre is the world origin
-	local side = Vector( -out.y, out.x, 0 )
-	for i, prof in ipairs( BASE_TRADERS ) do
-		for d = 9, 30 do
-			local p = a + out * ( d * GRID ) + side * ( ( i - 2.5 ) * 2.5 * GRID )
-			if GridNav:IsTraversable( p ) and not GridNav:IsBlocked( p ) then
-				local x, z = MC:CellOf( p )
-				table.insert( TRADERS, { x, z, prof } )
-				break
-			end
+	local base = math.atan2( out.y, out.x )
+	local function spot( i, r )
+		local t = base + math.rad( -75 + 150 * ( i - 1 ) / ( #BASE_TRADERS - 1 ) )
+		return a + Vector( math.cos( t ), math.sin( t ), 0 ) * ( r * GRID )
+	end
+	local radius = 9
+	for r = 9, 20, 0.5 do
+		local ok = true
+		for i = 1, #BASE_TRADERS do
+			local p = spot( i, r )
+			if not GridNav:IsTraversable( p ) or GridNav:IsBlocked( p ) then ok = false break end
 		end
+		if ok then radius = r break end
+	end
+	for i, prof in ipairs( BASE_TRADERS ) do
+		local p = spot( i, radius )
+		table.insert( TRADERS, { ( p.x - a.x ) / GRID, -( p.y - a.y ) / GRID, prof } )
 	end
 	-- Dota's shops are trigger_shop volumes (no API tells their type): the secret shop is taken as the nearest one that
 	-- is well away from the spawn (the fountain shop is at the spawn); a map with a single shop uses that one
@@ -308,10 +316,10 @@ function MC:SpawnTraders()
 		if d > 30 and ( not bestD or d < bestD ) then best, bestD = { x, z }, d end
 	end
 	local secret = best or any or { 20, 0 }
-	table.insert( TRADERS, { secret[1] + 2, secret[2], "weaponsmith" } )
-	for _, t in ipairs( TRADERS ) do print( string.format( "[mc] trader %s at cell %d,%d", t[3], t[1], t[2] ) ) end
+	table.insert( TRADERS, { secret[1] + 2.5, secret[2] + 0.5, "weaponsmith" } )
 	for _, t in ipairs( TRADERS ) do
-		local pos = MC:CellPos( t[1], t[2] )
+		print( string.format( "[mc] trader %s at %.1f, %.1f", t[3], t[1], t[2] ) )
+		local pos = GetGroundPosition( a + Vector( t[1] * GRID, -t[2] * GRID, 0 ), nil )
 		local face = ( a - pos ):Normalized() -- toward the spawn; the model looks +Y at yaw 0
 		SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/villager_" .. t[3] .. ".vmdl",
 			origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ),
@@ -321,7 +329,7 @@ function MC:SpawnTraders()
 end
 
 function MC:SendTraders()
-	for _, t in ipairs( TRADERS ) do MCBridge:Send( string.format( "trader %d %d %s", t[1], t[2], t[3] ) ) end
+	for _, t in ipairs( TRADERS ) do MCBridge:Send( string.format( "trader %.2f %.2f %s", t[1], t[2], t[3] ) ) end
 end
 
 -- Steve's kills drop Minecraft loot: emeralds (the shop currency) by the unit's gold bounty, food, and from neutrals the

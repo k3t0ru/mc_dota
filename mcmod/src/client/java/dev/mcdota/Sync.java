@@ -207,7 +207,7 @@ public final class Sync {
 					case "respawn" -> Progress.respawn(server);
 					case "lvl" -> Progress.level(server, Integer.parseInt(p[1]));
 					case "delay" -> Overlay.dotaDelay(Integer.parseInt(p[1]));
-					case "trader" -> Progress.trader(Integer.parseInt(p[1]), Integer.parseInt(p[2]), p[3]);
+					case "trader" -> Progress.trader(Double.parseDouble(p[1]), Double.parseDouble(p[2]), p[3]);
 					case "xp" -> run(server, "xp add @p " + p[1] + " points"); // Steve killed a Dota unit
 					case "reset" -> { // new Dota game: flat ground again (dirt under a magenta podzol top) and nothing on it
 						int r = 112; // only chunks within view distance are loaded; fill fails on anything else
