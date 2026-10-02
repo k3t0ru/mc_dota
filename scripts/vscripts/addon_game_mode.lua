@@ -2,11 +2,11 @@
 
 -- tier = pickaxe tier needed, hp = hits at power 1, drop = item, xp = hero xp on break
 BLOCKS = {
-	npc_mc_block_log     = { tier = 0, hp = 3,  drop = "item_mc_log",         xp = 5,  color = { 140, 100, 60 } },
-	npc_mc_block_stone   = { tier = 1, hp = 4,  drop = "item_mc_cobblestone", xp = 5,  color = { 150, 150, 150 } },
-	npc_mc_block_coal    = { tier = 1, hp = 4,  drop = "item_mc_coal",        xp = 10, color = { 40, 40, 40 } },
-	npc_mc_block_iron    = { tier = 2, hp = 6,  drop = "item_mc_iron",        xp = 20, color = { 220, 170, 130 } },
-	npc_mc_block_diamond = { tier = 3, hp = 10, drop = "item_mc_diamond",     xp = 50, color = { 80, 230, 230 } },
+	npc_mc_block_log     = { tier = 0, hp = 3,  drop = "item_mc_log",         xp = 5 },
+	npc_mc_block_stone   = { tier = 1, hp = 4,  drop = "item_mc_cobblestone", xp = 5 },
+	npc_mc_block_coal    = { tier = 1, hp = 4,  drop = "item_mc_coal",        xp = 10 },
+	npc_mc_block_iron    = { tier = 2, hp = 6,  drop = "item_mc_iron",        xp = 20 },
+	npc_mc_block_diamond = { tier = 3, hp = 10, drop = "item_mc_diamond",     xp = 50 },
 }
 BLOCKS.npc_mc_block_cobble = BLOCKS.npc_mc_block_stone -- player-placed
 
@@ -22,11 +22,12 @@ STEVE = "npc_dota_hero_kunkka" -- ponytail: Steve overrides Kunkka's slot; own h
 GRID = 128
 NIGHT_MOBS = { "npc_mc_zombie", "npc_mc_zombie", "npc_mc_skeleton" }
 
+LinkLuaModifier( "modifier_mc_block", "modifier_mc_block", LUA_MODIFIER_MOTION_NONE )
+
 function Precache( context )
 	for _, m in ipairs({
-		"models/props_rock/riveredge_rock006a.vmdl",
-		"models/events/dark_carnival/crate_drop_minigame/crate_drop_crate.vmdl",
-		"models/props_gameplay/treasure_chest001.vmdl",
+		"models/mc/stone.vmdl", "models/mc/cobblestone.vmdl", "models/mc/log.vmdl", "models/mc/coal_ore.vmdl",
+		"models/mc/iron_ore.vmdl", "models/mc/diamond_ore.vmdl", "models/mc/crafting_table.vmdl",
 		"models/heroes/undying/undying_minion.vmdl",
 		"models/creeps/neutral_creeps/n_creep_troll_skeleton/n_creep_skeleton_melee.vmdl",
 	}) do PrecacheResource( "model", m, context ) end
@@ -51,6 +52,7 @@ function MC:Init()
 
 	local mode = GameRules:GetGameModeEntity()
 	mode:SetDamageFilter( Dynamic_Wrap( MC, "DamageFilter" ), MC )
+	mode:SetExecuteOrderFilter( Dynamic_Wrap( MC, "OrderFilter" ), MC )
 	mode:SetThink( "NightThink", MC, "mc_night", 5 )
 
 	ListenToGameEvent( "npc_spawned", Dynamic_Wrap( MC, "OnSpawned" ), MC )
@@ -60,9 +62,11 @@ function MC:Init()
 	print( "[mc] loaded" )
 end
 
--- test helper: "-give item_mc_iron 5" (cheats/tools only)
+-- test helpers: "-give item_mc_iron 5", "-time 0.5" (cheats/tools only)
 function MC:OnChat( e )
 	if not ( GameRules:IsCheatMode() or IsInToolsMode() ) then return end
+	local t = e.text:match( "^%-time ([%d%.]+)" )
+	if t then GameRules:SetTimeOfDay( tonumber( t ) ) return end
 	local item, n = e.text:match( "^%-give (%S+)%s*(%d*)" )
 	local hero = item and PlayerResource:GetSelectedHeroEntity( e.playerid )
 	if not hero then return end
@@ -89,6 +93,7 @@ function MC:OnSpawned( e )
 end
 
 function MC:SetupHero( hero )
+	if hero:GetUnitName() == STEVE then hero:SetIdleAcquire( false ) end -- no auto-attack in Minecraft
 
 	-- every player gets a personal crafting table next to them
 	local table = CreateUnitByName( "npc_mc_crafting_table", hero:GetAbsOrigin() + hero:GetForwardVector() * 200, true, hero, hero, hero:GetTeam() )
@@ -114,7 +119,7 @@ function MC:SpawnBlock( name, pos )
 	local def = BLOCKS[ name ]
 	local b = CreateUnitByName( name, pos, false, nil, nil, DOTA_TEAM_NEUTRALS )
 	b.mc_block = def
-	b:SetRenderColor( def.color[1], def.color[2], def.color[3] )
+	b:AddNewModifier( b, nil, "modifier_mc_block", {} )
 	b:SetForwardVector( Vector( 0, 1, 0 ) )
 	return b
 end
@@ -154,6 +159,14 @@ function MC:ToolOf( hero )
 	return tier, power
 end
 
+-- remember what each unit was explicitly told to attack (to tell clicks from auto-attacks)
+function MC:OrderFilter( f )
+	for _, idx in pairs( f.units ) do
+		EntIndexToHScript( idx ).mc_ordered = f.order_type == DOTA_UNIT_ORDER_ATTACK_TARGET and f.entindex_target or nil
+	end
+	return true
+end
+
 function MC:DamageFilter( f )
 	if not f.entindex_victim_const or not f.entindex_attacker_const then return true end
 	local victim = EntIndexToHScript( f.entindex_victim_const )
@@ -166,13 +179,14 @@ function MC:DamageFilter( f )
 
 	local tier, power = MC:ToolOf( hero )
 	if tier < def.tier then
-		if not hero.mc_warned or GameRules:GetGameTime() - hero.mc_warned > 3 then
+		if attacker.mc_ordered == victim:entindex() and ( not hero.mc_warned or GameRules:GetGameTime() - hero.mc_warned > 3 ) then
 			hero.mc_warned = GameRules:GetGameTime()
 			GameRules:SendCustomMessage( "#mc_need_better_pickaxe", hero:GetPlayerID(), 0 )
 		end
 		return false
 	end
 	f.damage = power
+	victim:RemoveModifierByName( "modifier_mc_block" ) -- health bar becomes the mining progress
 	return true
 end
 

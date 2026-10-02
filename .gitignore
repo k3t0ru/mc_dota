@@ -1,2 +1,5 @@
 # Valve map copied from hero_demo for local testing; never ship it
 maps/hero_demo_main.vpk
+
+# compiled from content/ by tools/build_assets.sh
+*_c
