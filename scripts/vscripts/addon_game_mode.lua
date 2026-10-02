@@ -52,6 +52,11 @@ function MC:Init()
 	GameRules:SetPreGameTime( 5 )
 
 	local mode = GameRules:GetGameModeEntity()
+	GameRules:SetCustomGameSetupAutoLaunchDelay( 0 ) -- one team anyway: skip the team-select screen
+	if GameRules:IsCheatMode() or IsInToolsMode() then -- dev runs: no hero pick, no pre-game wait
+		mode:SetCustomGameForceHero( STEVE )
+		GameRules:SetPreGameTime( 0 )
+	end
 	mode:SetDamageFilter( Dynamic_Wrap( MC, "DamageFilter" ), MC )
 	mode:SetExecuteOrderFilter( Dynamic_Wrap( MC, "OrderFilter" ), MC )
 

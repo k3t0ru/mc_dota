@@ -1,0 +1,8 @@
+<root>
+	<scripts>
+		<include src="file://{resources}/scripts/custom_game/fpcam.js" />
+	</scripts>
+	<Panel hittest="false" style="width: 100%; height: 100%;">
+		<Label id="CamInfo" text="" style="visibility: collapse;" />
+	</Panel>
+</root>

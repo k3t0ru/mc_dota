@@ -57,3 +57,13 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
   (3) thinks: timers live on an info_target, wrapped in safe(); (4) peaceful forbids summoning monsters → difficulty easy.
 - Not verified: a real MC client (needs a licensed account), Dota damage → `damage <player>` in MC.
 - Next: block sync (Dota 128 = 2×2 MC blocks), hero/Steve models (resource pack + blocky Steve), our own arena map.
+
+## 2026-10-02: architecture (user's decision) + camera
+- The Steve player has 2 clients: Dota = main screen, Minecraft computes all its own logic and renders from Dota's camera
+  without sky; its picture (blocks, hand, UI) is overlaid on Dota with a transparent window (NO injection into Dota, VAC).
+  Pattern = Minecraft×GTA V passthrough (github rehan-remade/universal-modder examples/minecraft-gta5-passthrough), host = Dota.
+- Camera: Panorama GameUI.SetCameraPitchMin/Max + SetCameraDistance + SetCameraLookAtPositionHeightOffset + SetCameraTarget work.
+  pitch 5 / dist 150 / h 150 = over-the-shoulder with horizon. pitch 0 / dist 50 = inside the model (hide the hero for 1st person).
+- New Panorama files are visible only after RESTARTING the dota2.exe process (models — after a map restart).
+- Fast start: in cheat mode ForceHero(Steve) + PreGame 0, SetCustomGameSetupAutoLaunchDelay(0): map → hero in 2 s.
+  Launch: dota2.exe -novid -console -condebug -windowed -noborder -w 1600 -h 900 +sv_cheats 1 +dota_launch_custom_game mc_dungeons hero_demo_main
