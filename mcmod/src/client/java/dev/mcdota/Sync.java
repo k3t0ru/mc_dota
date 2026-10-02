@@ -37,6 +37,15 @@ public final class Sync {
 		else out.add(String.format("set %d %d %d %s", p.getX(), p.getY(), p.getZ(), BuiltInRegistries.BLOCK.getKey(s.getBlock()).getPath()));
 	}
 
+	private static String lastCrack = "";
+
+	// client thread: mining progress on a block (stage -1 = stopped)
+	public static void crack(BlockPos p, int stage) {
+		String line = String.format("crack %d %d %d %d", p.getX(), p.getY(), p.getZ(), stage);
+		if (!line.equals(lastCrack)) out.add(line);
+		lastCrack = line;
+	}
+
 	// client thread, every tick
 	public static void tick(Minecraft mc) {
 		MinecraftServer server = mc.getSingleplayerServer();

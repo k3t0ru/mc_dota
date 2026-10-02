@@ -186,3 +186,15 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Overlay delay 0 (only hand/HUD/UI), Panorama PLAYBACK_MS 0 (the newest pose).
 - Textures: tools/gen_blocks.py takes Minecraft's textures from the local jar (~/.gradle/caches/fabric-loom/*/minecraft-client.jar),
   per face (top/side/bottom: log rings/bark, crafting table). PNGs are gitignored — Mojang files, never commit/publish.
+
+## 2026-10-02 22:45: hybrid round 2 (user video)
+- Inventory/crafting with the mouse: when a Screen is open, MouseInput feeds MouseHandler.onMove/onButton (Invoker) with the cursor
+  over Dota's window; the overlay shows an arrow cursor. Verified: logs → crafting grid → 4 planks.
+  GOTCHA for tests: python must be DPI-aware (SetProcessDpiAwareness(2)), otherwise SetCursorPos misses.
+- Focus: any LMB/RMB press over Dota's window → Minecraft gets focus (STATIC overlay doesn't always get WM_LBUTTONDOWN).
+- Cracks: ClientLevel.destroyBlockProgress (own player) → "crack x y z stage" → Dota prop crack_<n>.vmdl (alpha-test,
+  destroy_stage_N from the local MC jar), 1.02× over the block. Verified on screen.
+- Allies: a "hit" on a teammate only works below 50% HP (deny); no XP for kills of your own team.
+- Look-up limit returned (MIN_PITCH 3): above the horizon Dota has nothing to show anyway.
+- Camera height jerking on high/low ground: offset = wanted - (Dota's ground = lookAt.z - last offset), with no slow
+  feedback loop. Verified: want z == actual z while walking.

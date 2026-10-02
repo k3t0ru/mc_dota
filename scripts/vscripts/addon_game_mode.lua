@@ -34,6 +34,8 @@ function Precache( context )
 		"models/mc/stone.vmdl", "models/mc/cobblestone.vmdl", "models/mc/log.vmdl", "models/mc/coal_ore.vmdl",
 		"models/mc/iron_ore.vmdl", "models/mc/diamond_ore.vmdl", "models/mc/crafting_table.vmdl",
 		"models/mc/dirt.vmdl", "models/mc/sand.vmdl", "models/mc/planks.vmdl",
+		"models/mc/crack_0.vmdl", "models/mc/crack_1.vmdl", "models/mc/crack_2.vmdl", "models/mc/crack_3.vmdl", "models/mc/crack_4.vmdl",
+		"models/mc/crack_5.vmdl", "models/mc/crack_6.vmdl", "models/mc/crack_7.vmdl", "models/mc/crack_8.vmdl", "models/mc/crack_9.vmdl",
 		"models/heroes/undying/undying_minion.vmdl",
 		"models/creeps/neutral_creeps/n_creep_troll_skeleton/n_creep_skeleton_melee.vmdl",
 	}) do PrecacheResource( "model", m, context ) end
@@ -211,6 +213,17 @@ function MC:ShowBlock( bx, by, bz, kind )
 	MC.props[ key ] = p
 end
 
+-- mining cracks (stage 0..9; anything else removes them): a slightly bigger cracked shell over the block
+function MC:Crack( bx, by, bz, stage )
+	if MC.crack and not MC.crack:IsNull() then MC.crack:RemoveSelf() end
+	MC.crack = nil
+	if stage < 0 or stage > 9 or not MC.props[ bx .. "," .. by .. "," .. bz ] then return end
+	local pos = MC.anchor + Vector( ( bx + 0.5 ) * GRID, -( bz + 0.5 ) * GRID, ( by - MC_FLOOR ) * GRID - 1 )
+	MC.crack = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/crack_" .. stage .. ".vmdl",
+		origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ) } )
+	MC.crack:SetModelScale( GRID / 128 * 1.02 )
+end
+
 function MC:HideBlock( bx, by, bz )
 	local key = bx .. "," .. by .. "," .. bz
 	local p = MC.props[ key ]
@@ -278,7 +291,7 @@ function MC:OnKilled( e )
 	local def = dead and dead.mc_block
 	local killer = e.entindex_attacker and EntIndexToHScript( e.entindex_attacker )
 	if not def then -- Steve's kills give Minecraft experience (loot only from neutrals, later)
-		if killer and killer.mc_player and dead and not dead:IsNull() then
+		if killer and killer.mc_player and dead and not dead:IsNull() and dead:GetTeamNumber() ~= killer:GetTeamNumber() then -- denies give nothing
 			MCBridge:Send( string.format( "xp %d", math.max( 1, math.floor( dead:GetDeathXP() / 10 ) ) ) )
 		end
 		return

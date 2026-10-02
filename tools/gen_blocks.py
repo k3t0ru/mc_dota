@@ -211,4 +211,27 @@ for name, fn in BLOCKS.items():
             f.write(VMAT.format(tex=tex))
     with open(os.path.join(MDL, f"{name}.vmdl"), "w") as f:
         f.write(VMDL.format(name=name))
+# breaking cracks: a slightly bigger alpha-tested cube per stage, drawn over the block Dota renders
+CRACK_VMAT = """Layer0
+{{
+	shader "global_lit_simple.vfx"
+	F_SPECULAR 0
+	F_ALPHA_TEST 1
+	g_flAlphaTestReference "0.500"
+	TextureColor "materials/mc/crack_{n}.png"
+	TextureTranslucency "materials/mc/crack_{n}_alpha.png"
+}}
+"""
+if jar:
+    for n in range(10):
+        img = Image.open(io.BytesIO(jar.read(f"assets/minecraft/textures/block/destroy_stage_{n}.png"))).convert("RGBA").crop((0, 0, S, S))
+        big = img.resize((S * UP, S * UP), Image.NEAREST)
+        big.convert("RGB").save(os.path.join(MAT, f"crack_{n}.png"))
+        big.split()[3].save(os.path.join(MAT, f"crack_{n}_alpha.png"))
+        for face in ("top", "side", "bottom"):
+            with open(os.path.join(MAT, f"crack_{n}_{face}.vmat"), "w") as f:
+                f.write(CRACK_VMAT.format(n=n))
+        with open(os.path.join(MDL, f"crack_{n}.vmdl"), "w") as f:
+            f.write(VMDL.format(name=f"crack_{n}"))
+    print("cracks: 10 stages")
 print("ok:", ", ".join(BLOCKS))

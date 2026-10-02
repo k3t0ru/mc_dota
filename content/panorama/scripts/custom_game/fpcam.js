@@ -9,9 +9,10 @@ var PLAYBACK_MS = 0; // hybrid: Dota draws the blocks itself, so nothing to wait
 var poses = []; // { t, v } sorted by t
 var lag = [];
 var lastProbe = 0;
-// Dota measures the height offset from its own smoothed "camera ground", not the real terrain, so the look-at point
-// ends up too low in hollows and lags over cliffs. Feedback fixes it: nudge the offset by the remaining height error.
-var zFix = 0;
+// Dota measures the height offset from its own smoothed "camera ground", not the real terrain. Its reference = the look-at
+// height it produced minus the offset we gave it; the next offset is exactly wanted - reference (no slow feedback loop,
+// which swung up and down when stepping between high and low ground).
+var zFix = 0, lastOff = 0;
 
 // calibration: what Dota really does with the pose we asked for
 function probe( v ) {
@@ -51,9 +52,10 @@ function frame() {
 		GameUI.SetCameraPitchMin( v[3] );
 		GameUI.SetCameraPitchMax( v[3] );
 		GameUI.SetCameraDistance( v[4] );
-		var err = v[7] - GameUI.GetCameraLookAtPosition()[2]; // wanted absolute look-at height minus what Dota did
-		if ( Math.abs( err ) < 400 ) zFix += err * 0.5;
-		GameUI.SetCameraLookAtPositionHeightOffset( v[5] + zFix );
+		var ref = GameUI.GetCameraLookAtPosition()[2] - lastOff; // Dota's own ground under the look-at point
+		lastOff = v[7] - ref;
+		zFix = lastOff - v[5];
+		GameUI.SetCameraLookAtPositionHeightOffset( lastOff );
 		if ( Date.now() - lastProbe > 2000 ) probe( v );
 	}
 	$.Schedule( 0, frame );

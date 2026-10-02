@@ -58,7 +58,9 @@ function MCBridge:Apply( body )
 
 		local id, amount = line:match( "^hit (%d+) (%S+)" )
 		local hero = id and EntIndexToHScript( tonumber( id ) )
-		if hero and hero:IsAlive() then
+		-- allies can only be denied like in Dota: below half health
+		local ally = hero and self.steve and hero:GetTeamNumber() == self.steve:GetTeamNumber()
+		if hero and hero:IsAlive() and ( not ally or hero:GetHealthPercent() < 50 ) then
 			ApplyDamage( { victim = hero, attacker = self.steve or hero, damage = tonumber( amount ) * DMG_TO_DOTA, damage_type = DAMAGE_TYPE_PURE } )
 		end
 
@@ -78,6 +80,9 @@ function MCBridge:Apply( body )
 			local ground = MC.heights[ rx .. "," .. rz ] or MC_FLOOR
 			if ry >= ground and ry <= ground + 1 then MC:RemoveBlock( rx, rz ) end
 		end
+
+		local cx, cy, cz, stage = line:match( "^crack (%S+) (%S+) (%S+) (%S+)" )
+		if cx then MC:Crack( tonumber( cx ), tonumber( cy ), tonumber( cz ), tonumber( stage ) ) end
 
 		local lx, ly, yawc, pitch, dist, lz, sent = line:match( "^cam (%S+) (%S+) (%S+) (%S+) (%S+) (%S+) (%S+)" )
 		if lx and self.steve and GameRules:GetGameTime() - ( self.eyeLog or 0 ) > 2 then -- debug: eye height over real ground

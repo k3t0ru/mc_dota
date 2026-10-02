@@ -25,9 +25,12 @@ public final class Overlay implements Runnable {
 		void keybd_event(byte vk, byte scan, int flags, int extra);
 		Pointer SetClassLongPtrW(HWND hwnd, int index, Pointer value);
 		int ShowCursor(boolean show);
+		Pointer LoadCursorW(Pointer instance, Pointer name);
 	}
 
 	public volatile int cx, cy; // centre of Dota's window on screen (mouse anchor)
+	public volatile int x, y, w, h; // Dota's window on screen (menus map the cursor through it)
+	public volatile boolean showCursor; // a Minecraft menu is open
 	// Dota plays poses back PLAYBACK_MS (fpcam.js, 150) after Minecraft had them, and needs ~1 frame to draw; Minecraft frames are shown
 	// DELAY ms late from a small ring buffer: both layers then move together instead of blocks sliding over the map
 	private static final int RING = 24;
@@ -88,6 +91,7 @@ public final class Overlay implements Runnable {
 		Pointer bits = null;
 		HWND dota = null;
 		long lastFind = 0, lastLog = System.currentTimeMillis();
+		boolean cursorShown = false;
 		int frames = 0;
 
 		while (true) {
@@ -97,7 +101,17 @@ public final class Overlay implements Runnable {
 				u.TranslateMessage(msg);
 				u.DispatchMessage(msg);
 			}
+			if (showCursor != cursorShown) { // arrow over the picture only while a menu is open
+				cursorShown = showCursor;
+				Keys.INSTANCE.SetClassLongPtrW(hwnd, -12, cursorShown ? Keys.INSTANCE.LoadCursorW(null, new Pointer(32512)) : null);
+				Keys.INSTANCE.ShowCursor(cursorShown);
+			}
 			HWND fg = u.GetForegroundWindow(); // Dota is only the picture: focus always goes back to Minecraft
+			// a mouse press over Dota's window also counts (the overlay's STATIC window doesn't always get the message)
+			POINT cur = new POINT();
+			u.GetCursorPos(cur);
+			boolean pressed = (u.GetAsyncKeyState(0x01) & 0x8000) != 0 || (u.GetAsyncKeyState(0x02) & 0x8000) != 0;
+			if (pressed && W > 0 && cur.x >= X && cur.x < X + W && cur.y >= Y && cur.y < Y + H) clicked = true;
 			if (McDotaClient.mcHwnd != null && !McDotaClient.mcHwnd.equals(fg) && (clicked || hwnd.equals(fg) || (dota != null && dota.equals(fg)))) {
 				// Windows refuses SetForegroundWindow from a background process; a synthetic Alt tap lifts that lock
 				Keys.INSTANCE.keybd_event((byte) 0x12, (byte) 0, 0, 0);
@@ -137,6 +151,7 @@ public final class Overlay implements Runnable {
 					}
 					X = r.left; Y = r.top;
 					cx = X + W / 2; cy = Y + H / 2;
+					x = X; y = Y; w = W; h = H;
 				}
 			}
 
