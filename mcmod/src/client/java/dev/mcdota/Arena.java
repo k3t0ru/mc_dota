@@ -18,6 +18,7 @@ public final class Arena {
 		"tp @p 0.5 0 0.5",
 		"kill @e[tag=dota]", // stand-ins saved in the world by an earlier session (they come back invisible)
 		// death screens need the mouse, which only works in-game here: respawn at the start right away
+		"gamerule keepInventory true", "gamerule keep_inventory true",
 		"gamerule doImmediateRespawn true", "gamerule immediate_respawn true", "setworldspawn 0 0 0", "spawnpoint @p 0 0 0", // start where the Dota hero spawns (MC 0,0), not wherever the last session ended
 		"attribute @p minecraft:knockback_resistance base set 1", // Dota hits hurt but don't shove the camera around
 		// ponytail: test kit while the world starts empty; real progression comes later

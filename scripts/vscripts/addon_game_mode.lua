@@ -23,7 +23,7 @@ PICKAXES = {
 STEVE = "npc_dota_hero_kunkka" -- ponytail: Steve overrides Kunkka's slot; own hero needs a model from Workshop Tools
 GRID = 96 -- one Dota block cell = one Minecraft block (so Steve is hero-sized), cells are aligned to MC.anchor
 CALIBRATE = false -- true: show Dota's own block cubes so they can be lined up with Minecraft's (camera calibration)
-TERRAIN_R = 64 -- cells around the anchor whose height is mirrored into Minecraft
+TERRAIN_R = 220 -- max cells around the anchor mirrored into Minecraft (the map's own size usually ends it first)
 MC_FLOOR = 0 -- Minecraft y where feet stand on flat ground (the world is a superflat whose top layer is y -1)
 
 require( "mc_bridge" )
@@ -113,7 +113,6 @@ function MC:SetupHero( hero )
 		-- Dota's own camera controls would fight Minecraft's (launch args alone get overridden by the user's config)
 		SendToConsole( "dota_camera_edgemove 0; dota_camera_speed 0; dota_camera_lock 0; dota_camera_fov_min 90; dota_camera_fov_max 90; dota_camera_z_interp_speed 100000; fps_max 30" )
 		MC:SendTerrain()
-		if MC.lowest then print( string.format( "[mc] lowest cell %d,%d at %d half blocks", MC.lowest.x, MC.lowest.z, MC.lowest.h ) ) end
 		-- ponytail: thinks on the game mode entity never fired here, so timers live on their own entity
 		local timer = SpawnEntityFromTableSynchronous( "info_target", { targetname = "mc_timer" } )
 		local function safe( f ) -- log the real error instead of the engine's "error in error handling"
@@ -146,6 +145,16 @@ function MC:HeightAt( z ) return MC_FLOOR + math.floor( MC:HalfHeightAt( z ) / 2
 
 -- Minecraft's invisible floor follows Dota's terrain (1-block steps; autojump takes them)
 function MC:SendTerrain()
+	-- the Dota map in cells; outside it (and wherever Dota reports garbage heights) Minecraft gets bottomless void
+	local a = MC.anchor
+	local x1, x2 = math.floor( ( GetWorldMinX() - a.x ) / GRID ), math.floor( ( GetWorldMaxX() - a.x ) / GRID )
+	local z1, z2 = math.floor( -( GetWorldMaxY() - a.y ) / GRID ), math.floor( -( GetWorldMinY() - a.y ) / GRID )
+	local R = math.min( TERRAIN_R, math.max( -x1, x2, -z1, z2 ) + 6 ) -- a void strip past the map edge, then the border
+	MCBridge:Send( string.format( "border %d", 2 * R + 1 ) )
+	print( string.format( "[mc] terrain R=%d, map cells x %d..%d z %d..%d", R, x1, x2, z1, z2 ) )
+	local function outside( bx, bz )
+		return bx < x1 or bx > x2 or bz < z1 or bz > z2 or math.abs( MC:CellPos( bx, bz ).z - a.z ) > 1500
+	end
 	local H = {}
 	local function hh( bx, bz )
 		local k = bx .. "," .. bz
@@ -155,14 +164,17 @@ function MC:SendTerrain()
 		end
 		return H[ k ]
 	end
-	for bx = -TERRAIN_R, TERRAIN_R do
-		for bz = -TERRAIN_R, TERRAIN_R do
-			local h = hh( bx, bz )
-			-- lowest neighbour: this column's side wall is exposed down to there and must be magenta too
-			local low = math.min( h, hh( bx + 1, bz ), hh( bx - 1, bz ), hh( bx, bz + 1 ), hh( bx, bz - 1 ) )
-			MC.heights[ bx .. "," .. bz ] = MC_FLOOR + math.floor( h / 2 )
-			if h < ( MC.lowest or { h = 0 } ).h then MC.lowest = { h = h, x = bx, z = bz } end
-			if h ~= 0 or low ~= 0 then MCBridge:Send( string.format( "h %d %d %d %d", bx, bz, h, low ) ) end
+	for bx = -R, R do
+		for bz = -R, R do
+			if outside( bx, bz ) then
+				MCBridge:Send( string.format( "void %d %d", bx, bz ) )
+			else
+				local h = hh( bx, bz )
+				-- lowest neighbour: this column's side wall is exposed down to there and must be magenta too
+				local low = math.min( h, hh( bx + 1, bz ), hh( bx - 1, bz ), hh( bx, bz + 1 ), hh( bx, bz - 1 ) )
+				MC.heights[ bx .. "," .. bz ] = MC_FLOOR + math.floor( h / 2 )
+				if h ~= 0 or low ~= 0 then MCBridge:Send( string.format( "h %d %d %d %d", bx, bz, h, low ) ) end
+			end
 		end
 	end
 end

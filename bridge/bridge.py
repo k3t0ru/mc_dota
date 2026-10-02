@@ -6,6 +6,7 @@
 #   dmg <amount>        (Dota hit Steve)          set <x> <y> <z> <kind>       (block placed in MC)
 #   block <x> <y> <z> <kind> / unblock <x> <y> <z>  break <x> <y> <z>          (block gone in MC)
 #   reset               (new Dota game: clear MC's arena)
+#   void <x> <z>        (outside the Dota map: bottomless column)   border <size> (MC world border, centred on 0,0)
 #   h <x> <z> <hh> <low> (terrain: column height and its lowest neighbour's, half blocks above the flat floor)
 # hero lines may carry a 7th field: the MC y the unit stands at (any Dota unit, creeps too)
 # Dota gets back: steve <name> <x> <z> <hp> <maxhp> <yaw>, hit .., mcblock <x> <y> <z> <kind>, mcbreak <x> <y> <z>,
@@ -43,8 +44,10 @@ class Relay:
                     self.anchor = tuple(float(v) for v in p[1:])
                 elif p[0] == "hero":
                     heroes[p[1]] = line
-                elif p[0] in ("dmg", "block", "unblock", "reset", "h", "xp"):
+                elif p[0] in ("dmg", "block", "unblock", "reset", "h", "xp", "void", "border"):
                     self.to_mc.append(line)
+                    if p[0] in ("reset", "border"):
+                        print("to mc:", line, flush=True)
             self.heroes = heroes
             out = self.to_dota + ([self.me] if self.me else [])
             self.to_dota = []

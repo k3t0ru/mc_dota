@@ -76,6 +76,35 @@ public final class Sync {
 		if (hh % 2 != 0) run(server, String.format("setblock %s %d %s minecraft:mud_brick_slab", x, full, z));
 	}
 
+	// Minecraft can only change loaded chunks, and Dota's map is far bigger than the view distance: columns of unloaded
+	// chunks wait here and are built the moment their chunk loads (ServerChunkEvents in McDotaClient)
+	// Ready builds run at most BUDGET per server tick: a whole Dota map at once froze Minecraft for seconds.
+	private static final Map<Long, java.util.List<Runnable>> pending = new HashMap<>();
+	private static final java.util.ArrayDeque<Runnable> ready = new java.util.ArrayDeque<>();
+	private static final int BUDGET = 400;
+
+	private static void column(MinecraftServer server, int x, int z, Runnable build) {
+		if (server.overworld().hasChunk(x >> 4, z >> 4)) ready.add(build);
+		else pending.computeIfAbsent(net.minecraft.world.level.ChunkPos.asLong(x >> 4, z >> 4), k -> new java.util.ArrayList<>()).add(build);
+	}
+
+	// server thread: a chunk just loaded
+	public static void chunkLoaded(MinecraftServer server, int cx, int cz) {
+		java.util.List<Runnable> builds = pending.remove(net.minecraft.world.level.ChunkPos.asLong(cx, cz));
+		if (builds != null) ready.addAll(builds);
+	}
+
+	// server thread, every tick
+	public static void buildSome() {
+		if (ready.isEmpty()) return;
+		applying = true;
+		try {
+			for (int i = 0; i < BUDGET && !ready.isEmpty(); i++) ready.poll().run();
+		} finally {
+			applying = false;
+		}
+	}
+
 	// server thread
 	private static void apply(MinecraftServer server, String body) {
 		ServerLevel level = server.overworld();
@@ -109,10 +138,16 @@ public final class Sync {
 						run(server, "kill @e[type=minecraft:item]");
 						run(server, "kill @e[tag=dota]"); // stand-ins of the previous Dota game
 						standIns.clear();
+						ready.clear(); // terrain of the previous Dota game
+						pending.clear();
 					}
 					case "block" -> run(server, String.format("setblock %s %s %s minecraft:%s", p[1], p[2], p[3], p[4]));
 					case "unblock" -> run(server, String.format("setblock %s %s %s minecraft:air", p[1], p[2], p[3]));
-					case "h" -> terrain(server, p[1], p[2], Integer.parseInt(p[3]), Integer.parseInt(p[4]));
+					case "void" -> column(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), () ->
+						run(server, String.format("fill %s -64 %s %s 30 %s minecraft:air", p[1], p[2], p[1], p[2]))); // fall and die
+					case "border" -> { run(server, "worldborder center 0.5 0.5"); run(server, "worldborder set " + p[1]); }
+					case "h" -> column(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), () ->
+						terrain(server, p[1], p[2], Integer.parseInt(p[3]), Integer.parseInt(p[4])));
 					default -> { }
 				}
 			}

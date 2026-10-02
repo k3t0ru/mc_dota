@@ -42,6 +42,10 @@ public class McDotaClient implements ClientModInitializer {
 			overlay = new Overlay();
 		});
 		ClientPlayConnectionEvents.JOIN.register((handler, sender, mc) -> Arena.ensure(mc));
+		net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(server -> Sync.buildSome());
+		net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents.CHUNK_LOAD.register((level, chunk) -> {
+			if (level.dimension() == net.minecraft.world.level.Level.OVERWORLD) Sync.chunkLoaded(level.getServer(), chunk.getPos().x, chunk.getPos().z);
+		});
 		// a respawn resets attributes: Steve must keep ignoring Dota's knockback
 		net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) ->
 			newPlayer.level().getServer().getCommands().performPrefixedCommand(newPlayer.level().getServer().createCommandSourceStack().withSuppressedOutput(),

@@ -1,10 +1,11 @@
 // Dota's camera follows Steve's eyes in Minecraft. The server relays the bridge's pose as the "mc_cam" event:
 // "lookAtX lookAtY yaw pitch distance heightOffset sentMillis" (Dota units; sentMillis = Minecraft's wall clock).
-// Poses arrive 35-170 ms late and unevenly, so they are played back on a fixed schedule: every Dota frame shows the
-// pose Minecraft had exactly PLAYBACK_MS ago (interpolated). The overlay delays Minecraft's frames by the same amount
-// (mcdota.delay), so both layers show the same instant and nothing swims.
+// Poses arrive 35-170 ms late and unevenly, so they are played back on a fixed schedule. Each pose belongs to one
+// Minecraft frame (same stamp as its picture); every Dota frame shows the newest pose at least PLAYBACK_MS old, NOT an
+// interpolation (an in-between pose matches no Minecraft frame, so the layers would always slide a little). The overlay
+// picks Minecraft pictures by the same rule (mcdota.delay = PLAYBACK_MS + Dota's extra frame of render latency).
 "use strict";
-var PLAYBACK_MS = 150; // must cover the worst lag ("[mc] camera lag" in the log)
+var PLAYBACK_MS = 180; // must cover the worst lag ("[mc] camera lag" in the log)
 var poses = []; // { t, v } sorted by t
 var lag = [];
 var lastProbe = 0;
@@ -37,21 +38,13 @@ GameEvents.Subscribe( "mc_cam", function( e ) {
 	}
 } );
 
-function mix( a, b, f ) { return a + ( b - a ) * f; }
-function mixAngle( a, b, f ) { var d = ( ( b - a ) % 360 + 540 ) % 360 - 180; return a + d * f; }
 
 function frame() {
 	var t = Date.now() - PLAYBACK_MS;
-	var a = null, b = null;
-	for ( var i = 0; i < poses.length; i++ ) {
-		if ( poses[i].t <= t ) a = poses[i]; else { b = poses[i]; break; }
-	}
+	var a = null;
+	for ( var i = 0; i < poses.length && poses[i].t <= t; i++ ) a = poses[i];
 	if ( a ) {
 		var v = a.v;
-		if ( b ) {
-			var f = ( t - a.t ) / Math.max( 1, b.t - a.t ), w = b.v;
-			v = [ mix( v[0], w[0], f ), mix( v[1], w[1], f ), mixAngle( v[2], w[2], f ), mix( v[3], w[3], f ), v[4], mix( v[5], w[5], f ), v[6], mix( v[7], w[7], f ) ];
-		}
 		GameUI.SetCameraTarget( -1 );
 		GameUI.SetCameraTargetPosition( [ v[0], v[1], 0 ], 0.001 ); // lerp = transition seconds; called every frame, anything bigger makes the camera trail ("float")
 		GameUI.SetCameraYaw( v[2] );
@@ -65,4 +58,6 @@ function frame() {
 	}
 	$.Schedule( 0, frame );
 }
+// Steve's screen is Minecraft's: hide Dota's HUD (top bar, minimap, abilities, inventory, shop, chat...)
+for ( var k in DotaDefaultUIElement_t ) GameUI.SetDefaultUIEnabled( DotaDefaultUIElement_t[k], false );
 frame();

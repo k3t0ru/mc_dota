@@ -164,3 +164,15 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Top layer: podzol with ONLY the top magenta (podzol_side is vanilla again) → a hole's walls are real dirt (verified on screen).
   Exposed walls (raised columns, a lower neighbour) = mud_bricks, magenta on every face → Dota's slope shows through.
 - Gotcha: WinDrive "type" with the user's Russian layout turns commands into Cyrillic — test with mouse/keys, not chat.
+
+## 2026-10-02 21:12: jitter, 360, HUD, keepInventory, map edge
+- Jitter: one stamp per MC frame (pose and picture); Panorama shows EXACTLY the pose of a frame (newest with t <= now-180),
+  no interpolation. Overlay delay sweep 180/210/240/270 → 270 (Dota lags ~90 ms more at 30 fps). Both games fps 30.
+- 360: Steve's pitch is no longer clamped; Dota stays at MIN_PITCH (looking up in Dota is impossible).
+- Dota HUD: GameUI.SetDefaultUIEnabled(all DotaDefaultUIElement_t, false).
+- keepInventory/keep_inventory true.
+- Map edge: GetWorldMin/MaxX/Y → cells; outside the map / garbage height → "void" (column of air down to -64 = falling out);
+  worldborder = 2R+1 (R = map + 6). The map is huge (cells x -149..192) → terrain is built by chunk: columns of unloaded
+  chunks wait in pending, ServerChunkEvents.CHUNK_LOAD → ready, ≤400 columns per server tick (otherwise MC froze at 0 fps).
+  Verified: steady 30 fps; tp past the edge → "fell out of the world" → respawn at 0,0.
+- The MC window's layout must be EN for chat tests: WM_INPUTLANGCHANGEREQUEST to the MC window only.

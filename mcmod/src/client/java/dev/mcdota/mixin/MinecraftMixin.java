@@ -23,7 +23,8 @@ public class MinecraftMixin {
 	@Inject(method = "runTick", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/pipeline/RenderTarget;blitToScreen()V"))
 	private void mcdota$grab(CallbackInfo ci) {
 		dev.mcdota.MouseInput.frame((Minecraft) (Object) this);
-		dev.mcdota.CameraSender.send((Minecraft) (Object) this);
+		long stamp = System.currentTimeMillis(); // this frame's id: Dota shows the pose with this stamp, the overlay this picture
+		dev.mcdota.CameraSender.send((Minecraft) (Object) this, stamp);
 		if (McDotaClient.overlay == null) return;
 		RenderTarget rt = ((Minecraft) (Object) this).getMainRenderTarget();
 		int w = rt.width, h = rt.height, tex = ((GlTexture) rt.getColorTexture()).glId();
@@ -37,6 +38,6 @@ public class MinecraftMixin {
 		}
 		GlStateManager._readPixels(0, 0, w, h, GL30.GL_BGRA, GL30.GL_UNSIGNED_BYTE, MemoryUtil.memAddress(mcdota$buf));
 		GlStateManager._glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, 0);
-		McDotaClient.overlay.submit(mcdota$buf, w, h);
+		McDotaClient.overlay.submit(mcdota$buf, w, h, stamp);
 	}
 }

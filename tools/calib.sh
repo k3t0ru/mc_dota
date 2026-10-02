@@ -4,7 +4,7 @@
 UM=/c/Users/Roman/.claude/plugins/cache/universal-modder/universal-modder/0.1.0/bin/um
 LOG="/c/Program Files (x86)/Steam/steamapps/common/dota 2 beta/game/dota/console.log"
 OUT=${1:-calib}
-for c in "/tp @p 0.5 -60 0.5 ${YAW:-180} ${PITCH:-12}" "/fill -4 -60 -8 3 -58 -3 minecraft:air" "/setblock 0 -60 -4 minecraft:cobblestone" "/setblock 2 -60 -7 minecraft:oak_log" "/setblock -3 -60 -6 minecraft:stone"; do
+for c in "/tp @p 0.5 0 0.5 ${YAW:-180} ${PITCH:-12}" "/fill -4 0 -8 3 2 -3 minecraft:air" "/setblock 0 0 -4 minecraft:cobblestone" "/setblock 2 0 -7 minecraft:oak_log" "/setblock -3 0 -6 minecraft:stone"; do
 	"$UM" win drive --proc java "key 0x54" "type $c" "key 0x0D" >/dev/null 2>&1
 	sleep 1
 done
