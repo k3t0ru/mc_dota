@@ -7,7 +7,7 @@ D='C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta\game\bin\win64\dota
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 
 rm -f "$LOG"
-("$UM" win launch "$D" -- -novid -console -condebug -windowed -noborder -w 1600 -h 900 +dota_camera_edgemove 0 +dota_camera_speed 0 +dota_camera_lock 0 +sv_cheats 1 +dota_launch_custom_game mc_dungeons hero_demo_main >/dev/null 2>&1 &)
+("$UM" win launch "$D" -- -novid -console -condebug -windowed -noborder -w 1600 -h 900 +dota_camera_edgemove 0 +dota_camera_speed 0 +dota_camera_lock 0 +dota_camera_fov_min 90 +dota_camera_fov_max 90 +sv_cheats 1 +dota_launch_custom_game mc_dungeons hero_demo_main >/dev/null 2>&1 &)
 for i in $(seq 1 90); do grep -q "bridge online" "$LOG" 2>/dev/null && break; sleep 2; done
 grep -E "\[mc\]" "$LOG" | tail -2
 

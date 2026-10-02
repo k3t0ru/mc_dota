@@ -28,9 +28,13 @@ public final class Overlay implements Runnable {
 	}
 
 	public volatile int cx, cy; // centre of Dota's window on screen (mouse anchor)
-	private int[] latest = new int[0];
-	private int lw, lh;
-	private boolean fresh;
+	// Dota plays poses back PLAYBACK_MS (fpcam.js, 150) after Minecraft had them, and needs ~1 frame to draw; Minecraft frames are shown
+	// DELAY ms late from a small ring buffer: both layers then move together instead of blocks sliding over the map
+	private static final int DELAY = Integer.getInteger("mcdota.delay", 125), RING = 16;
+	private final int[][] ring = new int[RING][];
+	private final long[] stamp = new long[RING];
+	private int head, lw, lh;
+	private long shown; // stamp of the frame on screen
 
 	public Overlay() {
 		Thread t = new Thread(this, "mcdota-overlay");
@@ -41,9 +45,11 @@ public final class Overlay implements Runnable {
 	// render thread: glReadPixels output, BGRA bytes bottom-up
 	public void submit(ByteBuffer bgra, int w, int h) {
 		synchronized (this) {
-			if (latest.length != w * h) latest = new int[w * h];
-			bgra.order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().get(0, latest); // ints are 0xAARRGGBB
-			lw = w; lh = h; fresh = true;
+			if (ring[head] == null || ring[head].length != w * h) ring[head] = new int[w * h];
+			bgra.order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().get(0, ring[head]); // ints are 0xAARRGGBB
+			stamp[head] = System.currentTimeMillis();
+			head = (head + 1) % RING;
+			lw = w; lh = h;
 		}
 	}
 
@@ -77,7 +83,8 @@ public final class Overlay implements Runnable {
 		int[] src = new int[0], dst = new int[0], xmap = new int[0], ymap = new int[0];
 		Pointer bits = null;
 		HWND dota = null;
-		long lastFind = 0;
+		long lastFind = 0, lastLog = System.currentTimeMillis();
+		int frames = 0;
 
 		while (true) {
 			boolean clicked = false; // a click on the picture means "I'm playing": keyboard goes to Minecraft
@@ -94,6 +101,12 @@ public final class Overlay implements Runnable {
 				u.SetForegroundWindow(McDotaClient.mcHwnd);
 			}
 			long now = System.currentTimeMillis();
+			if (now - lastLog >= 5000) {
+				org.slf4j.LoggerFactory.getLogger("mcdota").info("overlay {} fps, minecraft {} fps, size {}x{} -> {}x{}",
+					frames * 1000 / (now - lastLog), net.minecraft.client.Minecraft.getInstance().getFps(), lw, lh, W, H);
+				frames = 0;
+				lastLog = now;
+			}
 			if (now - lastFind > 1000) { // follow Dota's window
 				lastFind = now;
 				dota = u.FindWindow(null, "Dota 2");
@@ -119,10 +132,15 @@ public final class Overlay implements Runnable {
 				}
 			}
 
-			boolean have;
+			boolean have = false;
 			synchronized (this) {
-				have = fresh && W > 0;
-				if (have) {
+				int pick = -1; // newest frame that is at least DELAY old
+				for (int i = 0; i < RING; i++)
+					if (stamp[i] != 0 && stamp[i] <= now - DELAY && (pick < 0 || stamp[i] > stamp[pick])) pick = i;
+				if (pick >= 0 && stamp[pick] != shown && W > 0 && ring[pick].length == lw * lh) {
+					have = true;
+					shown = stamp[pick];
+					int[] latest = ring[pick];
 					if (src.length != latest.length) src = new int[latest.length];
 					System.arraycopy(latest, 0, src, 0, latest.length);
 					if (lw != sw || lh != sh) {
@@ -131,7 +149,6 @@ public final class Overlay implements Runnable {
 						for (int x = 0; x < W; x++) xmap[x] = (int) ((long) x * sw / W);
 						for (int y = 0; y < H; y++) ymap[y] = (int) ((long) y * sh / H) * sw;
 					}
-					fresh = false;
 				}
 			}
 			if (have) {
@@ -142,6 +159,7 @@ public final class Overlay implements Runnable {
 				}
 				bits.write(0, dst, 0, dst.length);
 				u.UpdateLayeredWindow(hwnd, null, new POINT(X, Y), new WinUser.SIZE(W, H), mem, new POINT(0, 0), 0, blend, WinUser.ULW_ALPHA);
+				frames++;
 			}
 			try { Thread.sleep(2); } catch (InterruptedException e) { return; }
 		}

@@ -115,3 +115,14 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
   no blocks (GenerateWorld removed), "reset" on Dota start clears ±112 (fill fails on unloaded chunks).
 - No rain: weather clear + doWeatherCycle/advance_weather false + addWeatherPass cancelled. Cursor: ShowCursor(false) in the overlay thread.
 - Verified: walking 5.2 blocks in 1.2 s, placing cobblestone (screenshot b1). Not verified: blocks reaching Dota, hits, damage.
+
+## 2026-10-02 18:30: camera/scale/terrain pass
+- SCALE/GRID 96 (Steve hero-sized), block ModelScale 0.75, SetHullRadius(36) so Dota heroes can't squeeze between blocks.
+- Terrain: Dota samples ±40 cells → "h x z y" (+3 where GridNav isn't traversable/trees) → MC raises/lowers the barrier floor.
+- Stand-ins for ALL units within 2500 of Steve (creeps too), with height; invisibility via /effect (the SNBT effect didn't stick).
+- FOV: Dota +dota_camera_fov_min/max 90 (horizontal 4:3) ↔ MC fov 74 vertical, fovEffectScale 0.
+- Camera lag measured (Date.now in Panorama vs MC millis): median ~95 ms, 35-170 ms jitter = the "floating".
+  Fix: synchronized playback — Panorama shows the pose from PLAYBACK_MS=150 ago (interpolated), the overlay shows MC frames 125 ms late (ring of 16).
+- "Floats right after loading" = Steve spawned next to creeps/towers, Dota damage → knockback + hurt tilt in MC.
+  Fix: tp to 0,0 on join, knockback_resistance 1, damageTiltStrength 0, bobView off, heal on join.
+- Perf: overlay 54-57 fps, MC 56-59 fps; the bottleneck is Dota on Intel UHD (~37 fps).

@@ -6,16 +6,18 @@
 #   dmg <amount>        (Dota hit Steve)          set <x> <y> <z> <kind>       (block placed in MC)
 #   block <x> <y> <z> <kind> / unblock <x> <y> <z>  break <x> <y> <z>          (block gone in MC)
 #   reset               (new Dota game: clear MC's arena)
+#   h <x> <z> <y>       (terrain: MC surface height of a column where it differs from the flat floor)
+# hero lines may carry a 7th field: the MC y the unit stands at (any Dota unit, creeps too)
 # Dota gets back: steve <name> <x> <z> <hp> <maxhp> <yaw>, hit .., mcblock <x> <y> <z> <kind>, mcbreak <x> <y> <z>,
-#                 cam <lookX> <lookY> <yaw> <pitch> <dist> <height>
-# The mod gets back: hero .., dmg <amount>, block .., unblock .., reset
+#                 cam <lookX> <lookY> <yaw> <pitch> <dist> <lookZ>   (lookZ absolute; Lua turns it into a height offset)
+# The mod gets back: hero .., dmg <amount>, block .., unblock .., reset, h ..
 # The mod also sends its camera over UDP :27101 every frame: "<x> <y> <z> <yaw> <pitch>" (MC eye).
 # Run: python bridge/bridge.py
 import math, os, socket, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 GROUND_Y = -60  # MC feet level (top of the invisible barrier floor is -61)
-SCALE = 64  # Dota units per MC block (same as mc_bridge.lua)
+SCALE = 96  # Dota units per MC block (GRID in addon_game_mode.lua): Steve stands as tall as a Dota hero
 CAM_DIST = 40  # Dota camera sits this far behind its look-at point; small = first person
 MIN_PITCH = float(os.environ.get("MCDOTA_MIN_PITCH", 3))  # lowest pitch Dota accepts (calibration knob)
 YAW_SIGN, YAW_OFFSET = -1, 180  # Dota yaw = YAW_OFFSET + YAW_SIGN * MC yaw (calibration knob)
@@ -41,7 +43,7 @@ class Relay:
                     self.anchor = tuple(float(v) for v in p[1:])
                 elif p[0] == "hero":
                     heroes[p[1]] = line
-                elif p[0] in ("dmg", "block", "unblock", "reset"):
+                elif p[0] in ("dmg", "block", "unblock", "reset", "h"):
                     self.to_mc.append(line)
             self.heroes = heroes
             out = self.to_dota + ([self.me] if self.me else [])
@@ -71,17 +73,17 @@ class Relay:
             return "\n".join(out)
 
     def dota_cam(self):
-        """MC eye -> Dota camera: look-at point, yaw, pitch, distance, height offset above the anchor's ground."""
+        """MC eye -> Dota camera: look-at point, yaw, pitch, distance, look-at height (absolute)."""
         if not (self.cam and self.anchor):
             return ""
-        x, y, z, yaw, pitch = self.cam
+        x, y, z, yaw, pitch, sent = self.cam
         ax, ay, az = self.anchor
         ex, ey, ez = ax + x * SCALE, ay - z * SCALE, az + (y - GROUND_Y) * SCALE
         t, p = math.radians(yaw), math.radians(pitch)
         hx, hy = -math.sin(t), -math.cos(t)  # MC facing in Dota's x/y
         lx, ly = ex + CAM_DIST * math.cos(p) * hx, ey + CAM_DIST * math.cos(p) * hy
         lz = ez - CAM_DIST * math.sin(p)
-        return f"{lx:.1f} {ly:.1f} {YAW_OFFSET + YAW_SIGN * yaw:.2f} {max(pitch, MIN_PITCH):.2f} {CAM_DIST} {lz - az:.1f}"
+        return f"{lx:.1f} {ly:.1f} {YAW_OFFSET + YAW_SIGN * yaw:.2f} {max(pitch, MIN_PITCH):.2f} {CAM_DIST} {lz:.1f} {sent:.0f}"
 
 
 def main():
@@ -92,7 +94,7 @@ def main():
         sock.bind(("127.0.0.1", 27101))
         while True:
             data = sock.recv(256).decode().split()
-            if len(data) == 5:
+            if len(data) == 6:  # x y z yaw pitch millis (wall clock, so Panorama can measure the camera's lag)
                 relay.cam = tuple(float(v) for v in data)
     threading.Thread(target=udp, daemon=True).start()
 

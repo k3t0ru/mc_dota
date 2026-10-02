@@ -4,7 +4,7 @@
 	{
 		"BaseClass"	"npc_dota_creature"
 		"Model"	"models/mc/log.vmdl"
-		"ModelScale"	"0.5"
+		"ModelScale"	"0.75"
 		"Level"	"1"
 		"StatusHealth"	"3"
 		"StatusHealthRegen"	"0"
@@ -26,7 +26,7 @@
 	{
 		"BaseClass"	"npc_dota_creature"
 		"Model"	"models/mc/stone.vmdl"
-		"ModelScale"	"0.5"
+		"ModelScale"	"0.75"
 		"Level"	"1"
 		"StatusHealth"	"4"
 		"StatusHealthRegen"	"0"
@@ -48,7 +48,7 @@
 	{
 		"BaseClass"	"npc_dota_creature"
 		"Model"	"models/mc/cobblestone.vmdl"
-		"ModelScale"	"0.5"
+		"ModelScale"	"0.75"
 		"Level"	"1"
 		"StatusHealth"	"4"
 		"StatusHealthRegen"	"0"
@@ -70,7 +70,7 @@
 	{
 		"BaseClass"	"npc_dota_creature"
 		"Model"	"models/mc/coal_ore.vmdl"
-		"ModelScale"	"0.5"
+		"ModelScale"	"0.75"
 		"Level"	"1"
 		"StatusHealth"	"4"
 		"StatusHealthRegen"	"0"
@@ -92,7 +92,7 @@
 	{
 		"BaseClass"	"npc_dota_creature"
 		"Model"	"models/mc/iron_ore.vmdl"
-		"ModelScale"	"0.5"
+		"ModelScale"	"0.75"
 		"Level"	"1"
 		"StatusHealth"	"6"
 		"StatusHealthRegen"	"0"
@@ -114,7 +114,7 @@
 	{
 		"BaseClass"	"npc_dota_creature"
 		"Model"	"models/mc/diamond_ore.vmdl"
-		"ModelScale"	"0.5"
+		"ModelScale"	"0.75"
 		"Level"	"1"
 		"StatusHealth"	"10"
 		"StatusHealthRegen"	"0"

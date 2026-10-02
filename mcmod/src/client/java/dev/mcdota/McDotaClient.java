@@ -11,6 +11,8 @@ public class McDotaClient implements ClientModInitializer {
 	// colour of the see-through holes (Minecraft clears its frame to it); magenta never shows up in vanilla terrain
 	public static final int KEY_ARGB = 0xFFFF00FF;
 	public static final int OFFSCREEN_X = -20000;
+	// Dota FOV 90 is horizontal at 4:3 (Source convention) = 73.7 degrees vertical, Minecraft's FOV is vertical
+	public static final int FOV = Integer.getInteger("mcdota.fov", 74);
 	public static Overlay overlay;
 	public static com.sun.jna.platform.win32.WinDef.HWND mcHwnd; // Minecraft's own (off-screen) window
 
@@ -24,6 +26,10 @@ public class McDotaClient implements ClientModInitializer {
 	public void onInitializeClient() {
 		ClientLifecycleEvents.CLIENT_STARTED.register(mc -> {
 			mc.options.cloudStatus().set(CloudStatus.OFF);
+			mc.options.fov().set(FOV); // must match Dota's camera (dota_camera_fov_min/max in tools/dev_launch.sh)
+			mc.options.fovEffectScale().set(0.0); // no sprint/speed zoom: Dota's FOV never changes
+			mc.options.damageTiltStrength().set(0.0); // a hurt camera tilt would tear Minecraft's layer off Dota's
+			mc.options.bobView().set(false); // walking bob shakes only Minecraft's layer, so blocks would swim over the map
 			int[] r = renderSize(); // resizing inside Window's constructor crashes, so do it once the client is up
 			GLFW.glfwSetWindowSize(mc.getWindow().handle(), r[0], r[1]);
 			GLFW.glfwSetWindowPos(mc.getWindow().handle(), OFFSCREEN_X, 0);

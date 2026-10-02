@@ -19,11 +19,15 @@ function MCBridge:Tick()
 
 	local a = MC.anchor
 	local lines = { string.format( "anchor %.1f %.1f %.1f", a.x, a.y, a.z ) }
-	for _, h in ipairs( HeroList:GetAllHeroes() ) do
-		if h:IsAlive() and not h.mc_player and h:GetUnitName() ~= STEVE then
-			local x, z = to_mc( h:GetAbsOrigin() )
-			table.insert( lines, string.format( "hero %d %s %.2f %.2f %d %d", h:entindex(),
-				( h:GetUnitName():gsub( "npc_dota_hero_", "" ) ), x, z, h:GetHealth(), h:GetMaxHealth() ) )
+	-- every living Dota unit near Steve gets a stand-in in Minecraft (heroes, creeps, neutrals)
+	local center = self.steve and self.steve:GetAbsOrigin() or MC.anchor
+	for _, h in ipairs( FindUnitsInRadius( DOTA_TEAM_GOODGUYS, center, nil, 2500, DOTA_UNIT_TARGET_TEAM_BOTH,
+		DOTA_UNIT_TARGET_HERO + DOTA_UNIT_TARGET_BASIC, DOTA_UNIT_TARGET_FLAG_NONE, FIND_ANY_ORDER, false ) ) do
+		if h:IsAlive() and not h.mc_player and not h.mc_block and not h:IsInvulnerable() then
+			local p = h:GetAbsOrigin()
+			local x, z = to_mc( p )
+			table.insert( lines, string.format( "hero %d %s %.2f %.2f %d %d %d", h:entindex(),
+				( h:GetUnitName():gsub( "npc_dota_hero_", "" ):gsub( "npc_dota_", "" ) ), x, z, h:GetHealth(), h:GetMaxHealth(), MC:HeightAt( p.z ) ) )
 		end
 	end
 	for _, l in ipairs( self.out ) do table.insert( lines, l ) end
@@ -59,14 +63,18 @@ function MCBridge:Apply( body )
 		end
 
 		local bx, by, bz, kind = line:match( "^mcblock (%S+) (%S+) (%S+) (%S+)" )
-		if bx and math.abs( tonumber( by ) - MC_FLOOR ) <= 1 then -- blocks at the hero's height block Dota pathing
+		local ground = bx and ( MC.heights[ bx .. "," .. bz ] or MC_FLOOR )
+		if bx and tonumber( by ) >= ground and tonumber( by ) <= ground + 1 then -- blocks at a hero's height block Dota pathing
 			MC:SpawnBlock( FROM_MC[ kind ] or "npc_mc_block_cobble", MC:CellPos( tonumber( bx ), tonumber( bz ) ), true )
 		end
 		local rx, ry, rz = line:match( "^mcbreak (%S+) (%S+) (%S+)" )
-		if rx and tonumber( ry ) == MC_FLOOR then MC:RemoveBlock( tonumber( rx ), tonumber( rz ) ) end
+		if rx then MC:RemoveBlock( tonumber( rx ), tonumber( rz ) ) end
 
-		local cam = line:match( "^cam (.+)" )
-		if cam then CustomGameEventManager:Send_ServerToAllClients( "mc_cam", { v = cam } ) end
+		local lx, ly, yawc, pitch, dist, lz, sent = line:match( "^cam (%S+) (%S+) (%S+) (%S+) (%S+) (%S+) (%S+)" )
+		if lx then -- Panorama wants the look-at height above the ground under it
+			local off = tonumber( lz ) - GetGroundHeight( Vector( tonumber( lx ), tonumber( ly ), 0 ), nil )
+			CustomGameEventManager:Send_ServerToAllClients( "mc_cam", { v = table.concat( { lx, ly, yawc, pitch, dist, string.format( "%.1f", off ), sent }, " " ) } )
+		end
 	end
 end
 

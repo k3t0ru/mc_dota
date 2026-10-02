@@ -9,7 +9,7 @@ import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 
-// Every frame: Minecraft's eye pose "x y z yaw pitch" to the bridge (UDP 127.0.0.1:27101), which steers Dota's camera.
+// Every frame: Minecraft's eye pose "x y z yaw pitch millis" to the bridge (UDP 127.0.0.1:27101), which steers Dota's camera.
 public final class CameraSender {
 	private static final InetSocketAddress BRIDGE = new InetSocketAddress("127.0.0.1", 27101);
 	private static DatagramSocket socket;
@@ -20,7 +20,7 @@ public final class CameraSender {
 			if (socket == null) socket = new DatagramSocket();
 			Camera cam = mc.gameRenderer.getMainCamera();
 			Vec3 p = cam.position();
-			byte[] msg = String.format(java.util.Locale.ROOT, "%.3f %.3f %.3f %.2f %.2f", p.x, p.y, p.z, cam.yRot(), cam.xRot())
+			byte[] msg = String.format(java.util.Locale.ROOT, "%.3f %.3f %.3f %.2f %.2f %d", p.x, p.y, p.z, cam.yRot(), cam.xRot(), System.currentTimeMillis())
 				.getBytes(StandardCharsets.US_ASCII);
 			socket.send(new DatagramPacket(msg, msg.length, BRIDGE));
 		} catch (Exception ignored) { // bridge not running: Minecraft just plays on

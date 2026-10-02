@@ -71,23 +71,33 @@ public final class Sync {
 			for (String line : body.split("\n")) {
 				String[] p = line.trim().split(" ");
 				switch (p[0]) {
-					case "hero" -> { // hero <id> <name> <x> <z> <hp> <max>
+					case "hero" -> { // hero <id> <name> <x> <z> <hp> <max> [y]: any Dota unit near Steve
 						String tag = "dota_" + p[1];
+						String y = p.length > 7 ? p[7] : "-60";
 						seen.add(tag);
-						if (standIns.put(p[1], tag) == null) run(server, String.format("summon minecraft:husk %s -60 %s {NoAI:1b,Silent:1b,"
+						boolean fresh = standIns.put(p[1], tag) == null;
+						if (fresh) run(server, String.format("summon minecraft:husk %s " + y + " %s {NoAI:1b,Silent:1b,"
 							+ "PersistenceRequired:1b,Tags:[\"dota\",\"%s\"],CustomName:\"%s\",attributes:[{id:\"minecraft:max_health\",base:%d}],"
-							+ "Health:%df,active_effects:[{id:\"minecraft:invisibility\",duration:-1,show_particles:0b}]}", p[3], p[4], tag, p[2], (int) HERO_HP, (int) HERO_HP));
-						run(server, String.format("tp @e[tag=%s,limit=1] %s -60 %s", tag, p[3], p[4]));
+							+ "Health:%df}", p[3], p[4], tag, p[2], (int) HERO_HP, (int) HERO_HP));
+						if (fresh) run(server, "effect give @e[tag=" + tag + "] minecraft:invisibility infinite 0 true"); // the Dota unit is what you see
+						run(server, String.format("tp @e[tag=%s,limit=1] %s %s %s", tag, p[3], y, p[4]));
 					}
 					case "dmg" -> run(server, "damage @p " + p[1] + " minecraft:mob_attack");
-					case "reset" -> { // new Dota game: wipe every block above the barrier floor in the arena
+					case "reset" -> { // new Dota game: flat barrier floor again and nothing on it
 						int r = 112; // only chunks within view distance are loaded; fill fails on anything else
-						for (int x = -r; x < r; x += 4)
+						for (int x = -r; x < r; x += 4) {
+							run(server, String.format("fill %d -63 %d %d -61 %d minecraft:barrier", x, -r, x + 3, r - 1));
 							run(server, String.format("fill %d -60 %d %d -40 %d minecraft:air", x, -r, x + 3, r - 1));
+						}
 						run(server, "kill @e[type=minecraft:item]");
 					}
 					case "block" -> run(server, String.format("setblock %s %s %s minecraft:%s", p[1], p[2], p[3], p[4]));
 					case "unblock" -> run(server, String.format("setblock %s %s %s minecraft:air", p[1], p[2], p[3]));
+					case "h" -> { // h <x> <z> <y>: the invisible floor follows Dota's terrain (y = where feet stand)
+						int y = Math.max(-63, Integer.parseInt(p[3]));
+						if (y > -60) run(server, String.format("fill %s -60 %s %s %d %s minecraft:barrier", p[1], p[2], p[1], y - 1, p[2]));
+						else if (y < -60) run(server, String.format("fill %s %d %s %s -61 %s minecraft:air", p[1], y, p[2], p[1], p[2]));
+					}
 					default -> { }
 				}
 			}
