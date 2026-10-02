@@ -1,7 +1,11 @@
 "AddonInfo"
 {
-	"maps"		"hero_demo_main"
+	"maps"		"dota hero_demo_main"
 	"IsPlayable"	"1"
+	"dota"
+	{
+		"MaxPlayers"	"4"
+	}
 	"hero_demo_main"
 	{
 		"MaxPlayers"	"4"

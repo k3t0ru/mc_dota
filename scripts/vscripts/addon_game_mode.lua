@@ -36,7 +36,7 @@ function Precache( context )
 		"models/mc/dirt.vmdl", "models/mc/sand.vmdl", "models/mc/planks.vmdl",
 		"models/mc/crack_0.vmdl", "models/mc/crack_1.vmdl", "models/mc/crack_2.vmdl", "models/mc/crack_3.vmdl", "models/mc/crack_4.vmdl",
 		"models/mc/crack_5.vmdl", "models/mc/crack_6.vmdl", "models/mc/crack_7.vmdl", "models/mc/crack_8.vmdl", "models/mc/crack_9.vmdl",
-		"models/mc/villager_weaponsmith.vmdl", "models/mc/villager_armorer.vmdl", "models/mc/villager_librarian.vmdl",
+		"models/mc/villager_fletcher.vmdl", "models/mc/villager_librarian.vmdl", "models/mc/villager_toolsmith.vmdl", "models/mc/villager_weaponsmith.vmdl", "models/mc/villager_mason.vmdl",
 		"models/heroes/undying/undying_minion.vmdl",
 		"models/creeps/neutral_creeps/n_creep_troll_skeleton/n_creep_skeleton_melee.vmdl",
 	}) do PrecacheResource( "model", m, context ) end
@@ -103,6 +103,10 @@ end
 
 function MC:OnSpawned( e )
 	local hero = EntIndexToHScript( e.entindex )
+	if hero.mc_player and hero.mc_dead then -- Dota's respawn timer is over: Minecraft's player may move again
+		hero.mc_dead = nil
+		MCBridge:Send( "respawn" )
+	end
 	if not hero:IsRealHero() or hero.mc_ready then return end
 	hero.mc_ready = true
 	-- npc_spawned fires while the hero is still at (0,0,0); wait a frame for the real position
@@ -119,7 +123,7 @@ function MC:SetupHero( hero )
 		MC.world_done = true
 		MC.anchor = hero:GetAbsOrigin() -- Minecraft (0,0) maps here
 		-- Dota's own camera controls would fight Minecraft's (launch args alone get overridden by the user's config)
-		SendToConsole( "dota_camera_edgemove 0; dota_camera_speed 0; dota_camera_lock 0; dota_camera_fov_min 90; dota_camera_fov_max 90; dota_camera_z_interp_speed 100000; fps_max 60" )
+		SendToConsole( "dota_camera_edgemove 0; dota_camera_speed 0; dota_camera_lock 0; dota_camera_fov_min 90; dota_camera_fov_max 90; dota_camera_z_interp_speed 100000; snd_mute_losefocus 0; snd_musicvolume 0" ) -- Dota's sound plays with Minecraft holding focus; music is Minecraft's
 		MC:SendTerrain()
 		MC:SpawnTraders()
 		-- Panorama's camera playback delay: Minecraft's overlay waits as long (see fpcam.js)
@@ -256,13 +260,25 @@ function MC:LiftUnit( u )
 	return lift
 end
 
--- Traders by the spawn (Minecraft cells; they look west, toward the spawn). Dota draws them; Minecraft keeps an
--- invisible villager on each spot to trade with (Progress.java has the offers)
-TRADERS = { { 4, -2, "weaponsmith" }, { 4, 1, "armorer" }, { 4, 4, "librarian" } }
+-- Traders (Minecraft cells; they look west). Dota draws them; Minecraft keeps an invisible villager on each spot to trade
+-- with (Progress.java has the offers). The basic shop stands by the spawn, the secret one at Dota's own secret shop.
+TRADERS = { { 4, -2, "fletcher" }, { 4, 1, "librarian" }, { 4, 4, "toolsmith" }, { 4, 7, "mason" } }
 function MC:SpawnTraders()
+	-- Dota's shops are trigger_shop volumes (no API tells their type): the secret shop is taken as the nearest one that
+	-- is well away from the spawn (the fountain shop is at the spawn); a map with a single shop uses that one
+	local best, bestD, any
+	for _, e in ipairs( Entities:FindAllByClassname( "trigger_shop" ) ) do
+		local x, z = MC:CellOf( e:GetAbsOrigin() )
+		local d = math.sqrt( x * x + z * z )
+		any = any or { x, z }
+		if d > 30 and ( not bestD or d < bestD ) then best, bestD = { x, z }, d end
+	end
+	local secret = best or any or { 20, 0 }
+	table.insert( TRADERS, { secret[1] + 2, secret[2], "weaponsmith" } )
+	print( string.format( "[mc] secret shop trader at cell %d,%d", secret[1] + 2, secret[2] ) )
 	for _, t in ipairs( TRADERS ) do
 		local pos = MC:CellPos( t[1], t[2] )
-		local p = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/villager_" .. t[3] .. ".vmdl",
+		SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/villager_" .. t[3] .. ".vmdl",
 			origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ), angles = "0 90 0" } ) -- the model looks +Y at yaw 0
 	end
 	MC:SendTraders()
@@ -272,21 +288,46 @@ function MC:SendTraders()
 	for _, t in ipairs( TRADERS ) do MCBridge:Send( string.format( "trader %d %d %s", t[1], t[2], t[3] ) ) end
 end
 
--- Steve's kills drop Minecraft loot: emeralds (the shop currency) by the unit's gold bounty, plus food
+-- Steve's kills drop Minecraft loot: emeralds (the shop currency) by the unit's gold bounty, food, and from neutrals the
+-- crafting materials that fit them (Dota's shops have nothing to mine; the jungle is the "mine")
 EMERALD_GOLD = 25 -- gold bounty per emerald
+NEUTRAL_LOOT = { -- unit name part -> Minecraft item, count (first match wins; ancients before their small kin)
+	{ "black_dragon", "diamond", 2 }, { "black_drake", "diamond", 1 }, { "thunderhide", "diamond", 1 }, { "prowler", "diamond", 1 },
+	{ "granite_golem", "diamond", 1 }, { "rock_golem", "iron_ingot", 2 }, { "frostbitten", "diamond", 1 },
+	{ "harpy", "feather", 4 }, { "wildkin", "feather", 4 }, { "wolf", "leather", 2 }, { "centaur", "leather", 3 },
+	{ "hellbear", "leather", 3 }, { "kobold", "string", 2 }, { "satyr", "string", 3 }, { "gnoll", "flint", 3 },
+	{ "troll", "flint", 2 }, { "ogre", "iron_ingot", 1 }, { "golem", "iron_ingot", 2 }, { "ghost", "gunpowder", 2 },
+	{ "fel_beast", "gunpowder", 2 }, { "warpine", "oak_log", 6 },
+}
 function MC:LootFor( dead )
-	local gold = dead:GetGoldBounty()
-	local food, n = "none", 0
+	local gold, name = dead:GetGoldBounty(), dead:GetUnitName()
+	local items = {}
 	if dead:IsRealHero() then
-		gold, food, n = 150 + 10 * dead:GetLevel(), "golden_apple", 1
+		gold = 150 + 10 * dead:GetLevel()
+		items = { "golden_apple", 1 }
 	elseif dead:IsBuilding() then
-		gold, food, n = dead:IsTower() and 250 or 150, "golden_apple", 1
+		gold = dead:IsTower() and 250 or 150
+		items = { "golden_apple", 1, "iron_ingot", 3 }
+	elseif name:find( "roshan" ) then -- the Aegis: a totem, plus the rare stuff
+		items = { "totem_of_undying", 1, "netherite_ingot", 1, "diamond", 3 }
 	elseif dead:IsNeutralUnitType() or dead:GetTeamNumber() == DOTA_TEAM_NEUTRALS then
-		food, n = "cooked_beef", RandomInt( 1, 2 )
+		items = { "cooked_beef", RandomInt( 1, 2 ) }
+		for _, l in ipairs( NEUTRAL_LOOT ) do
+			if name:find( l[1] ) then table.insert( items, l[2] ) table.insert( items, l[3] ) break end
+		end
+		if #items == 2 then table.insert( items, "leather" ) table.insert( items, 1 ) end -- unknown neutral
+	elseif name:find( "siege" ) then
+		items = { "gunpowder", 2 }
 	elseif RandomInt( 1, 2 ) == 1 then
-		food, n = "bread", 1
+		items = { "bread", 1 }
 	end
-	return string.format( "loot %d %s %d", math.max( 1, math.floor( gold / EMERALD_GOLD + 0.5 ) ), food, n )
+	-- every unit pays its own bounty, like gold in Dota: what doesn't make a whole emerald waits for the next kill
+	MC.goldLeft = ( MC.goldLeft or 0 ) + gold
+	local emeralds = math.floor( MC.goldLeft / EMERALD_GOLD )
+	MC.goldLeft = MC.goldLeft - emeralds * EMERALD_GOLD
+	local line = string.format( "loot %d %d", emeralds, gold )
+	for i = 1, #items, 2 do line = line .. " " .. items[i] .. " " .. items[i + 1] end
+	return line
 end
 
 -- mining cracks (stage 0..9; anything else removes them): a slightly bigger cracked shell over the block
@@ -342,6 +383,12 @@ function MC:DamageFilter( f )
 		MCBridge:OnSteveDamaged( victim, f.damage, f.entindex_attacker_const )
 		return false
 	end
+	local attackerUnit = EntIndexToHScript( f.entindex_attacker_const )
+	if attackerUnit and attackerUnit.mc_attack then -- Steve's deny: a real Dota attack carrying the Minecraft hit
+		f.damage = attackerUnit.mc_attack
+		attackerUnit.mc_attack = nil
+		return true
+	end
 	local def = victim.mc_block
 	if not def then return true end
 
@@ -368,9 +415,7 @@ function MC:OnKilled( e )
 	local killer = e.entindex_attacker and EntIndexToHScript( e.entindex_attacker )
 	if not def then -- Steve's kills give Minecraft experience and loot
 		if killer and killer.mc_player and dead and not dead:IsNull() and dead:GetTeamNumber() == killer:GetTeamNumber() then
-			-- a deny: Dota itself already cuts the enemy's XP; show the "!" and give Steve nothing
-			ParticleManager:ReleaseParticleIndex( ParticleManager:CreateParticle( "particles/msg_fx/msg_deny.vpcf", PATTACH_OVERHEAD_FOLLOW, dead ) )
-			print( "[mc] Steve denied " .. dead:GetUnitName() )
+			print( "[mc] Steve denied " .. dead:GetUnitName() ) -- a real attack did it, so Dota shows the "!" and cuts the XP itself
 		end
 		if killer and killer.mc_player and dead and not dead:IsNull() and dead:GetTeamNumber() ~= killer:GetTeamNumber() then -- denies give nothing
 			MCBridge:Send( string.format( "xp %d", math.max( 1, math.floor( dead:GetDeathXP() / 10 ) ) ) )

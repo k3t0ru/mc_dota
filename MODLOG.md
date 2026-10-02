@@ -241,3 +241,27 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
   units in it get modifier_mc_lift (VISUAL_Z_DELTA 96) and their stand-in y+1. 2 high = wall. No staircases.
 - Test trick: POST "hit <id> <n>" / "set x y z kind" to /mc fakes Minecraft events (an empty POST lists hero lines, but
   it also eats queued to_mc lines).
+
+## 2026-10-03 01:30: real Dota map, crafting economy, death penalty, repair, sound
+- Map: DOTA_MAP (env.sh, default "dota") = game/dota/maps/dota.vpk copied into maps/ (setup.sh; gitignored maps/*.vpk,
+  addoninfo lists both). Secret shop = nearest trigger_shop > 30 cells from the spawn (no API for the shop type);
+  on the real map: cell 18,-90. hero_demo_main has a single shop at 22,14.
+- Terrain on the big map: the build queue is now per chunk, nearest chunk to the player first ("terrain: N columns ready"
+  every 10 s). Half-loaded chunks at the view edge are drawn by the client but not built → podzol SIDE is magenta too
+  (was an orange "dirt" strip across the river). Base restore (bedrock/stone/dirt) only if bedrock is missing.
+  Routine terrain/void fills no longer log "No blocks were filled".
+- Denies: ApplyDamage isn't an attack, so Dota didn't count it (no "!", enemy full XP). Now Steve:PerformAttack on the ally,
+  DamageFilter swaps in the Minecraft hit (steve.mc_attack).
+- Economy = crafting: villagers sell MATERIALS (Progress.java): fletcher (logs, string, flint, feathers, leather, iron,
+  gunpowder, paper, food), librarian (enchanting), toolsmith (tables; sneak + right click = repair held item for 1/3 of
+  its material value x wear), mason (blocks Dota has models for), secret shop (diamonds, netherite + template, elytra,
+  totem, pearls, top books). Neutrals drop materials by name (NEUTRAL_LOOT), Roshan = totem + netherite + diamonds.
+  Emeralds from gold bounty with the remainder carried over (MC.goldLeft): units differ like in Dota.
+- Death: MC death → "died <lost>" (lost = min(carried, 2 + level) emeralds) → Lua kills Steve's hero crediting the last
+  attacker (bounty/XP to them), "dead <secs> <lost>" → title; frozen at spawn (adventure, speed/jump 0) until Dota's
+  respawn → "respawn".
+- Shield: blocked in our code (isBlocking + attacker stand-in within 90° → no damage, shield wear, block sound);
+  /damage ... by <stand-in> alone didn't block.
+- Arrows from the player: no gravity, gone after 80 ticks (Dota's camera can't look up to lob). Sweep: sweeping_damage_ratio 0.8.
+- Sound: Dota muted itself without focus → snd_mute_losefocus 0; Dota music off (snd_musicvolume 0 — persists in the
+  user's Dota config!), Minecraft music stays (user's choice).

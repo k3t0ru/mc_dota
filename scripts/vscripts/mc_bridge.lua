@@ -78,7 +78,14 @@ function MCBridge:Apply( body, stale )
 		local ally = hero and self.steve and hero:GetTeamNumber() == self.steve:GetTeamNumber()
 		local deniable = ally and hero:IsAlive() and not hero:IsHero() and hero:GetHealthPercent() < ( hero:IsTower() and 10 or 50 )
 		if hero and hero:IsAlive() and ( not ally or deniable ) then
-			ApplyDamage( { victim = hero, attacker = self.steve or hero, damage = tonumber( amount ) * DMG_TO_DOTA, damage_type = DAMAGE_TYPE_PURE } )
+			if ally and self.steve then
+				-- a deny must be an ATTACK, or Dota doesn't count it (no "!", the enemy keeps full XP); DamageFilter swaps in the hit
+				self.steve.mc_attack = tonumber( amount ) * DMG_TO_DOTA
+				self.steve:PerformAttack( hero, true, false, true, true, false, false, true )
+				self.steve.mc_attack = nil
+			else
+				ApplyDamage( { victim = hero, attacker = self.steve or hero, damage = tonumber( amount ) * DMG_TO_DOTA, damage_type = DAMAGE_TYPE_PURE } )
+			end
 		end
 
 		local bx, by, bz, kind = line:match( "^mcblock (%S+) (%S+) (%S+) (%S+)" )
@@ -92,6 +99,14 @@ function MCBridge:Apply( body, stale )
 			rx, ry, rz = tonumber( rx ), tonumber( ry ), tonumber( rz )
 			MC:HideBlock( rx, ry, rz )
 			MC:ColumnChanged( rx, rz )
+		end
+
+		local lost = line:match( "^died (%S+)" ) -- the Minecraft player died: so does his Dota hero (the killer gets the bounty)
+		if lost and self.steve and self.steve:IsAlive() then
+			local killer = self.lastAttacker and not self.lastAttacker:IsNull() and self.lastAttacker or self.steve
+			self.steve.mc_dead = true
+			self.steve:Kill( nil, killer )
+			self:Send( string.format( "dead %d %s", math.ceil( self.steve:GetTimeUntilRespawn() ), lost ) )
 		end
 
 		local cx, cy, cz, stage = line:match( "^crack (%S+) (%S+) (%S+) (%S+)" )
@@ -133,6 +148,8 @@ end
 -- Dota hits Steve: Minecraft owns his health, so the hit goes there
 -- (the attacker's stand-in is named, so a raised Minecraft shield facing it blocks the hit)
 function MCBridge:OnSteveDamaged( victim, damage, attacker )
+	local unit = attacker and EntIndexToHScript( attacker )
+	if unit and unit.GetUnitName then self.lastAttacker = unit end -- credited if Steve dies
 	local amount = damage * DOTA_TO_MC
 	if amount < 0.01 then return end
 	self:Send( string.format( "dmg %.2f %d", amount, attacker or -1 ) )

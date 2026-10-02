@@ -11,9 +11,10 @@ java -version 2>&1 | grep -q '"21' || echo "WARNING: JDK 21 expected (java -vers
 W=$(cygpath -w "$HERE")
 powershell -NoProfile -Command "foreach (\$d in @('game','content')) { \$p = '$(cygpath -w "$DOTA_DIR")\' + \$d + '\dota_addons\mc_dungeons'; if (-not (Test-Path \$p)) { New-Item -ItemType Junction -Path \$p -Target ('$W' + \$(if (\$d -eq 'content') { '\content' } else { '' })) | Out-Null } }"
 
-# test map: a copy of Valve's hero_demo map from the user's own install (never shipped)
+# maps: copies of Valve's real Dota map and the small hero_demo map from the user's own install (never shipped)
 mkdir -p "$HERE/maps"
 cp -n "$DOTA_DIR/game/dota_addons/hero_demo/maps/hero_demo_main.vpk" "$HERE/maps/" 2>/dev/null || true
+cp -n "$DOTA_DIR/game/dota/maps/dota.vpk" "$HERE/maps/" 2>/dev/null || true
 
 # Minecraft: first build downloads Minecraft + Fabric (~5-10 min), then the world and options
 (cd "$HERE/mcmod" && ./gradlew --no-daemon build)

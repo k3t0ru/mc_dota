@@ -46,10 +46,14 @@ public class McDotaClient implements ClientModInitializer {
 		net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents.CHUNK_LOAD.register((level, chunk) -> {
 			if (level.dimension() == net.minecraft.world.level.Level.OVERWORLD) Sync.chunkLoaded(level.getServer(), chunk.getPos().x, chunk.getPos().z);
 		});
-		// a respawn resets attributes: Steve must keep ignoring Dota's knockback
+		// a respawn resets attributes (knockback resistance, health by level, sweep); a death waits for Dota's respawn
 		net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) ->
-			newPlayer.level().getServer().getCommands().performPrefixedCommand(newPlayer.level().getServer().createCommandSourceStack().withSuppressedOutput(),
-				"attribute " + newPlayer.getName().getString() + " minecraft:knockback_resistance base set 1"));
+			Progress.afterRespawn(newPlayer.level().getServer()));
+		net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents.AFTER_DEATH.register((entity, source) -> {
+			if (entity instanceof net.minecraft.server.level.ServerPlayer p) Progress.died(p);
+		});
+		net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> Progress.entityLoaded(entity));
+		net.fabricmc.fabric.api.event.player.UseEntityCallback.EVENT.register((player, level, hand, entity, hit) -> Progress.interact(player, entity));
 		// clicks land on the overlay, never in Minecraft's window, so grab the mouse ourselves once focus arrives
 		ClientTickEvents.END_CLIENT_TICK.register(Sync::tick);
 		ClientTickEvents.END_CLIENT_TICK.register(mc -> {

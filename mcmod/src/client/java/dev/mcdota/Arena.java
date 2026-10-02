@@ -4,7 +4,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.server.MinecraftServer;
 
 // World rules for playing on top of Dota. The world is a diggable superflat (bedrock, stone, dirt) whose top layer is
-// podzol at y -1; podzol (and mud-brick slabs for half steps) are retextured pure magenta, so the overlay turns the
+// podzol at y -1; podzol (top AND sides: columns not rebuilt yet, e.g. in half-loaded chunks at the view edge, keep the
+// flat default and must not show) and mud-brick slabs for half steps are retextured pure magenta, so the overlay turns the
 // surface into a hole showing Dota's ground, while still hiding Minecraft blocks behind Dota's hills.
 public final class Arena {
 	public static final int RADIUS = 160; // blocks around MC (0,0) that are synced with Dota; 1 block = 64 Dota units
@@ -20,7 +21,6 @@ public final class Arena {
 		// death screens need the mouse, which only works in-game here: respawn at the start right away
 		"gamerule keepInventory true", "gamerule keep_inventory true",
 		"gamerule doImmediateRespawn true", "gamerule immediate_respawn true", "setworldspawn 0 0 0", "spawnpoint @p 0 0 0", // start where the Dota hero spawns (MC 0,0), not wherever the last session ended
-		"attribute @p minecraft:knockback_resistance base set 1", // Dota hits hurt but don't shove the camera around
 		// the starting kit comes with every new Dota match (Progress.newMatch)
 	};
 
@@ -29,6 +29,7 @@ public final class Arena {
 		if (server == null) return;
 		server.execute(() -> {
 			for (String c : RULES) server.getCommands().performPrefixedCommand(server.createCommandSourceStack().withSuppressedOutput(), c);
+			Progress.attributes(server); // health by Dota level, sweep, knockback resistance
 		});
 	}
 }

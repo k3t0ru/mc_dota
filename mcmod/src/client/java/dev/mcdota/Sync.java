@@ -37,6 +37,9 @@ public final class Sync {
 		else out.add(String.format("set %d %d %d %s", p.getX(), p.getY(), p.getZ(), BuiltInRegistries.BLOCK.getKey(s.getBlock()).getPath()));
 	}
 
+	// any thread: a line for Dota
+	public static void out(String line) { out.add(line); }
+
 	private static String lastCrack = "";
 
 	// client thread: mining progress on a block (stage -1 = stopped)
@@ -80,18 +83,20 @@ public final class Sync {
 	// wall down to the lowest neighbour is mud bricks, magenta on every face, so Dota's slope shows through it.
 	private static void terrain(MinecraftServer server, String x, String z, int hh, int low) {
 		hh = Math.max(-100, Math.min(100, hh)); // stay well inside the world (bottom is y -64)
-		// the superflat underneath (bedrock, stone, dirt), in case this column was void before; "nothing filled" is the norm here
-		run(server, String.format("fill %s -64 %s %s -64 %s minecraft:bedrock", x, z, x, z), false);
-		run(server, String.format("fill %s -63 %s %s -5 %s minecraft:stone", x, z, x, z), false);
-		run(server, String.format("fill %s -4 %s %s -2 %s minecraft:dirt", x, z, x, z), false);
+		// the superflat underneath (bedrock, stone, dirt) if this column was void before (no bedrock at the bottom)
+		if (server.overworld().getBlockState(new BlockPos(Integer.parseInt(x), -64, Integer.parseInt(z))).isAir()) {
+			run(server, String.format("fill %s -64 %s %s -64 %s minecraft:bedrock", x, z, x, z), false);
+			run(server, String.format("fill %s -63 %s %s -5 %s minecraft:stone", x, z, x, z), false);
+			run(server, String.format("fill %s -4 %s %s -2 %s minecraft:dirt", x, z, x, z), false);
+		}
 		low = Math.max(-100, Math.min(hh, low));
 		int full = Math.floorDiv(hh, 2), bottom = Math.floorDiv(low, 2) - 1; // solid up to full - 1; skin from bottom
 		Hybrid.setSurface(Integer.parseInt(x), Integer.parseInt(z), full);
-		if (full < 0) run(server, String.format("fill %s %d %s %s -1 %s minecraft:air", x, full, z, x, z));
+		if (full < 0) run(server, String.format("fill %s %d %s %s -1 %s minecraft:air", x, full, z, x, z), false);
 		boolean exposed = low < hh || full > 0; // a side wall shows (raised column or a lower neighbour)
 		run(server, String.format("fill %s %d %s %s %d %s minecraft:%s", x, Math.min(bottom, full - 1), z, x, full - 1, z,
-			exposed ? "mud_bricks" : "podzol"));
-		if (hh % 2 != 0) run(server, String.format("setblock %s %d %s minecraft:mud_brick_slab", x, full, z));
+			exposed ? "mud_bricks" : "podzol"), false);
+		if (hh % 2 != 0) run(server, String.format("setblock %s %d %s minecraft:mud_brick_slab", x, full, z), false);
 	}
 
 	// Minecraft can only change loaded chunks, and Dota's map is far bigger than the view distance: columns of unloaded
@@ -102,13 +107,22 @@ public final class Sync {
 	// which is why the void past the map edge never appeared.
 	private record Build(int x, int z, Runnable run) { }
 	private static final Map<Long, java.util.List<Build>> pending = new HashMap<>();
-	private static final java.util.ArrayDeque<Build> ready = new java.util.ArrayDeque<>();
+	// ready builds grouped by chunk; the chunks nearest the player go first (the real Dota map queues tens of thousands
+	// of columns, and first-come-first-served left the ground under the player unbuilt for minutes)
+	private static final Map<Long, java.util.ArrayDeque<Build>> ready = new HashMap<>();
+	private static int readyCount;
 	private static final int BUDGET = 400;
+	private static long lastReport;
 
 	private static void column(MinecraftServer server, int x, int z, Runnable build) {
 		Build b = new Build(x, z, build);
-		if (server.overworld().hasChunk(x >> 4, z >> 4)) ready.add(b);
+		if (server.overworld().hasChunk(x >> 4, z >> 4)) ready(b);
 		else wait(b);
+	}
+
+	private static void ready(Build b) {
+		ready.computeIfAbsent(net.minecraft.world.level.ChunkPos.asLong(b.x >> 4, b.z >> 4), k -> new java.util.ArrayDeque<>()).add(b);
+		readyCount++;
 	}
 
 	private static void wait(Build b) {
@@ -118,18 +132,37 @@ public final class Sync {
 	// server thread: a chunk just loaded
 	public static void chunkLoaded(MinecraftServer server, int cx, int cz) {
 		java.util.List<Build> builds = pending.remove(net.minecraft.world.level.ChunkPos.asLong(cx, cz));
-		if (builds != null) ready.addAll(builds);
+		if (builds != null) builds.forEach(Sync::ready);
 	}
 
 	// server thread, every tick
 	public static void buildSome(MinecraftServer server) {
-		if (ready.isEmpty()) return;
+		if (System.currentTimeMillis() - lastReport > 10000 && (readyCount > 0 || !pending.isEmpty())) {
+			lastReport = System.currentTimeMillis();
+			org.slf4j.LoggerFactory.getLogger("mcdota").info("terrain: {} columns ready, {} chunks waiting to load", readyCount, pending.size());
+		}
+		if (readyCount == 0) return;
+		var players = server.getPlayerList().getPlayers();
+		int px = players.isEmpty() ? 0 : players.get(0).getBlockX() >> 4, pz = players.isEmpty() ? 0 : players.get(0).getBlockZ() >> 4;
+		java.util.List<Long> order = new java.util.ArrayList<>(ready.keySet());
+		order.sort(java.util.Comparator.comparingLong(k -> {
+			long dx = net.minecraft.world.level.ChunkPos.getX(k) - px, dz = net.minecraft.world.level.ChunkPos.getZ(k) - pz;
+			return dx * dx + dz * dz;
+		}));
 		applying = true;
 		try {
-			for (int i = 0; i < BUDGET && !ready.isEmpty(); i++) {
-				Build b = ready.poll();
-				if (server.overworld().hasChunk(b.x >> 4, b.z >> 4)) b.run.run();
-				else wait(b);
+			int done = 0;
+			for (Long k : order) {
+				java.util.ArrayDeque<Build> q = ready.get(k);
+				while (done < BUDGET && !q.isEmpty()) {
+					Build b = q.poll();
+					readyCount--;
+					done++;
+					if (server.overworld().hasChunk(b.x >> 4, b.z >> 4)) b.run.run();
+					else wait(b);
+				}
+				if (q.isEmpty()) ready.remove(k);
+				if (done >= BUDGET) break;
 			}
 		} finally {
 			applying = false;
@@ -166,11 +199,10 @@ public final class Sync {
 						run(server, String.format("tp @e[tag=%s,limit=1] %s %s %s", tag, p[3], y, p[4]));
 					}
 					// from the attacker's stand-in, so a raised shield facing it blocks the hit (no stand-in: plain damage)
-					case "dmg" -> {
-						if (p.length < 3 || !run(server, "damage @p " + p[1] + " minecraft:mob_attack by @e[tag=dota_" + p[2] + ",limit=1]"))
-							run(server, "damage @p " + p[1] + " minecraft:mob_attack");
-					}
-					case "loot" -> Progress.loot(server, Integer.parseInt(p[1]), p[2], Integer.parseInt(p[3]));
+					case "dmg" -> Progress.damage(server, Float.parseFloat(p[1]), p.length > 2 ? p[2] : "-1");
+					case "loot" -> Progress.loot(server, p);
+					case "dead" -> Progress.deadFor(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]));
+					case "respawn" -> Progress.respawn(server);
 					case "lvl" -> Progress.level(server, Integer.parseInt(p[1]));
 					case "delay" -> Overlay.dotaDelay(Integer.parseInt(p[1]));
 					case "trader" -> Progress.trader(Integer.parseInt(p[1]), Integer.parseInt(p[2]), p[3]);
@@ -187,6 +219,7 @@ public final class Sync {
 						run(server, "kill @e[tag=dota]"); // stand-ins of the previous Dota game
 						standIns.clear();
 						ready.clear(); // terrain of the previous Dota game
+						readyCount = 0;
 						pending.clear();
 					}
 					case "block" -> run(server, String.format("setblock %s %s %s minecraft:%s", p[1], p[2], p[3], p[4]));

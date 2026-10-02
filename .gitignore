@@ -1,5 +1,5 @@
-# Valve map copied from hero_demo for local testing; never ship it
-maps/hero_demo_main.vpk
+# Valve maps copied from the local Dota install (real map, hero_demo); never ship them
+maps/*.vpk
 
 # compiled from content/ by tools/build_assets.sh
 *_c

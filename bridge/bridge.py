@@ -9,7 +9,8 @@
 #   void <x> <z>        (outside the Dota map: bottomless column)   border <size> (MC world border, centred on 0,0)
 #   h <x> <z> <hh> <low> (terrain: column height and its lowest neighbour's, half blocks above the flat floor)
 #   delay <ms> (Dota camera playback delay: Minecraft's overlay waits as long)   trader <x> <z> <profession>
-#   loot <emeralds> <food> <n> (Steve killed a unit)   lvl <n> (Steve's Dota level = MC max health)   xp <points>
+#   dead <respawn s> <emeralds lost> / respawn (Steve's Dota hero died / is back)   MC -> Dota: died <emeralds lost>
+#   loot <emeralds> <gold> [<item> <n>]... (Steve killed a unit; leftover gold carries over in Lua)   lvl <n> (Steve's Dota level = MC max health)   xp <points>
 # hero lines may carry a 7th field: the MC y the unit stands at (any Dota unit, creeps too)
 # Dota gets back: steve <name> <x> <z> <hp> <maxhp> <yaw>, hit .., mcblock <x> <y> <z> <kind>, mcbreak <x> <y> <z>,
 #                 cam <lookX> <lookY> <yaw> <pitch> <dist> <lookZ>   (lookZ absolute; Lua turns it into a height offset)
@@ -46,7 +47,7 @@ class Relay:
                     self.anchor = tuple(float(v) for v in p[1:])
                 elif p[0] == "hero":
                     heroes[p[1]] = line
-                elif p[0] in ("dmg", "block", "unblock", "reset", "h", "xp", "void", "border", "loot", "lvl", "delay", "trader"):
+                elif p[0] in ("dmg", "block", "unblock", "reset", "h", "xp", "void", "border", "loot", "lvl", "delay", "trader", "dead", "respawn"):
                     self.to_mc.append(line)
                     if p[0] in ("reset", "border"):
                         print("to mc:", line, flush=True)
@@ -67,7 +68,7 @@ class Relay:
                 if p[0] == "me" and len(p) == 8:
                     name, x, y, z, yaw, hp, mx = p[1:]
                     self.me = f"steve {name} {x} {z} {hp} {mx} {yaw}"
-                elif p[0] in ("hit", "crack"):
+                elif p[0] in ("hit", "crack", "died"):
                     self.to_dota.append(line)
                 elif p[0] == "set":
                     self.to_dota.append("mcblock " + " ".join(p[1:]))
