@@ -42,6 +42,10 @@ public class McDotaClient implements ClientModInitializer {
 			overlay = new Overlay();
 		});
 		ClientPlayConnectionEvents.JOIN.register((handler, sender, mc) -> Arena.ensure(mc));
+		// a respawn resets attributes: Steve must keep ignoring Dota's knockback
+		net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents.AFTER_RESPAWN.register((oldPlayer, newPlayer, alive) ->
+			newPlayer.level().getServer().getCommands().performPrefixedCommand(newPlayer.level().getServer().createCommandSourceStack().withSuppressedOutput(),
+				"attribute " + newPlayer.getName().getString() + " minecraft:knockback_resistance base set 1"));
 		// clicks land on the overlay, never in Minecraft's window, so grab the mouse ourselves once focus arrives
 		ClientTickEvents.END_CLIENT_TICK.register(Sync::tick);
 		ClientTickEvents.END_CLIENT_TICK.register(mc -> {

@@ -157,3 +157,10 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - "Higher than the floor in lowlands / up first, then down off a cliff": Dota measures the height offset from its smoothed
   "camera ground". Fix: dota_camera_z_interp_speed 100000 + feedback in Panorama (zFix += (wanted - GetCameraLookAtPosition z)*0.5).
   Measured: want z == fact; in the lowland (8,13) feet on -1.5 (-3 half blocks), eye 139 above Dota's ground (155 - rounding).
+
+## 2026-10-02 20:48: respawn + dig visibility
+- Death screen needs a GUI mouse → doImmediateRespawn/immediate_respawn + setworldspawn/spawnpoint 0 0 0; AFTER_RESPAWN re-applies
+  knockback_resistance (a respawn resets attributes). Verified: /kill → straight back at 0.5 0 0.5.
+- Top layer: podzol with ONLY the top magenta (podzol_side is vanilla again) → a hole's walls are real dirt (verified on screen).
+  Exposed walls (raised columns, a lower neighbour) = mud_bricks, magenta on every face → Dota's slope shows through.
+- Gotcha: WinDrive "type" with the user's Russian layout turns commands into Cyrillic — test with mouse/keys, not chat.

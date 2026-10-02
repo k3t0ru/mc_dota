@@ -62,15 +62,17 @@ public final class Sync {
 		}
 	}
 
-	// column x,z gets its ground at hh half blocks above y 0 (a magenta slab for a half step). Everything visible from
-	// above is magenta podzol: the top, and the side wall down to the lowest neighbour (otherwise dirt pokes out where
-	// Dota's ground drops). Below that it stays dirt/stone, so digging shows real blocks.
+	// column x,z gets its ground at hh half blocks above y 0 (a magenta slab for a half step). Flat ground keeps its podzol
+	// top (only the TOP face is magenta, so a dug hole shows real dirt walls). Where Dota's ground drops, the exposed side
+	// wall down to the lowest neighbour is mud bricks, magenta on every face, so Dota's slope shows through it.
 	private static void terrain(MinecraftServer server, String x, String z, int hh, int low) {
 		hh = Math.max(-100, Math.min(100, hh)); // stay well inside the world (bottom is y -64)
 		low = Math.max(-100, Math.min(hh, low));
 		int full = Math.floorDiv(hh, 2), bottom = Math.floorDiv(low, 2) - 1; // solid up to full - 1; skin from bottom
 		if (full < 0) run(server, String.format("fill %s %d %s %s -1 %s minecraft:air", x, full, z, x, z));
-		run(server, String.format("fill %s %d %s %s %d %s minecraft:podzol", x, Math.min(bottom, full - 1), z, x, full - 1, z));
+		boolean exposed = low < hh || full > 0; // a side wall shows (raised column or a lower neighbour)
+		run(server, String.format("fill %s %d %s %s %d %s minecraft:%s", x, Math.min(bottom, full - 1), z, x, full - 1, z,
+			exposed ? "mud_bricks" : "podzol"));
 		if (hh % 2 != 0) run(server, String.format("setblock %s %d %s minecraft:mud_brick_slab", x, full, z));
 	}
 
