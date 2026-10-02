@@ -5,6 +5,10 @@
 // interpolation (an in-between pose matches no Minecraft frame, so the layers would always slide a little). The overlay
 // picks Minecraft pictures by the same rule (mcdota.delay = PLAYBACK_MS + Dota's extra frame of render latency).
 "use strict";
+// Prediction: poses arrive ~100 ms late; extrapolate from the last two (velocity) to Minecraft's present moment.
+var LEAD_MS = 33; // Dota puts the camera on screen about one frame after we set it: aim at that moment
+var PREDICT_MAX_MS = 200; // never extrapolate further than this (a stale stream would fly off)
+var errs = { raw: [], pred: [] }, shown = []; // calibration: how far the shown camera is from the truth that arrives later
 var PLAYBACK_MS = 0; // hybrid: Dota draws the blocks itself, so nothing to wait for: always the newest pose (overlay version: 180)
 var poses = []; // { t, v } sorted by t
 var lag = [];
@@ -29,6 +33,19 @@ function probe( v ) {
 GameEvents.Subscribe( "mc_cam", function( e ) {
 	var v = ( "" + e.v ).split( " " ).map( Number );
 	if ( v.length !== 8 || isNaN( v[0] ) ) return;
+	// truth for moment v[6] just arrived: compare with what was on screen then (shown = predicted, raw = newest known)
+	for ( var k = 0; k < shown.length; k++ ) {
+		if ( Math.abs( shown[k].t - v[6] ) < 17 ) {
+			errs.raw.push( Math.abs( angDiff( shown[k].raw, v[2] ) ) );
+			errs.pred.push( Math.abs( angDiff( shown[k].pred, v[2] ) ) );
+		}
+	}
+	shown = shown.filter( function( x ) { return x.t > v[6] - 50; } );
+	if ( errs.raw.length >= 60 ) {
+		var avg = function( a ) { return ( a.reduce( function( x, y ) { return x + y; }, 0 ) / a.length ).toFixed( 2 ); };
+		$.Msg( "[mc] yaw error on screen, deg: without prediction " + avg( errs.raw ) + ", with " + avg( errs.pred ) );
+		errs = { raw: [], pred: [] };
+	}
 	poses.push( { t: v[6], v: v } );
 	if ( poses.length > 60 ) poses.shift();
 	lag.push( Date.now() - v[6] );
@@ -40,12 +57,25 @@ GameEvents.Subscribe( "mc_cam", function( e ) {
 } );
 
 
+function angDiff( a, b ) { return ( ( b - a ) % 360 + 540 ) % 360 - 180; }
+
+// pose at wall-clock time t, extrapolated from the two newest poses A (older) and B
+function extrapolate( A, B, t ) {
+	var dt = B.t - A.t;
+	if ( dt <= 0 || dt > 200 ) return B.v; // gap in the stream: no velocity
+	var f = Math.min( t - B.t, PREDICT_MAX_MS ) / dt;
+	var a = A.v, b = B.v;
+	return [ b[0] + ( b[0] - a[0] ) * f, b[1] + ( b[1] - a[1] ) * f, b[2] + angDiff( a[2], b[2] ) * f,
+		Math.max( 3, b[3] + ( b[3] - a[3] ) * f ), b[4], b[5] + ( b[5] - a[5] ) * f, b[6], b[7] + ( b[7] - a[7] ) * f ];
+}
+
 function frame() {
 	var t = Date.now() - PLAYBACK_MS;
 	var a = null;
 	for ( var i = 0; i < poses.length && poses[i].t <= t; i++ ) a = poses[i];
 	if ( a ) {
-		var v = a.v;
+		var v = poses.length >= 2 ? extrapolate( poses[poses.length - 2], poses[poses.length - 1], Date.now() + LEAD_MS ) : a.v;
+		shown.push( { t: Date.now() + LEAD_MS, raw: poses[poses.length - 1].v[2], pred: v[2] } );
 		GameUI.SetCameraTarget( -1 );
 		GameUI.SetCameraTargetPosition( [ v[0], v[1], 0 ], 0.001 ); // lerp = transition seconds; called every frame, anything bigger makes the camera trail ("float")
 		GameUI.SetCameraYaw( v[2] );
