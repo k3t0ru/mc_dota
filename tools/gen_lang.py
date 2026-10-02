@@ -57,6 +57,7 @@ for i, lang in ((0, "english"), (1, "russian")):
         if v[2 + i]:
             L.append(f'\t\t"DOTA_Tooltip_ability_{k}_Description"\t"{v[2 + i]}"')
     L += ["\t}", "}", ""]
-    with open(os.path.join(R, f"addon_{lang}.txt"), "w", encoding="utf-8") as f:
-        f.write("\n".join(L))
+    for d in (R, os.path.join(R, "..", "panorama", "localization")):  # resource/ = chat, panorama/ = UI
+        with open(os.path.join(d, f"addon_{lang}.txt"), "w", encoding="utf-8") as f:
+            f.write("\n".join(L))
 print("ok")

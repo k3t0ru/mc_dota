@@ -26,7 +26,7 @@ function Precache( context )
 	for _, m in ipairs({
 		"models/props_rock/riveredge_rock006a.vmdl",
 		"models/events/dark_carnival/crate_drop_minigame/crate_drop_crate.vmdl",
-		"models/props_structures/shopkeeper_table001.vmdl",
+		"models/props_gameplay/treasure_chest001.vmdl",
 		"models/heroes/undying/undying_minion.vmdl",
 		"models/creeps/neutral_creeps/n_creep_troll_skeleton/n_creep_skeleton_melee.vmdl",
 	}) do PrecacheResource( "model", m, context ) end
@@ -55,20 +55,48 @@ function MC:Init()
 
 	ListenToGameEvent( "npc_spawned", Dynamic_Wrap( MC, "OnSpawned" ), MC )
 	ListenToGameEvent( "entity_killed", Dynamic_Wrap( MC, "OnKilled" ), MC )
+	ListenToGameEvent( "game_rules_state_change", Dynamic_Wrap( MC, "OnState" ), MC )
+	ListenToGameEvent( "player_chat", Dynamic_Wrap( MC, "OnChat" ), MC )
 	print( "[mc] loaded" )
+end
+
+-- test helper: "-give item_mc_iron 5" (cheats/tools only)
+function MC:OnChat( e )
+	if not ( GameRules:IsCheatMode() or IsInToolsMode() ) then return end
+	local item, n = e.text:match( "^%-give (%S+)%s*(%d*)" )
+	local hero = item and PlayerResource:GetSelectedHeroEntity( e.playerid )
+	if not hero then return end
+	for _ = 1, tonumber( n ) or 1 do hero:AddItemByName( item ) end
+end
+
+-- whoever didn't pick a hero in time plays Steve
+function MC:OnState()
+	if GameRules:State_Get() ~= DOTA_GAMERULES_STATE_STRATEGY_TIME and GameRules:State_Get() ~= DOTA_GAMERULES_STATE_PRE_GAME then return end
+	for pid = 0, DOTA_MAX_TEAM_PLAYERS - 1 do
+		local player = PlayerResource:IsValidPlayerID( pid ) and PlayerResource:GetPlayer( pid )
+		if player and not PlayerResource:HasSelectedHero( pid ) then
+			player:SetSelectedHero( STEVE )
+		end
+	end
 end
 
 function MC:OnSpawned( e )
 	local hero = EntIndexToHScript( e.entindex )
 	if not hero:IsRealHero() or hero.mc_ready then return end
 	hero.mc_ready = true
+	-- npc_spawned fires while the hero is still at (0,0,0); wait a frame for the real position
+	hero:SetContextThink( "mc_setup", function() MC:SetupHero( hero ) end, FrameTime() )
+end
+
+function MC:SetupHero( hero )
 
 	-- every player gets a personal crafting table next to them
-	local table = CreateUnitByName( "npc_mc_crafting_table", hero:GetAbsOrigin() + RandomVector( 250 ), true, hero, hero, hero:GetTeam() )
+	local table = CreateUnitByName( "npc_mc_crafting_table", hero:GetAbsOrigin() + hero:GetForwardVector() * 200, true, hero, hero, hero:GetTeam() )
 	table:SetControllableByPlayer( hero:GetPlayerID(), true )
 	table:SetOwner( hero )
 	table:AddNewModifier( table, nil, "modifier_invulnerable", {} )
 	hero.mc_table = table
+	print( "[mc] table", table:GetAbsOrigin(), "hero", hero:GetAbsOrigin() )
 	for i = 0, table:GetAbilityCount() - 1 do
 		local a = table:GetAbilityByIndex( i )
 		if a then a:SetLevel( 1 ) end
@@ -84,7 +112,7 @@ end
 
 function MC:SpawnBlock( name, pos )
 	local def = BLOCKS[ name ]
-	local b = CreateUnitByName( name, pos, false, nil, nil, DOTA_TEAM_BADGUYS )
+	local b = CreateUnitByName( name, pos, false, nil, nil, DOTA_TEAM_NEUTRALS )
 	b.mc_block = def
 	b:SetRenderColor( def.color[1], def.color[2], def.color[3] )
 	b:SetForwardVector( Vector( 0, 1, 0 ) )

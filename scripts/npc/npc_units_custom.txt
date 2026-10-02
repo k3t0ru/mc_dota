@@ -135,8 +135,8 @@
 	"npc_mc_crafting_table"
 	{
 		"BaseClass"	"npc_dota_creature"
-		"Model"	"models/props_structures/shopkeeper_table001.vmdl"
-		"ModelScale"	"0.6"
+		"Model"	"models/props_gameplay/treasure_chest001.vmdl"
+		"ModelScale"	"1.0"
 		"StatusHealth"	"100"
 		"AttackCapabilities"	"DOTA_UNIT_CAP_NO_ATTACK"
 		"MovementCapabilities"	"DOTA_UNIT_CAP_MOVE_NONE"
