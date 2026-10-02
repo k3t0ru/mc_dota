@@ -205,3 +205,15 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
   and only damage whose getLastDamageSource().getEntity() is a Player counts. Verified: Roshan 6130/6130.
 - Portability: tools/env.sh (DOTA_DIR, kill by PID via taskkill, no um), setup.sh (junctions, map, gradle, world/options from
   tools/template, assets), SETUP.md. Transfer: git bundle mc_dungeons.bundle --all.
+
+## 2026-10-03 00:25: new PC (RTX 3060 Ti, 1920x1080 screen), camera pose rate, noon
+- Set up from the bundle per SETUP.md: Dota in D:/SteamLibrary (DOTA_DIR), default java is 24 → run with JAVA_HOME=jdk-21.0.12.
+- Resolution: tools/env.sh DOTA_SIZE (default 1920x1080) → Dota -w/-h and Minecraft render size (-Dmcdota.size via build.gradle).
+- Dota ran at 40 fps: engine_no_focus_sleep 20 in the user's config (Minecraft holds focus) → launch with +engine_no_focus_sleep 0,
+  +fps_max $DOTA_FPS (default 0). Minecraft fps from MC_FPS (default 60; was hard 30). Result: Dota 250-400 fps.
+- Camera jerk: Lua waited for each /sync answer → only ~10 poses/s reached Panorama. Now one request per tick, up to 4 in flight,
+  stale answers don't move Steve → 30 poses/s, lag median 75 → 35 ms. Panorama interpolates poses by Minecraft stamp with an
+  auto delay (90th pct of arrival lag + 8 ms, ~70 ms). "[mc] smooth" log = evenness per 50 ms bucket; synthetic 90°/s spin: 0.11.
+- Blue blocks = Dota night lighting (+ cyan fog sky). Dota locked to noon (SetDaynightCycleDisabled), +fog_enable 0.
+  unlit.vfx for blocks made them INVISIBLE (reverted to global_lit_simple).
+- Gotcha: "Cannot set convar ..., missing required FCVAR flag" on the command line is harmless (fps_max still applied).

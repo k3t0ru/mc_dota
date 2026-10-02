@@ -5,7 +5,7 @@ BRIDGE_URL = "http://127.0.0.1:27100/sync"
 DMG_TO_DOTA = 10  -- 1 MC hp of damage to a hero stand-in = 10 Dota damage
 DOTA_TO_MC = 0.02 -- 1 Dota damage to Steve = 0.02 MC hp (a 50-damage hit = half a heart)
 
-MCBridge = { out = { "reset" }, busy = false, sentAt = 0 } -- a new Dota game starts Minecraft's arena from scratch
+MCBridge = { out = { "reset" }, inflight = 0, sentAt = 0, seq = 0, applied = 0 } -- a new Dota game starts Minecraft's arena from scratch
 
 function MCBridge:Send( line ) table.insert( self.out, line ) end
 
@@ -14,7 +14,10 @@ local function to_dota( x, z ) return GetGroundPosition( MC.anchor + Vector( x *
 
 function MCBridge:Tick()
 	if not MC.anchor then return 0.1 end
-	if self.busy and GameRules:GetGameTime() - self.sentAt < 2 then return FrameTime() end -- a request to a dead bridge never answers
+	-- one request per tick without waiting for the previous answer (waiting halved the camera's pose rate to ~10 Hz);
+	-- a few may be in flight, more means the bridge is gone (a request to a dead bridge never answers)
+	if self.inflight >= 4 and GameRules:GetGameTime() - self.sentAt < 2 then return FrameTime() end
+	if self.inflight >= 4 then self.inflight = 0 end
 	self.sentAt = GameRules:GetGameTime()
 
 	local a = MC.anchor
@@ -34,27 +37,31 @@ function MCBridge:Tick()
 	local sent = self.out
 	self.out = {}
 
-	self.busy = true
+	self.inflight = self.inflight + 1
+	self.seq = self.seq + 1
+	local seq = self.seq
 	local req = CreateHTTPRequestScriptVM( "POST", BRIDGE_URL )
 	req:SetHTTPRequestAbsoluteTimeoutMS( 1000 )
 	req:SetHTTPRequestRawPostBody( "text/plain", table.concat( lines, "\n" ) )
 	req:Send( function( res )
-		self.busy = false
+		self.inflight = math.max( 0, self.inflight - 1 )
 		if res.StatusCode ~= 200 then
 			for _, l in ipairs( sent ) do table.insert( self.out, l ) end -- keep block updates for the next try
 			if not self.warned then self.warned = true print( "[mc] bridge offline: " .. tostring( res.StatusCode ) ) end
 			return
 		end
 		if self.warned ~= false then self.warned = false print( "[mc] bridge online" ) end
-		self:Apply( res.Body or "" )
+		local stale = seq < self.applied -- answers can overtake each other: an older one must not move Steve back
+		self.applied = math.max( self.applied, seq )
+		self:Apply( res.Body or "", stale )
 	end )
 	return FrameTime()
 end
 
-function MCBridge:Apply( body )
+function MCBridge:Apply( body, stale )
 	for line in body:gmatch( "[^\n]+" ) do
 		local name, x, z, hp, max, yaw = line:match( "^steve (%S+) (%S+) (%S+) (%S+) (%S+) (%S+)" )
-		if name then self:MoveSteve( name, to_dota( tonumber( x ), tonumber( z ) ), tonumber( hp ) / tonumber( max ), math.rad( tonumber( yaw ) ) ) end
+		if name and not stale then self:MoveSteve( name, to_dota( tonumber( x ), tonumber( z ) ), tonumber( hp ) / tonumber( max ), math.rad( tonumber( yaw ) ) ) end
 
 		local id, amount = line:match( "^hit (%d+) (%S+)" )
 		local hero = id and EntIndexToHScript( tonumber( id ) )

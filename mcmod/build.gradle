@@ -18,6 +18,8 @@ loom {
 		client {
 			// straight into the test world (a copy of mc_server/world)
 			programArgs "--quickPlaySingleplayer", "mcdota"
+			vmArg "-Dmcdota.size=" + (System.getenv("DOTA_SIZE") ?: "1600x900") // set by tools/env.sh
+			vmArg "-Dmcdota.fps=" + (System.getenv("MC_FPS") ?: "30")
 		}
 	}
 

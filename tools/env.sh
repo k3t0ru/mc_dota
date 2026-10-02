@@ -4,6 +4,10 @@ DOTA_EXE="$DOTA_DIR/game/bin/win64/dota2.exe"
 DOTA_LOG="$DOTA_DIR/game/dota/console.log"
 RC="$DOTA_DIR/game/bin/win64/resourcecompiler.exe"
 ADDON_CONTENT="$DOTA_DIR/content/dota_addons/mc_dungeons"
+DOTA_SIZE=${DOTA_SIZE:-1920x1080} # Dota window = Minecraft render size (16:9 keeps the calibrated FOV)
+# MC_FPS: Minecraft frame rate = how often Dota's camera moves (30 on weak GPUs); DOTA_FPS: Dota fps_max (0 = unlimited)
+MC_FPS=${MC_FPS:-60}; DOTA_FPS=${DOTA_FPS:-0}
+export DOTA_SIZE MC_FPS DOTA_FPS
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 
 # kill running processes by exact PID (never by name pattern)

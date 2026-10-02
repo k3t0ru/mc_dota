@@ -23,4 +23,4 @@ cp -n "$HERE/tools/template/options.txt" "$HERE/mcmod/run/options.txt" 2>/dev/nu
 
 # block models + Minecraft textures from the local Minecraft jar (downloaded by the build above), Panorama
 python "$HERE/tools/gen_blocks.py" && sh "$HERE/tools/build_assets.sh"
-echo "Done. Set Dota to windowed 1600x900 (see SETUP.md), then:  sh tools/dev_launch.sh"
+echo "Done. Set Dota to windowed 1920x1080 (see SETUP.md), then:  sh tools/dev_launch.sh"

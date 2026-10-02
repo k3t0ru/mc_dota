@@ -64,6 +64,9 @@ function MC:Init()
 		mode:SetCustomGameForceHero( STEVE )
 		GameRules:SetPreGameTime( 0 )
 	end
+	-- always noon, like Minecraft's side (time locked there too): Dota's night lighting turns the blocks blue
+	mode:SetDaynightCycleDisabled( true )
+	GameRules:SetTimeOfDay( 0.5 )
 	mode:SetDamageFilter( Dynamic_Wrap( MC, "DamageFilter" ), MC )
 	mode:SetExecuteOrderFilter( Dynamic_Wrap( MC, "OrderFilter" ), MC )
 
@@ -87,6 +90,7 @@ end
 
 -- whoever didn't pick a hero in time plays Steve
 function MC:OnState()
+	if GameRules:State_Get() >= DOTA_GAMERULES_STATE_PRE_GAME then GameRules:SetTimeOfDay( 0.5 ) end -- the clock starts at dawn
 	if GameRules:State_Get() ~= DOTA_GAMERULES_STATE_STRATEGY_TIME and GameRules:State_Get() ~= DOTA_GAMERULES_STATE_PRE_GAME then return end
 	for pid = 0, DOTA_MAX_TEAM_PLAYERS - 1 do
 		local player = PlayerResource:IsValidPlayerID( pid ) and PlayerResource:GetPlayer( pid )
