@@ -55,7 +55,11 @@ public final class Sync {
 	}
 
 	private static void run(MinecraftServer server, String cmd) {
-		server.getCommands().performPrefixedCommand(server.createCommandSourceStack().withSuppressedOutput(), cmd);
+		try { // execute directly so failures land in the log instead of vanishing
+			server.getCommands().getDispatcher().execute(cmd, server.createCommandSourceStack().withSuppressedOutput());
+		} catch (Exception e) {
+			org.slf4j.LoggerFactory.getLogger("mcdota").warn("command failed: {} -> {}", cmd, e.getMessage());
+		}
 	}
 
 	// server thread
@@ -76,6 +80,12 @@ public final class Sync {
 						run(server, String.format("tp @e[tag=%s,limit=1] %s -60 %s", tag, p[3], p[4]));
 					}
 					case "dmg" -> run(server, "damage @p " + p[1] + " minecraft:mob_attack");
+					case "reset" -> { // new Dota game: wipe every block above the barrier floor in the arena
+						int r = 112; // only chunks within view distance are loaded; fill fails on anything else
+						for (int x = -r; x < r; x += 4)
+							run(server, String.format("fill %d -60 %d %d -40 %d minecraft:air", x, -r, x + 3, r - 1));
+						run(server, "kill @e[type=minecraft:item]");
+					}
 					case "block" -> run(server, String.format("setblock %s %s %s minecraft:%s", p[1], p[2], p[3], p[4]));
 					case "unblock" -> run(server, String.format("setblock %s %s %s minecraft:air", p[1], p[2], p[3]));
 					default -> { }

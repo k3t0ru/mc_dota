@@ -104,3 +104,14 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Steve = the Dota hero STEVE, driven by "steve" from MC (SetAbsOrigin), AddNoDraw (camera inside him), HP mirrors MC.
 - Dota heroes → invisible husks (tag dota_<id>, 1024 hp) in MC; health drop → hit → ApplyDamage (×10). Dota damage to Steve → dmg → /damage @p.
 - Verified in screenshots: Dota blocks show up as MC blocks, the camera follows yaw and pitch. NOT verified: breaking/placing/hits/damage.
+
+## 2026-10-02 18:07: user feedback fixed
+- Lag: Dota video.txt fullscreen 1→0 (1600x900 window, with permission) → overlay 1:1 without 4K upscaling.
+- Can't look up: Dota with negative pitch shows the ground → Steve's pitch clamped to >= 3 (MouseInput.MIN_PITCH = bridge MIN_PITCH).
+- "Camera floats": SetCameraTargetPosition lerp 0 = creeping → 1; + launch with +dota_camera_edgemove 0 +dota_camera_speed 0 +dota_camera_lock 0
+  (convar names from strings in client.dll; they may get saved into the user's Dota config).
+- Couldn't walk: (1) WASD went to the Claude app — a click on the overlay now hands focus to MC; (2) thousands of blocks
+  accumulated in the MC world from old Dota runs. The world is now EMPTY: level.dat superflat = 4×barrier, regions wiped, Dota generates
+  no blocks (GenerateWorld removed), "reset" on Dota start clears ±112 (fill fails on unloaded chunks).
+- No rain: weather clear + doWeatherCycle/advance_weather false + addWeatherPass cancelled. Cursor: ShowCursor(false) in the overlay thread.
+- Verified: walking 5.2 blocks in 1.2 s, placing cobblestone (screenshot b1). Not verified: blocks reaching Dota, hits, damage.

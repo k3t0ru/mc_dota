@@ -15,7 +15,11 @@ public final class MouseInput {
 	private static boolean wasPlaying; // first frame after (re)gaining control only re-centres
 	private static final POINT anchor = new POINT(); // where the cursor really landed after re-centring (DPI-proof)
 
+	// Dota's camera can't look above the horizon (negative pitch shows the ground), so neither can Steve
+	public static final float MIN_PITCH = 3; // same as MIN_PITCH in bridge.py
+
 	public static void frame(Minecraft mc) {
+		if (mc.player != null && mc.player.getXRot() < MIN_PITCH) mc.player.setXRot(MIN_PITCH);
 		Overlay o = McDotaClient.overlay;
 		boolean playing = o != null && o.cx != 0 && mc.isWindowActive() && mc.screen == null && mc.mouseHandler.isMouseGrabbed();
 		User32 u = User32.INSTANCE;

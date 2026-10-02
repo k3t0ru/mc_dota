@@ -5,7 +5,7 @@ GameEvents.Subscribe( "mc_cam", function( e ) {
 	var v = ( "" + e.v ).split( " " ).map( Number );
 	if ( v.length !== 6 || isNaN( v[0] ) ) return;
 	GameUI.SetCameraTarget( -1 );
-	GameUI.SetCameraTargetPosition( [ v[0], v[1], 0 ], 0 );
+	GameUI.SetCameraTargetPosition( [ v[0], v[1], 0 ], 1 ); // lerp 1 = jump there now (0 creeps after it, the camera "floats")
 	GameUI.SetCameraYaw( v[2] );
 	GameUI.SetCameraPitchMin( v[3] );
 	GameUI.SetCameraPitchMax( v[3] );

@@ -16,7 +16,7 @@ public class McDotaClient implements ClientModInitializer {
 
 	// Minecraft's render size; the overlay scales it up to whatever size Dota's window is (-Dmcdota.size=WxH)
 	public static int[] renderSize() {
-		String[] p = System.getProperty("mcdota.size", "1920x1080").split("x");
+		String[] p = System.getProperty("mcdota.size", "1600x900").split("x");
 		return new int[] { Integer.parseInt(p[0].trim()), Integer.parseInt(p[1].trim()) };
 	}
 

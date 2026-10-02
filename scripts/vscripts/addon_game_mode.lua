@@ -23,7 +23,6 @@ PICKAXES = {
 STEVE = "npc_dota_hero_kunkka" -- ponytail: Steve overrides Kunkka's slot; own hero needs a model from Workshop Tools
 GRID = 64 -- one Dota block cell = one Minecraft block, cells are aligned to MC.anchor
 MC_FLOOR = -60 -- Minecraft y of the block layer standing on the floor
-NIGHT_MOBS = { "npc_mc_zombie", "npc_mc_zombie", "npc_mc_skeleton" }
 
 require( "mc_bridge" )
 LinkLuaModifier( "modifier_mc_block", "modifier_mc_block", LUA_MODIFIER_MOTION_NONE )
@@ -103,17 +102,6 @@ end
 function MC:SetupHero( hero )
 	if hero:GetUnitName() == STEVE then hero:SetIdleAcquire( false ) end -- no auto-attack in Minecraft
 
-	-- every player gets a personal crafting table next to them
-	local table = CreateUnitByName( "npc_mc_crafting_table", hero:GetAbsOrigin() + hero:GetForwardVector() * 200, true, hero, hero, hero:GetTeam() )
-	table:SetControllableByPlayer( hero:GetPlayerID(), true )
-	table:SetOwner( hero )
-	table:AddNewModifier( table, nil, "modifier_invulnerable", {} )
-	hero.mc_table = table
-	print( "[mc] table", table:GetAbsOrigin(), "hero", hero:GetAbsOrigin() )
-	for i = 0, table:GetAbilityCount() - 1 do
-		local a = table:GetAbilityByIndex( i )
-		if a then a:SetLevel( 1 ) end
-	end
 	local place = hero:FindAbilityByName( "mc_place_block" )
 	if place then place:SetLevel( 1 ) end
 
@@ -130,9 +118,7 @@ function MC:SetupHero( hero )
 				return 1
 			end
 		end
-		timer:SetContextThink( "mc_night", safe( function() return MC:NightThink() end ), 5 )
 		timer:SetContextThink( "mc_bridge", safe( function() return MCBridge:Tick() end ), 1 )
-		MC:GenerateWorld( hero:GetAbsOrigin() )
 	end
 end
 
@@ -157,7 +143,7 @@ function MC:SpawnBlock( name, pos, fromMC )
 	b.mc_block, b.mc_cell = def, key
 	MC.cells[ key ] = b
 	b:AddNewModifier( b, nil, "modifier_mc_block", {} )
-	b:SetForwardVector( Vector( 0, 1, 0 ) )
+	b:AddNoDraw() -- ponytail: Minecraft draws the block; Dota keeps only the collision (Dota-only players would see nothing)
 	if not fromMC then MCBridge:Send( string.format( "block %d %d %d %s", bx, MC_FLOOR, bz, def.mc ) ) end
 	return b
 end
@@ -169,29 +155,6 @@ function MC:RemoveBlock( bx, bz )
 		b.mc_silent = true
 		b:ForceKill( false )
 	end
-end
-
--- ponytail: random scatter around spawn, rarer ores further out; real caves/biomes come with our own map
-function MC:GenerateWorld( center )
-	local placed = 0
-	for _ = 1, 600 do
-		if placed >= 140 then break end
-		local d = RandomFloat( 450, 2600 )
-		local pos = center + RandomVector( d )
-		pos = MC:CellPos( MC:CellOf( pos ) )
-		if GridNav:IsTraversable( pos ) and not GridNav:IsBlocked( pos ) and #FindUnitsInRadius( DOTA_TEAM_BADGUYS, pos, nil, 90,
-			DOTA_UNIT_TARGET_TEAM_BOTH, DOTA_UNIT_TARGET_ALL, DOTA_UNIT_TARGET_FLAG_INVULNERABLE, FIND_ANY_ORDER, false ) == 0 then
-			local r, f = RandomFloat( 0, 1 ), d / 2600
-			local name = "npc_mc_block_stone"
-			if r < 0.25 then name = "npc_mc_block_log"
-			elseif r < 0.35 then name = "npc_mc_block_coal"
-			elseif r < 0.35 + 0.15 * f then name = "npc_mc_block_iron"
-			elseif r < 0.35 + 0.15 * f + 0.06 * f then name = "npc_mc_block_diamond" end
-			MC:SpawnBlock( name, pos )
-			placed = placed + 1
-		end
-	end
-	print( "[mc] world blocks: " .. placed )
 end
 
 function MC:ToolOf( hero )
@@ -255,35 +218,6 @@ function MC:OnKilled( e )
 	if killer and killer.IsRealHero and killer:IsRealHero() then
 		killer:AddExperience( def.xp, DOTA_ModifyXP_Unspecified, false, true )
 	end
-end
-
--- night: mobs come for the players; dawn: they burn
-function MC:NightThink()
-	if GameRules:State_Get() ~= DOTA_GAMERULES_STATE_GAME_IN_PROGRESS then return 5 end
-	MC.mobs = MC.mobs or {}
-	local alive = {}
-	for _, m in ipairs( MC.mobs ) do
-		if not m:IsNull() and m:IsAlive() then
-			if GameRules:IsDaytime() then m:ForceKill( false ) else table.insert( alive, m ) end
-		end
-	end
-	MC.mobs = alive
-	if GameRules:IsDaytime() then return 5 end
-
-	local heroes = HeroList:GetAllHeroes()
-	for _, hero in ipairs( heroes ) do
-		if hero:IsAlive() and #MC.mobs < 6 * #heroes then
-			local pos = hero:GetAbsOrigin() + RandomVector( RandomFloat( 900, 1300 ) )
-			if GridNav:IsTraversable( pos ) then
-				local level = math.floor( hero:GetLevel() / 3 )
-				local mob = CreateUnitByName( NIGHT_MOBS[ RandomInt( 1, #NIGHT_MOBS ) ], pos, true, nil, nil, DOTA_TEAM_BADGUYS )
-				mob:CreatureLevelUp( level )
-				ExecuteOrderFromTable( { UnitIndex = mob:entindex(), OrderType = DOTA_UNIT_ORDER_ATTACK_MOVE, Position = hero:GetAbsOrigin() } )
-				table.insert( MC.mobs, mob )
-			end
-		end
-	end
-	return 8
 end
 
 -- each Dota script file has its own environment; share these with abilities and mc_bridge.lua

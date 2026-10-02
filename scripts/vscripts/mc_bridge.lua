@@ -5,7 +5,7 @@ BRIDGE_URL = "http://127.0.0.1:27100/sync"
 DMG_TO_DOTA = 10  -- 1 MC hp of damage to a hero stand-in = 10 Dota damage
 DOTA_TO_MC = 0.02 -- 1 Dota damage to Steve = 0.02 MC hp (a 50-damage hit = half a heart)
 
-MCBridge = { out = {}, busy = false, sentAt = 0 }
+MCBridge = { out = { "reset" }, busy = false, sentAt = 0 } -- a new Dota game starts Minecraft's arena from scratch
 
 function MCBridge:Send( line ) table.insert( self.out, line ) end
 

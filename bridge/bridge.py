@@ -5,18 +5,19 @@
 #   hero <id> <name> <x> <z> <hp> <maxhp>         hit <heroid> <amount>        (MC hp units)
 #   dmg <amount>        (Dota hit Steve)          set <x> <y> <z> <kind>       (block placed in MC)
 #   block <x> <y> <z> <kind> / unblock <x> <y> <z>  break <x> <y> <z>          (block gone in MC)
+#   reset               (new Dota game: clear MC's arena)
 # Dota gets back: steve <name> <x> <z> <hp> <maxhp> <yaw>, hit .., mcblock <x> <y> <z> <kind>, mcbreak <x> <y> <z>,
 #                 cam <lookX> <lookY> <yaw> <pitch> <dist> <height>
-# The mod gets back: hero .., dmg <amount>, block .., unblock ..
+# The mod gets back: hero .., dmg <amount>, block .., unblock .., reset
 # The mod also sends its camera over UDP :27101 every frame: "<x> <y> <z> <yaw> <pitch>" (MC eye).
 # Run: python bridge/bridge.py
-import math, socket, threading
+import math, os, socket, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 GROUND_Y = -60  # MC feet level (top of the invisible barrier floor is -61)
 SCALE = 64  # Dota units per MC block (same as mc_bridge.lua)
 CAM_DIST = 40  # Dota camera sits this far behind its look-at point; small = first person
-MIN_PITCH = 5  # Dota's camera misbehaves at <= 0 (looks straight down); it can't look up
+MIN_PITCH = float(os.environ.get("MCDOTA_MIN_PITCH", 3))  # lowest pitch Dota accepts (calibration knob)
 YAW_SIGN, YAW_OFFSET = -1, 180  # Dota yaw = YAW_OFFSET + YAW_SIGN * MC yaw (calibration knob)
 
 
@@ -40,7 +41,7 @@ class Relay:
                     self.anchor = tuple(float(v) for v in p[1:])
                 elif p[0] == "hero":
                     heroes[p[1]] = line
-                elif p[0] in ("dmg", "block", "unblock"):
+                elif p[0] in ("dmg", "block", "unblock", "reset"):
                     self.to_mc.append(line)
             self.heroes = heroes
             out = self.to_dota + ([self.me] if self.me else [])

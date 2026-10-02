@@ -15,6 +15,11 @@ public class LevelRendererMixin {
 		ci.cancel();
 	}
 
+	@Inject(method = "addWeatherPass", at = @At("HEAD"), cancellable = true)
+	private void mcdota$noWeather(CallbackInfo ci) {
+		ci.cancel();
+	}
+
 	// clear to the colour key instead of the fog colour: those pixels become holes in the window
 	@ModifyArg(method = "*", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/CommandEncoder;clearColorAndDepthTextures(Lcom/mojang/blaze3d/textures/GpuTexture;ILcom/mojang/blaze3d/textures/GpuTexture;D)V"), index = 1)
 	private int mcdota$clearTransparent(int argb) {

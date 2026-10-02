@@ -23,6 +23,8 @@ public final class Overlay implements Runnable {
 	interface Keys extends com.sun.jna.Library { // not in jna-platform's User32
 		Keys INSTANCE = com.sun.jna.Native.load("user32", Keys.class);
 		void keybd_event(byte vk, byte scan, int flags, int extra);
+		Pointer SetClassLongPtrW(HWND hwnd, int index, Pointer value);
+		int ShowCursor(boolean show);
 	}
 
 	public volatile int cx, cy; // centre of Dota's window on screen (mouse anchor)
@@ -62,6 +64,8 @@ public final class Overlay implements Runnable {
 		User32 u = User32.INSTANCE;
 		int ex = WinUser.WS_EX_LAYERED | 0x08 /* TOPMOST */ | 0x80 /* TOOLWINDOW */ | 0x08000000 /* NOACTIVATE */;
 		HWND hwnd = u.CreateWindowEx(ex, "STATIC", "mcdota overlay", WinUser.WS_POPUP | WinUser.WS_VISIBLE, 0, 0, 1, 1, null, null, null, null);
+		Keys.INSTANCE.SetClassLongPtrW(hwnd, -12 /* GCLP_HCURSOR */, null); // no Windows cursor over the picture (Minecraft has a crosshair)
+		Keys.INSTANCE.ShowCursor(false);
 		HDC mem = GDI32.INSTANCE.CreateCompatibleDC(u.GetDC(null));
 		WinUser.BLENDFUNCTION blend = new WinUser.BLENDFUNCTION();
 		blend.BlendOp = WinUser.AC_SRC_OVER;
@@ -76,9 +80,14 @@ public final class Overlay implements Runnable {
 		long lastFind = 0;
 
 		while (true) {
-			while (u.PeekMessage(msg, null, 0, 0, 1)) { u.TranslateMessage(msg); u.DispatchMessage(msg); }
+			boolean clicked = false; // a click on the picture means "I'm playing": keyboard goes to Minecraft
+			while (u.PeekMessage(msg, null, 0, 0, 1)) {
+				if (msg.message == 0x0201 || msg.message == 0x0204 || msg.message == 0x0207) clicked = true; // L/R/M button down
+				u.TranslateMessage(msg);
+				u.DispatchMessage(msg);
+			}
 			HWND fg = u.GetForegroundWindow(); // Dota is only the picture: focus always goes back to Minecraft
-			if (McDotaClient.mcHwnd != null && (hwnd.equals(fg) || (dota != null && dota.equals(fg)))) {
+			if (McDotaClient.mcHwnd != null && !McDotaClient.mcHwnd.equals(fg) && (clicked || hwnd.equals(fg) || (dota != null && dota.equals(fg)))) {
 				// Windows refuses SetForegroundWindow from a background process; a synthetic Alt tap lifts that lock
 				Keys.INSTANCE.keybd_event((byte) 0x12, (byte) 0, 0, 0);
 				Keys.INSTANCE.keybd_event((byte) 0x12, (byte) 0, 2, 0);
