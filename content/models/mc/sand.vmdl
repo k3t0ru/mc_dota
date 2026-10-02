@@ -12,9 +12,9 @@
 					{
 						_class = "DefaultMaterialGroup"
 						remaps = [
-							{ from = "top.vmat" to = "materials/mc/coal_ore_top.vmat" },
-							{ from = "side.vmat" to = "materials/mc/coal_ore_side.vmat" },
-							{ from = "bottom.vmat" to = "materials/mc/coal_ore_bottom.vmat" },
+							{ from = "top.vmat" to = "materials/mc/sand_top.vmat" },
+							{ from = "side.vmat" to = "materials/mc/sand_side.vmat" },
+							{ from = "bottom.vmat" to = "materials/mc/sand_bottom.vmat" },
 						]
 						use_global_default = false
 						global_default_material = ""

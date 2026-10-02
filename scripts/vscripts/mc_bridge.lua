@@ -63,12 +63,21 @@ function MCBridge:Apply( body )
 		end
 
 		local bx, by, bz, kind = line:match( "^mcblock (%S+) (%S+) (%S+) (%S+)" )
-		local ground = bx and ( MC.heights[ bx .. "," .. bz ] or MC_FLOOR )
-		if bx and tonumber( by ) >= ground and tonumber( by ) <= ground + 1 then -- blocks at a hero's height block Dota pathing
-			MC:SpawnBlock( FROM_MC[ kind ] or "npc_mc_block_cobble", MC:CellPos( tonumber( bx ), tonumber( bz ) ), true )
+		if bx then
+			bx, by, bz = tonumber( bx ), tonumber( by ), tonumber( bz )
+			MC:ShowBlock( bx, by, bz, kind ) -- hybrid: Dota draws every Minecraft block, nailed to its world
+			local ground = MC.heights[ bx .. "," .. bz ] or MC_FLOOR
+			if by >= ground and by <= ground + 1 then -- blocks at a hero's height block Dota pathing
+				MC:SpawnBlock( FROM_MC[ kind ] or "npc_mc_block_cobble", MC:CellPos( bx, bz ), true ).mc_y = by
+			end
 		end
 		local rx, ry, rz = line:match( "^mcbreak (%S+) (%S+) (%S+)" )
-		if rx then MC:RemoveBlock( tonumber( rx ), tonumber( rz ) ) end
+		if rx then
+			rx, ry, rz = tonumber( rx ), tonumber( ry ), tonumber( rz )
+			MC:HideBlock( rx, ry, rz )
+			local ground = MC.heights[ rx .. "," .. rz ] or MC_FLOOR
+			if ry >= ground and ry <= ground + 1 then MC:RemoveBlock( rx, rz ) end
+		end
 
 		local lx, ly, yawc, pitch, dist, lz, sent = line:match( "^cam (%S+) (%S+) (%S+) (%S+) (%S+) (%S+) (%S+)" )
 		if lx and self.steve and GameRules:GetGameTime() - ( self.eyeLog or 0 ) > 2 then -- debug: eye height over real ground

@@ -176,3 +176,13 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
   chunks wait in pending, ServerChunkEvents.CHUNK_LOAD → ready, ≤400 columns per server tick (otherwise MC froze at 0 fps).
   Verified: steady 30 fps; tp past the edge → "fell out of the world" → respawn at 0,0.
 - The MC window's layout must be EN for chat tests: WM_INPUTLANGCHANGEREQUEST to the MC window only.
+
+## 2026-10-02 22:05: HYBRID (branch hybrid; old version = tag overlay-v1, rollback: git checkout overlay-v1 && sh tools/build_all.sh)
+- Dota draws Minecraft's blocks: every "mcblock" → prop_dynamic (models/mc/<kind>.vmdl, scale GRID/128) at
+  anchor + ((x+.5)*96, -(z+.5)*96, y*96); the bottom 2 levels also get the invisible collision unit (as before).
+- Minecraft doesn't draw them: RenderSectionRegion.getBlockState returns AIR for Hybrid.drawnByDota (non-terrain,
+  y >= column surface) — so neighbours' faces aren't culled either. (A WrapOperation on renderBatched didn't fire: Fabric's
+  Indigo replaces that call.) The magenta ground is emissiveRendering (otherwise black under a block = no light).
+- Overlay delay 0 (only hand/HUD/UI), Panorama PLAYBACK_MS 0 (the newest pose).
+- Textures: tools/gen_blocks.py takes Minecraft's textures from the local jar (~/.gradle/caches/fabric-loom/*/minecraft-client.jar),
+  per face (top/side/bottom: log rings/bark, crafting table). PNGs are gitignored — Mojang files, never commit/publish.

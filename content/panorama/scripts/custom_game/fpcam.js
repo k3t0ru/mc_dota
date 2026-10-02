@@ -5,7 +5,7 @@
 // interpolation (an in-between pose matches no Minecraft frame, so the layers would always slide a little). The overlay
 // picks Minecraft pictures by the same rule (mcdota.delay = PLAYBACK_MS + Dota's extra frame of render latency).
 "use strict";
-var PLAYBACK_MS = 180; // must cover the worst lag ("[mc] camera lag" in the log)
+var PLAYBACK_MS = 0; // hybrid: Dota draws the blocks itself, so nothing to wait for: always the newest pose (overlay version: 180)
 var poses = []; // { t, v } sorted by t
 var lag = [];
 var lastProbe = 0;

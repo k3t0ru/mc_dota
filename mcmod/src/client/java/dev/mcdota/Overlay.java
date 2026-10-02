@@ -31,7 +31,7 @@ public final class Overlay implements Runnable {
 	// Dota plays poses back PLAYBACK_MS (fpcam.js, 150) after Minecraft had them, and needs ~1 frame to draw; Minecraft frames are shown
 	// DELAY ms late from a small ring buffer: both layers then move together instead of blocks sliding over the map
 	private static final int RING = 24;
-	private static volatile int delay = Integer.getInteger("mcdota.delay", 270); // live knob: run/mcdota_delay.txt
+	private static volatile int delay = Integer.getInteger("mcdota.delay", 0); // live knob: run/mcdota_delay.txt
 	private final int[][] ring = new int[RING][];
 	private final long[] stamp = new long[RING];
 	private int head, lw, lh;

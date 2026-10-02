@@ -7,3 +7,7 @@ mc_server/
 mcmod/.gradle/
 mcmod/build/
 mcmod/run/
+
+# block textures may come from the local Minecraft jar (Mojang files): never commit them
+content/materials/mc/*.png
+materials/

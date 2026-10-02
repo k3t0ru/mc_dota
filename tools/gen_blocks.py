@@ -1,6 +1,7 @@
-# Generates our own Minecraft-style block assets (16x16 pixel textures, cube mesh, vmat, vmdl) into content/.
-# Then compile: tools/build_assets.ps1. Nothing here is copied from Minecraft.
-import os, random
+# Generates the block assets (cube mesh with top/side/bottom materials, vmat, vmdl) into content/.
+# Textures: Minecraft's own, read from the local Minecraft jar on this PC (Mojang's files: they stay local, gitignored,
+# never published); without the jar, our procedural 16x16 lookalikes. Then compile: tools/build_assets.sh.
+import glob, io, os, random, zipfile
 from PIL import Image
 
 ROOT = os.path.join(os.path.dirname(__file__), "..", "content")
@@ -65,17 +66,54 @@ def crafting_table(r):
     return px
 
 
+def dirt(r):
+    return [[jitter((121, 85, 58) if r.random() > 0.15 else (90, 62, 40), r, 10) for _ in range(S)] for _ in range(S)]
+
+
+def sand(r):
+    return [[jitter((219, 207, 163), r, 12) for _ in range(S)] for _ in range(S)]
+
+
 BLOCKS = {
+    "dirt": dirt, "sand": sand,
     "stone": stone, "cobblestone": cobble, "log": log, "planks": planks, "crafting_table": crafting_table,
     "coal_ore": ore((30, 30, 30)), "iron_ore": ore((216, 175, 147)), "diamond_ore": ore((95, 230, 225)),
 }
 
 # unit cube, origin at bottom centre; one quad per face with full 0..1 UVs
+# Minecraft texture names per block: (top, side, bottom)
+FACES_MC = {
+    "stone": ("stone",) * 3, "cobblestone": ("cobblestone",) * 3, "dirt": ("dirt",) * 3, "sand": ("sand",) * 3,
+    "log": ("oak_log_top", "oak_log", "oak_log_top"), "planks": ("oak_planks",) * 3,
+    "crafting_table": ("crafting_table_top", "crafting_table_front", "oak_planks"),
+    "coal_ore": ("coal_ore",) * 3, "iron_ore": ("iron_ore",) * 3, "diamond_ore": ("diamond_ore",) * 3,
+}
+
+
+def minecraft_jar():
+    jars = glob.glob(os.path.expanduser("~/.gradle/caches/fabric-loom/*/minecraft-client.jar"))
+    return zipfile.ZipFile(sorted(jars)[-1]) if jars else None
+
+
+# cube 128 units, origin at bottom centre; per face: material group and (u, v) per corner, v up the image
 h = SIZE / 2
-V = [(x, y, z) for x in (-h, h) for y in (-h, h) for z in (0, SIZE)]
-FACES = [(0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)]
-obj = [f"v {x} {z} {-y}" for x, y, z in V] + ["vt 0 0", "vt 1 0", "vt 1 1", "vt 0 1", "usemtl block"]  # OBJ is Y-up; ModelDoc makes it Z-up
-obj += ["f " + " ".join(f"{i + 1}/{t + 1}" for t, i in enumerate(face)) for face in FACES]
+def quad(mat, pts):  # pts: 4 corners (x, y, z) counter-clockwise seen from outside; uv follows the same order
+    return mat, pts
+CUBE = [
+    quad("top", [(-h, -h, SIZE), (h, -h, SIZE), (h, h, SIZE), (-h, h, SIZE)]),
+    quad("bottom", [(-h, h, 0), (h, h, 0), (h, -h, 0), (-h, -h, 0)]),
+    quad("side", [(-h, -h, 0), (h, -h, 0), (h, -h, SIZE), (-h, -h, SIZE)]),
+    quad("side", [(h, -h, 0), (h, h, 0), (h, h, SIZE), (h, -h, SIZE)]),
+    quad("side", [(h, h, 0), (-h, h, 0), (-h, h, SIZE), (h, h, SIZE)]),
+    quad("side", [(-h, h, 0), (-h, -h, 0), (-h, -h, SIZE), (-h, h, SIZE)]),
+]
+UV = [(0, 0), (1, 0), (1, 1), (0, 1)]
+obj, n = ["vt 0 0", "vt 1 0", "vt 1 1", "vt 0 1"], 0
+for mat, pts in CUBE:
+    obj.append(f"usemtl {mat}")
+    obj += [f"v {x} {z} {-y}" for x, y, z in pts]  # OBJ is Y-up; ModelDoc makes it Z-up
+    obj.append("f " + " ".join(f"{n + i + 1}/{i + 1}" for i in range(4)))
+    n += 4
 with open(os.path.join(MDL, "block.obj"), "w") as f:
     f.write("\n".join(obj) + "\n")
 
@@ -92,9 +130,13 @@ VMDL = """<!-- kv3 encoding:text:version{{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d}}
 				[
 					{{
 						_class = "DefaultMaterialGroup"
-						remaps = [ {{ from = "block.vmat" to = "materials/mc/{name}.vmat" }} ]
-						use_global_default = true
-						global_default_material = "materials/mc/{name}.vmat"
+						remaps = [
+							{{ from = "top.vmat" to = "materials/mc/{name}_top.vmat" }},
+							{{ from = "side.vmat" to = "materials/mc/{name}_side.vmat" }},
+							{{ from = "bottom.vmat" to = "materials/mc/{name}_bottom.vmat" }},
+						]
+						use_global_default = false
+						global_default_material = ""
 					}},
 				]
 			}},
@@ -145,18 +187,28 @@ VMAT = """Layer0
 	shader "global_lit_simple.vfx"
 	F_SPECULAR 0
 	g_vColorTint "[1.000000 1.000000 1.000000 0.000000]"
-	TextureColor "materials/mc/{name}.png"
+	TextureColor "materials/mc/{tex}.png"
 }}
 """
 
+jar = minecraft_jar()
+print("textures:", "Minecraft jar" if jar else "procedural")
 for name, fn in BLOCKS.items():
-    r = random.Random(name)
-    px = fn(r)
-    img = Image.new("RGB", (S, S))
-    img.putdata([c for row in px for c in row])
-    img.resize((S * UP, S * UP), Image.NEAREST).save(os.path.join(MAT, f"{name}.png"))
-    with open(os.path.join(MAT, f"{name}.vmat"), "w") as f:
-        f.write(VMAT.format(name=name))
+    for face, mc_name in zip(("top", "side", "bottom"), FACES_MC.get(name, (None,) * 3)):
+        tex = f"{name}_{face}"
+        img = None
+        if jar and mc_name:
+            try:
+                img = Image.open(io.BytesIO(jar.read(f"assets/minecraft/textures/block/{mc_name}.png"))).convert("RGB").crop((0, 0, S, S))
+            except KeyError:
+                pass
+        if img is None:
+            px = fn(random.Random(name))
+            img = Image.new("RGB", (S, S))
+            img.putdata([c for row in px for c in row])
+        img.resize((S * UP, S * UP), Image.NEAREST).save(os.path.join(MAT, f"{tex}.png"))
+        with open(os.path.join(MAT, f"{tex}.vmat"), "w") as f:
+            f.write(VMAT.format(tex=tex))
     with open(os.path.join(MDL, f"{name}.vmdl"), "w") as f:
         f.write(VMDL.format(name=name))
 print("ok:", ", ".join(BLOCKS))

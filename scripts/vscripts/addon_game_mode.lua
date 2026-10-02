@@ -33,6 +33,7 @@ function Precache( context )
 	for _, m in ipairs({
 		"models/mc/stone.vmdl", "models/mc/cobblestone.vmdl", "models/mc/log.vmdl", "models/mc/coal_ore.vmdl",
 		"models/mc/iron_ore.vmdl", "models/mc/diamond_ore.vmdl", "models/mc/crafting_table.vmdl",
+		"models/mc/dirt.vmdl", "models/mc/sand.vmdl", "models/mc/planks.vmdl",
 		"models/heroes/undying/undying_minion.vmdl",
 		"models/creeps/neutral_creeps/n_creep_troll_skeleton/n_creep_skeleton_melee.vmdl",
 	}) do PrecacheResource( "model", m, context ) end
@@ -195,6 +196,28 @@ function MC:SpawnBlock( name, pos, fromMC )
 	return b
 end
 
+-- Hybrid: Dota draws Minecraft's blocks (any height) as props, so they sit exactly on Dota's map
+MC.props = {} -- "x,y,z" -> prop_dynamic
+MODELS = { oak_log = "log", oak_planks = "planks", stone = "stone", cobblestone = "cobblestone", dirt = "dirt", sand = "sand",
+	coal_ore = "coal_ore", iron_ore = "iron_ore", diamond_ore = "diamond_ore", crafting_table = "crafting_table" }
+
+function MC:ShowBlock( bx, by, bz, kind )
+	local key = bx .. "," .. by .. "," .. bz
+	MC:HideBlock( bx, by, bz )
+	local pos = MC.anchor + Vector( ( bx + 0.5 ) * GRID, -( bz + 0.5 ) * GRID, ( by - MC_FLOOR ) * GRID )
+	local p = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/" .. ( MODELS[ kind ] or "cobblestone" ) .. ".vmdl",
+		origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ) } )
+	p:SetModelScale( GRID / 128 ) -- the cube model is 128 units
+	MC.props[ key ] = p
+end
+
+function MC:HideBlock( bx, by, bz )
+	local key = bx .. "," .. by .. "," .. bz
+	local p = MC.props[ key ]
+	if p and not p:IsNull() then p:RemoveSelf() end
+	MC.props[ key ] = nil
+end
+
 -- a block vanished in Minecraft: remove it here without drops
 function MC:RemoveBlock( bx, bz )
 	local b = MC.cells[ bx .. "," .. bz ]
@@ -264,7 +287,9 @@ function MC:OnKilled( e )
 	dead:AddNoDraw()
 	if dead.mc_silent then return end
 	local bx, bz = MC:CellOf( dead:GetAbsOrigin() )
-	MCBridge:Send( string.format( "unblock %d %d %d", bx, MC.heights[ dead.mc_cell ] or MC_FLOOR, bz ) )
+	local by = dead.mc_y or MC.heights[ dead.mc_cell ] or MC_FLOOR
+	MC:HideBlock( bx, by, bz )
+	MCBridge:Send( string.format( "unblock %d %d %d", bx, by, bz ) )
 	local item = CreateItem( def.drop, nil, nil )
 	CreateItemOnPositionSync( dead:GetAbsOrigin(), item )
 	if killer and killer.IsRealHero and killer:IsRealHero() then

@@ -1,3 +1,7 @@
 bridge on http://127.0.0.1:27100 (/sync for Dota, /mc for Minecraft), camera UDP :27101
 to mc: reset
 to mc: border 397
+to mc: reset
+to mc: border 397
+to mc: reset
+to mc: border 397

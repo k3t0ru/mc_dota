@@ -32,7 +32,7 @@ public final class Sync {
 
 	// server thread: a block changed somewhere
 	public static void blockChanged(BlockPos p, BlockState s) {
-		if (applying || Math.abs(p.getX()) >= Arena.RADIUS || Math.abs(p.getZ()) >= Arena.RADIUS || p.getY() < -8 || p.getY() > 40) return;
+		if (applying || p.getY() < -60 || p.getY() > 60) return; // Dota decides what to draw / collide by height
 		if (s.isAir()) out.add(String.format("break %d %d %d", p.getX(), p.getY(), p.getZ()));
 		else out.add(String.format("set %d %d %d %s", p.getX(), p.getY(), p.getZ(), BuiltInRegistries.BLOCK.getKey(s.getBlock()).getPath()));
 	}
@@ -69,6 +69,7 @@ public final class Sync {
 		hh = Math.max(-100, Math.min(100, hh)); // stay well inside the world (bottom is y -64)
 		low = Math.max(-100, Math.min(hh, low));
 		int full = Math.floorDiv(hh, 2), bottom = Math.floorDiv(low, 2) - 1; // solid up to full - 1; skin from bottom
+		Hybrid.setSurface(Integer.parseInt(x), Integer.parseInt(z), full);
 		if (full < 0) run(server, String.format("fill %s %d %s %s -1 %s minecraft:air", x, full, z, x, z));
 		boolean exposed = low < hh || full > 0; // a side wall shows (raised column or a lower neighbour)
 		run(server, String.format("fill %s %d %s %s %d %s minecraft:%s", x, Math.min(bottom, full - 1), z, x, full - 1, z,
