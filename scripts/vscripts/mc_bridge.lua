@@ -1,30 +1,34 @@
--- Sync with real Minecraft through bridge/bridge.py: Minecraft players appear as Steve units, Dota heroes as
--- stand-ins in Minecraft, hits go both ways. 1 Minecraft block = 64 Dota units, MC (0,0) = MC.anchor.
+-- Exchange with Minecraft through bridge/bridge.py (protocol at the top of that file). Coordinates on the wire are
+-- Minecraft blocks: 1 block = GRID (64) Dota units, MC (0,0) = MC.anchor. The Minecraft player drives the Steve hero;
+-- Dota heroes get invisible stand-ins in Minecraft so swords can hit them; blocks exist on both sides.
 BRIDGE_URL = "http://127.0.0.1:27100/sync"
-MC_SCALE = 64
 DMG_TO_DOTA = 10  -- 1 MC hp of damage to a hero stand-in = 10 Dota damage
-STEVE_HP = 1000   -- Dota health of a Steve unit at 20 MC hp
+DOTA_TO_MC = 0.02 -- 1 Dota damage to Steve = 0.02 MC hp (a 50-damage hit = half a heart)
 
-MCBridge = { steves = {}, dmg = {}, busy = false }
+MCBridge = { out = {}, busy = false, sentAt = 0 }
 
-local function to_mc( p ) return ( p.x - MC.anchor.x ) / MC_SCALE, -( p.y - MC.anchor.y ) / MC_SCALE end
-local function to_dota( x, z ) return GetGroundPosition( MC.anchor + Vector( x * MC_SCALE, -z * MC_SCALE, 0 ), nil ) end
+function MCBridge:Send( line ) table.insert( self.out, line ) end
+
+local function to_mc( p ) return ( p.x - MC.anchor.x ) / GRID, -( p.y - MC.anchor.y ) / GRID end
+local function to_dota( x, z ) return GetGroundPosition( MC.anchor + Vector( x * GRID, -z * GRID, 0 ), nil ) end
 
 function MCBridge:Tick()
 	if not MC.anchor then return 0.1 end
 	if self.busy and GameRules:GetGameTime() - self.sentAt < 2 then return FrameTime() end -- a request to a dead bridge never answers
 	self.sentAt = GameRules:GetGameTime()
+
 	local a = MC.anchor
 	local lines = { string.format( "anchor %.1f %.1f %.1f", a.x, a.y, a.z ) }
 	for _, h in ipairs( HeroList:GetAllHeroes() ) do
-		if h:IsAlive() and h:GetUnitName() ~= STEVE then
+		if h:IsAlive() and not h.mc_player and h:GetUnitName() ~= STEVE then
 			local x, z = to_mc( h:GetAbsOrigin() )
 			table.insert( lines, string.format( "hero %d %s %.2f %.2f %d %d", h:entindex(),
 				( h:GetUnitName():gsub( "npc_dota_hero_", "" ) ), x, z, h:GetHealth(), h:GetMaxHealth() ) )
 		end
 	end
-	for name, amount in pairs( self.dmg ) do table.insert( lines, string.format( "dmg %s %.2f", name, amount ) ) end
-	self.dmg = {}
+	for _, l in ipairs( self.out ) do table.insert( lines, l ) end
+	local sent = self.out
+	self.out = {}
 
 	self.busy = true
 	local req = CreateHTTPRequestScriptVM( "POST", BRIDGE_URL )
@@ -33,6 +37,7 @@ function MCBridge:Tick()
 	req:Send( function( res )
 		self.busy = false
 		if res.StatusCode ~= 200 then
+			for _, l in ipairs( sent ) do table.insert( self.out, l ) end -- keep block updates for the next try
 			if not self.warned then self.warned = true print( "[mc] bridge offline: " .. tostring( res.StatusCode ) ) end
 			return
 		end
@@ -43,52 +48,48 @@ function MCBridge:Tick()
 end
 
 function MCBridge:Apply( body )
-	local seen = {}
 	for line in body:gmatch( "[^\n]+" ) do
 		local name, x, z, hp, max, yaw = line:match( "^steve (%S+) (%S+) (%S+) (%S+) (%S+) (%S+)" )
-		if name then
-			seen[ name ] = true
-			self:MoveSteve( name, to_dota( tonumber( x ), tonumber( z ) ), tonumber( hp ) / tonumber( max ), math.rad( tonumber( yaw ) ) )
-		end
-		local cam = line:match( "^cam (.+)" )
-		if cam then CustomGameEventManager:Send_ServerToAllClients( "mc_cam", { v = cam } ) end
+		if name then self:MoveSteve( name, to_dota( tonumber( x ), tonumber( z ) ), tonumber( hp ) / tonumber( max ), math.rad( tonumber( yaw ) ) ) end
+
 		local id, amount = line:match( "^hit (%d+) (%S+)" )
 		local hero = id and EntIndexToHScript( tonumber( id ) )
 		if hero and hero:IsAlive() then
-			local attacker = next( self.steves ) and select( 2, next( self.steves ) ) or hero
-			ApplyDamage( { victim = hero, attacker = attacker, damage = tonumber( amount ) * DMG_TO_DOTA, damage_type = DAMAGE_TYPE_PURE } )
+			ApplyDamage( { victim = hero, attacker = self.steve or hero, damage = tonumber( amount ) * DMG_TO_DOTA, damage_type = DAMAGE_TYPE_PURE } )
 		end
-	end
-	for name, unit in pairs( self.steves ) do -- player left Minecraft
-		if not seen[ name ] then
-			if not unit:IsNull() then unit:RemoveSelf() end
-			self.steves[ name ] = nil
+
+		local bx, by, bz, kind = line:match( "^mcblock (%S+) (%S+) (%S+) (%S+)" )
+		if bx and math.abs( tonumber( by ) - MC_FLOOR ) <= 1 then -- blocks at the hero's height block Dota pathing
+			MC:SpawnBlock( FROM_MC[ kind ] or "npc_mc_block_cobble", MC:CellPos( tonumber( bx ), tonumber( bz ) ), true )
 		end
+		local rx, ry, rz = line:match( "^mcbreak (%S+) (%S+) (%S+)" )
+		if rx and tonumber( ry ) == MC_FLOOR then MC:RemoveBlock( tonumber( rx ), tonumber( rz ) ) end
+
+		local cam = line:match( "^cam (.+)" )
+		if cam then CustomGameEventManager:Send_ServerToAllClients( "mc_cam", { v = cam } ) end
 	end
 end
 
+-- the Minecraft player drives the first Steve hero; Minecraft owns its health
 function MCBridge:MoveSteve( name, pos, frac, yaw )
-	local u = self.steves[ name ]
-	if frac <= 0 then -- dead in Minecraft
-		if u and not u:IsNull() and u:IsAlive() then u:ForceKill( false ) end
-		return
-	end
-	if not u or u:IsNull() or not u:IsAlive() then
-		u = CreateUnitByName( "npc_mc_steve_proxy", pos, true, nil, nil, DOTA_TEAM_BADGUYS )
+	local u = self.steve
+	if not u or u:IsNull() then
+		for _, h in ipairs( HeroList:GetAllHeroes() ) do
+			if h:GetUnitName() == STEVE then u = h break end
+		end
+		if not u then return end
+		self.steve = u
 		u.mc_player = name
 		u:SetCustomHealthLabel( name, 120, 255, 120 )
-		self.steves[ name ] = u
+		u:AddNoDraw() -- ponytail: the camera sits inside him; for PvP give other players a visible blocky Steve instead
 	end
-	if ( u:GetAbsOrigin() - pos ):Length2D() > 400 then
-		FindClearSpaceForUnit( u, pos, true )
-	else
-		u:MoveToPosition( pos )
-	end
+	if not u:IsAlive() then return end
+	u:SetAbsOrigin( pos )
 	u:SetForwardVector( Vector( -math.sin( yaw ), -math.cos( yaw ), 0 ) )
 	u:SetHealth( math.max( 1, frac * u:GetMaxHealth() ) )
 end
 
--- Dota hits a Steve: don't touch the unit (Minecraft owns its health), send the hit to Minecraft instead
+-- Dota hits Steve: Minecraft owns his health, so the hit goes there
 function MCBridge:OnSteveDamaged( victim, damage )
-	self.dmg[ victim.mc_player ] = ( self.dmg[ victim.mc_player ] or 0 ) + damage * 20 / STEVE_HP
+	self:Send( string.format( "dmg %.2f", damage * DOTA_TO_MC ) )
 end

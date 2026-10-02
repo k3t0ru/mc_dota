@@ -1,14 +1,16 @@
 -- Minecraft x Dota: mining, crafting, night mobs.
 
--- tier = pickaxe tier needed, hp = hits at power 1, drop = item, xp = hero xp on break
+-- tier = pickaxe tier needed, hp = hits at power 1, drop = item, xp = hero xp on break, mc = Minecraft block id
 BLOCKS = {
-	npc_mc_block_log     = { tier = 0, hp = 3,  drop = "item_mc_log",         xp = 5 },
-	npc_mc_block_stone   = { tier = 1, hp = 4,  drop = "item_mc_cobblestone", xp = 5 },
-	npc_mc_block_coal    = { tier = 1, hp = 4,  drop = "item_mc_coal",        xp = 10 },
-	npc_mc_block_iron    = { tier = 2, hp = 6,  drop = "item_mc_iron",        xp = 20 },
-	npc_mc_block_diamond = { tier = 3, hp = 10, drop = "item_mc_diamond",     xp = 50 },
+	npc_mc_block_log     = { tier = 0, hp = 3,  drop = "item_mc_log",         xp = 5,  mc = "oak_log" },
+	npc_mc_block_stone   = { tier = 1, hp = 4,  drop = "item_mc_cobblestone", xp = 5,  mc = "stone" },
+	npc_mc_block_cobble  = { tier = 1, hp = 4,  drop = "item_mc_cobblestone", xp = 5,  mc = "cobblestone" },
+	npc_mc_block_coal    = { tier = 1, hp = 4,  drop = "item_mc_coal",        xp = 10, mc = "coal_ore" },
+	npc_mc_block_iron    = { tier = 2, hp = 6,  drop = "item_mc_iron",        xp = 20, mc = "iron_ore" },
+	npc_mc_block_diamond = { tier = 3, hp = 10, drop = "item_mc_diamond",     xp = 50, mc = "diamond_ore" },
 }
-BLOCKS.npc_mc_block_cobble = BLOCKS.npc_mc_block_stone -- player-placed
+FROM_MC = {} -- Minecraft block id -> Dota block unit (anything unknown is solid cobblestone)
+for name, def in pairs( BLOCKS ) do FROM_MC[ def.mc ] = name end
 
 -- pickaxe item -> { tier, power }
 PICKAXES = {
@@ -19,7 +21,8 @@ PICKAXES = {
 }
 
 STEVE = "npc_dota_hero_kunkka" -- ponytail: Steve overrides Kunkka's slot; own hero needs a model from Workshop Tools
-GRID = 128
+GRID = 64 -- one Dota block cell = one Minecraft block, cells are aligned to MC.anchor
+MC_FLOOR = -60 -- Minecraft y of the block layer standing on the floor
 NIGHT_MOBS = { "npc_mc_zombie", "npc_mc_zombie", "npc_mc_skeleton" }
 
 require( "mc_bridge" )
@@ -133,13 +136,39 @@ function MC:SetupHero( hero )
 	end
 end
 
-function MC:SpawnBlock( name, pos )
+-- Dota position <-> Minecraft block column (bx, bz)
+function MC:CellOf( pos )
+	return math.floor( ( pos.x - MC.anchor.x ) / GRID ), math.floor( -( pos.y - MC.anchor.y ) / GRID )
+end
+
+function MC:CellPos( bx, bz )
+	return GetGroundPosition( MC.anchor + Vector( ( bx + 0.5 ) * GRID, -( bz + 0.5 ) * GRID, 0 ), nil )
+end
+
+MC.cells = {} -- "bx,bz" -> block unit
+
+-- fromMC: the block came from Minecraft, so don't echo it back
+function MC:SpawnBlock( name, pos, fromMC )
 	local def = BLOCKS[ name ]
-	local b = CreateUnitByName( name, pos, false, nil, nil, DOTA_TEAM_NEUTRALS )
-	b.mc_block = def
+	local bx, bz = MC:CellOf( pos )
+	local key = bx .. "," .. bz
+	if MC.cells[ key ] and not MC.cells[ key ]:IsNull() then return MC.cells[ key ] end
+	local b = CreateUnitByName( name, MC:CellPos( bx, bz ), false, nil, nil, DOTA_TEAM_NEUTRALS )
+	b.mc_block, b.mc_cell = def, key
+	MC.cells[ key ] = b
 	b:AddNewModifier( b, nil, "modifier_mc_block", {} )
 	b:SetForwardVector( Vector( 0, 1, 0 ) )
+	if not fromMC then MCBridge:Send( string.format( "block %d %d %d %s", bx, MC_FLOOR, bz, def.mc ) ) end
 	return b
+end
+
+-- a block vanished in Minecraft: remove it here without drops
+function MC:RemoveBlock( bx, bz )
+	local b = MC.cells[ bx .. "," .. bz ]
+	if b and not b:IsNull() and b:IsAlive() then
+		b.mc_silent = true
+		b:ForceKill( false )
+	end
 end
 
 -- ponytail: random scatter around spawn, rarer ores further out; real caves/biomes come with our own map
@@ -149,8 +178,7 @@ function MC:GenerateWorld( center )
 		if placed >= 140 then break end
 		local d = RandomFloat( 450, 2600 )
 		local pos = center + RandomVector( d )
-		pos = Vector( math.floor( pos.x / GRID + 0.5 ) * GRID, math.floor( pos.y / GRID + 0.5 ) * GRID, 0 )
-		pos = GetGroundPosition( pos, nil )
+		pos = MC:CellPos( MC:CellOf( pos ) )
 		if GridNav:IsTraversable( pos ) and not GridNav:IsBlocked( pos ) and #FindUnitsInRadius( DOTA_TEAM_BADGUYS, pos, nil, 90,
 			DOTA_UNIT_TARGET_TEAM_BOTH, DOTA_UNIT_TARGET_ALL, DOTA_UNIT_TARGET_FLAG_INVULNERABLE, FIND_ANY_ORDER, false ) == 0 then
 			local r, f = RandomFloat( 0, 1 ), d / 2600
@@ -216,13 +244,17 @@ function MC:OnKilled( e )
 	local dead = EntIndexToHScript( e.entindex_killed )
 	local def = dead and dead.mc_block
 	if not def then return end
+	MC.cells[ dead.mc_cell ] = nil
+	dead:AddNoDraw()
+	if dead.mc_silent then return end
+	local bx, bz = MC:CellOf( dead:GetAbsOrigin() )
+	MCBridge:Send( string.format( "unblock %d %d %d", bx, MC_FLOOR, bz ) )
 	local item = CreateItem( def.drop, nil, nil )
 	CreateItemOnPositionSync( dead:GetAbsOrigin(), item )
 	local killer = e.entindex_attacker and EntIndexToHScript( e.entindex_attacker )
 	if killer and killer.IsRealHero and killer:IsRealHero() then
 		killer:AddExperience( def.xp, DOTA_ModifyXP_Unspecified, false, true )
 	end
-	dead:AddNoDraw()
 end
 
 -- night: mobs come for the players; dawn: they burn
@@ -255,4 +287,4 @@ function MC:NightThink()
 end
 
 -- each Dota script file has its own environment; share these with abilities and mc_bridge.lua
-_G.MC, _G.BLOCKS, _G.PICKAXES, _G.GRID, _G.STEVE = MC, BLOCKS, PICKAXES, GRID, STEVE
+_G.MC, _G.BLOCKS, _G.PICKAXES, _G.GRID, _G.STEVE, _G.FROM_MC, _G.MC_FLOOR = MC, BLOCKS, PICKAXES, GRID, STEVE, FROM_MC, MC_FLOOR

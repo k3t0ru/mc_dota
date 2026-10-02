@@ -53,7 +53,7 @@ public final class Overlay implements Runnable {
 	// translucent GUI (hotbar, chat) blended over the magenta clear comes out pink: show it as plain grey instead
 	private static int unpink(int p) {
 		int r = (p >> 16) & 255, g = (p >> 8) & 255, b = p & 255;
-		if (r - g > 60 && b - g > 60 && Math.abs(r - b) < 24) return (g << 16) | (g << 8) | g; // ponytail: real purples get greyed too
+		if (r - g > 40 && b - g > 30 && Math.abs(r - b) < 40) return (g << 16) | (g << 8) | g; // ponytail: real purples get greyed too
 		return p;
 	}
 

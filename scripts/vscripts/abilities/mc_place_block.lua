@@ -6,9 +6,9 @@ local USES = { item_mc_cobblestone = "npc_mc_block_cobble", item_mc_log = "npc_m
 function mc_place_block:OnSpellStart()
 	local hero = self:GetCaster()
 	local p = self:GetCursorPosition()
-	p = GetGroundPosition( Vector( math.floor( p.x / GRID + 0.5 ) * GRID, math.floor( p.y / GRID + 0.5 ) * GRID, 0 ), nil )
+	p = MC:CellPos( MC:CellOf( p ) )
 
-	if #FindUnitsInRadius( hero:GetTeam(), p, nil, 64, DOTA_UNIT_TARGET_TEAM_BOTH, DOTA_UNIT_TARGET_ALL,
+	if #FindUnitsInRadius( hero:GetTeam(), p, nil, 30, DOTA_UNIT_TARGET_TEAM_BOTH, DOTA_UNIT_TARGET_ALL,
 		DOTA_UNIT_TARGET_FLAG_INVULNERABLE, FIND_ANY_ORDER, false ) > 0 then
 		GameRules:SendCustomMessage( "#mc_occupied", hero:GetPlayerID(), 0 )
 		return

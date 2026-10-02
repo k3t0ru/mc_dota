@@ -33,6 +33,7 @@ public class McDotaClient implements ClientModInitializer {
 		});
 		ClientPlayConnectionEvents.JOIN.register((handler, sender, mc) -> Arena.ensure(mc));
 		// clicks land on the overlay, never in Minecraft's window, so grab the mouse ourselves once focus arrives
+		ClientTickEvents.END_CLIENT_TICK.register(Sync::tick);
 		ClientTickEvents.END_CLIENT_TICK.register(mc -> {
 			if (mc.isWindowActive() && mc.screen == null && mc.level != null && !mc.mouseHandler.isMouseGrabbed()) mc.mouseHandler.grabMouse();
 		});

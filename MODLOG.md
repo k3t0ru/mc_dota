@@ -96,3 +96,11 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Scripts: tools/dev_launch.sh (Dota + MC), tools/restart_mc.sh.
 - PROBLEM: the dev client plays single-player, the bridge talks to the dedicated server over RCON → MC players/stand-ins don't connect.
   Next: the mod itself (integrated server) exchanges with the bridge (blocks, Dota hero stand-ins, damage), 1 MC block = 64 Dota units.
+
+## 2026-10-02 17:30: playable prototype (single-player MC + Dota)
+- bridge.py = a plain relay (no RCON): Dota /sync, mod /mc, camera UDP. Dedicated server no longer needed for dev.
+- Dota: GRID 64 aligned to the anchor (MC:CellOf/CellPos), MC.cells registry, blocks ModelScale 0.5 / HULL_HERO.
+  Dota blocks → "block" → setblock in MC; MC block changes (LevelMixin on Level.setBlock, y -60..-40) → mcblock/mcbreak in Dota.
+- Steve = the Dota hero STEVE, driven by "steve" from MC (SetAbsOrigin), AddNoDraw (camera inside him), HP mirrors MC.
+- Dota heroes → invisible husks (tag dota_<id>, 1024 hp) in MC; health drop → hit → ApplyDamage (×10). Dota damage to Steve → dmg → /damage @p.
+- Verified in screenshots: Dota blocks show up as MC blocks, the camera follows yaw and pitch. NOT verified: breaking/placing/hits/damage.
