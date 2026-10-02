@@ -11,8 +11,11 @@ local function to_mc( p ) return ( p.x - MC.anchor.x ) / MC_SCALE, -( p.y - MC.a
 local function to_dota( x, z ) return GetGroundPosition( MC.anchor + Vector( x * MC_SCALE, -z * MC_SCALE, 0 ), nil ) end
 
 function MCBridge:Tick()
-	if self.busy or not MC.anchor then return 0.1 end
-	local lines = {}
+	if not MC.anchor then return 0.1 end
+	if self.busy and GameRules:GetGameTime() - self.sentAt < 2 then return FrameTime() end -- a request to a dead bridge never answers
+	self.sentAt = GameRules:GetGameTime()
+	local a = MC.anchor
+	local lines = { string.format( "anchor %.1f %.1f %.1f", a.x, a.y, a.z ) }
 	for _, h in ipairs( HeroList:GetAllHeroes() ) do
 		if h:IsAlive() and h:GetUnitName() ~= STEVE then
 			local x, z = to_mc( h:GetAbsOrigin() )
@@ -25,6 +28,7 @@ function MCBridge:Tick()
 
 	self.busy = true
 	local req = CreateHTTPRequestScriptVM( "POST", BRIDGE_URL )
+	req:SetHTTPRequestAbsoluteTimeoutMS( 1000 )
 	req:SetHTTPRequestRawPostBody( "text/plain", table.concat( lines, "\n" ) )
 	req:Send( function( res )
 		self.busy = false
@@ -35,7 +39,7 @@ function MCBridge:Tick()
 		if self.warned ~= false then self.warned = false print( "[mc] bridge online" ) end
 		self:Apply( res.Body or "" )
 	end )
-	return 0.1
+	return FrameTime()
 end
 
 function MCBridge:Apply( body )
@@ -46,6 +50,8 @@ function MCBridge:Apply( body )
 			seen[ name ] = true
 			self:MoveSteve( name, to_dota( tonumber( x ), tonumber( z ) ), tonumber( hp ) / tonumber( max ), math.rad( tonumber( yaw ) ) )
 		end
+		local cam = line:match( "^cam (.+)" )
+		if cam then CustomGameEventManager:Send_ServerToAllClients( "mc_cam", { v = cam } ) end
 		local id, amount = line:match( "^hit (%d+) (%S+)" )
 		local hero = id and EntIndexToHScript( tonumber( id ) )
 		if hero and hero:IsAlive() then

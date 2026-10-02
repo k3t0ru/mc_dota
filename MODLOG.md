@@ -83,3 +83,16 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Screen 3840x2160, Dota is stretched to the whole screen. With the monitor off WGC/ddagrab give no frames — F2 in MC works.
   Full-desktop capture: ffmpeg -f lavfi -i "ddagrab=0:framerate=5,hwdownload,format=bgra" -frames:v 1 out.png
 - Next: camera sync MC→Dota (Panorama polls the bridge), empty MC world (void + barriers along Dota's terrain), Dota camera = MC eye.
+
+## 2026-10-02 17:20: first person over Dota WORKS (screenshot p3)
+- Panorama: `$.AsyncWebRequest has been removed` → the camera goes MC → UDP → bridge → reply to Lua /sync → CustomGameEvent "mc_cam" → Panorama.
+- Dota pitch <= 0 behaves badly → clamp to 5 (MIN_PITCH in bridge). Can't look up.
+- Dota video.txt (userdata/491223219/570/local/cfg): fullscreen_min_on_focus_loss 1→0 (with the user's permission; backup
+  ~/.universal-modder/backups/dota-cfg/20261002-171041.zip and video.txt.bak-mcdota). Otherwise Dota minimizes when MC is focused.
+- Mouse: GLFW can't hold the cursor in an off-screen window → grabOrReleaseMouse cancelled, MouseInput reads GetCursorPos from the
+  centre of Dota (anchor = actual position after SetCursorPos, otherwise DPI virtualisation → endless spinning), buttons via
+  GetAsyncKeyState → KeyMapping.set/click. Focus: overlay NOACTIVATE; if Dota/overlay is foreground → Alt tap + SetForegroundWindow(MC).
+- MC ground → barrier (Arena.java / bridge), radius 160, forceload. renderDistance 8.
+- Scripts: tools/dev_launch.sh (Dota + MC), tools/restart_mc.sh.
+- PROBLEM: the dev client plays single-player, the bridge talks to the dedicated server over RCON → MC players/stand-ins don't connect.
+  Next: the mod itself (integrated server) exchanges with the bridge (blocks, Dota hero stand-ins, damage), 1 MC block = 64 Dota units.

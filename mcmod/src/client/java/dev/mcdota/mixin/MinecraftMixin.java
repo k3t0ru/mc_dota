@@ -22,6 +22,8 @@ public class MinecraftMixin {
 
 	@Inject(method = "runTick", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/pipeline/RenderTarget;blitToScreen()V"))
 	private void mcdota$grab(CallbackInfo ci) {
+		dev.mcdota.MouseInput.frame((Minecraft) (Object) this);
+		dev.mcdota.CameraSender.send((Minecraft) (Object) this);
 		if (McDotaClient.overlay == null) return;
 		RenderTarget rt = ((Minecraft) (Object) this).getMainRenderTarget();
 		int w = rt.width, h = rt.height, tex = ((GlTexture) rt.getColorTexture()).glId();
