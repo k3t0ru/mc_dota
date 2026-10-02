@@ -1,0 +1,222 @@
+"DOTAAbilities"
+{
+	"item_mc_log"
+	{
+		"BaseClass"	"item_datadriven"
+		"AbilityTextureName"	"item_branches"
+		"AbilityBehavior"	"DOTA_ABILITY_BEHAVIOR_PASSIVE"
+		"ItemCost"	"0"
+		"ItemPurchasable"	"0"
+		"ItemSellable"	"0"
+		"ItemStackable"	"1"
+		"ItemPermanent"	"0"
+		"ItemInitialCharges"	"1"
+		"ItemDisplayCharges"	"1"
+		"ItemDroppable"	"1"
+		"ItemShareability"	"ITEM_FULLY_SHAREABLE_STACKING"
+	}
+	"item_mc_cobblestone"
+	{
+		"BaseClass"	"item_datadriven"
+		"AbilityTextureName"	"item_blight_stone"
+		"AbilityBehavior"	"DOTA_ABILITY_BEHAVIOR_PASSIVE"
+		"ItemCost"	"0"
+		"ItemPurchasable"	"0"
+		"ItemSellable"	"0"
+		"ItemStackable"	"1"
+		"ItemPermanent"	"0"
+		"ItemInitialCharges"	"1"
+		"ItemDisplayCharges"	"1"
+		"ItemDroppable"	"1"
+		"ItemShareability"	"ITEM_FULLY_SHAREABLE_STACKING"
+	}
+	"item_mc_coal"
+	{
+		"BaseClass"	"item_datadriven"
+		"AbilityTextureName"	"item_smoke_of_deceit"
+		"AbilityBehavior"	"DOTA_ABILITY_BEHAVIOR_PASSIVE"
+		"ItemCost"	"0"
+		"ItemPurchasable"	"0"
+		"ItemSellable"	"0"
+		"ItemStackable"	"1"
+		"ItemPermanent"	"0"
+		"ItemInitialCharges"	"1"
+		"ItemDisplayCharges"	"1"
+		"ItemDroppable"	"1"
+		"ItemShareability"	"ITEM_FULLY_SHAREABLE_STACKING"
+	}
+	"item_mc_iron"
+	{
+		"BaseClass"	"item_datadriven"
+		"AbilityTextureName"	"item_chainmail"
+		"AbilityBehavior"	"DOTA_ABILITY_BEHAVIOR_PASSIVE"
+		"ItemCost"	"0"
+		"ItemPurchasable"	"0"
+		"ItemSellable"	"0"
+		"ItemStackable"	"1"
+		"ItemPermanent"	"0"
+		"ItemInitialCharges"	"1"
+		"ItemDisplayCharges"	"1"
+		"ItemDroppable"	"1"
+		"ItemShareability"	"ITEM_FULLY_SHAREABLE_STACKING"
+	}
+	"item_mc_diamond"
+	{
+		"BaseClass"	"item_datadriven"
+		"AbilityTextureName"	"item_gem"
+		"AbilityBehavior"	"DOTA_ABILITY_BEHAVIOR_PASSIVE"
+		"ItemCost"	"0"
+		"ItemPurchasable"	"0"
+		"ItemSellable"	"0"
+		"ItemStackable"	"1"
+		"ItemPermanent"	"0"
+		"ItemInitialCharges"	"1"
+		"ItemDisplayCharges"	"1"
+		"ItemDroppable"	"1"
+		"ItemShareability"	"ITEM_FULLY_SHAREABLE_STACKING"
+	}
+	"item_mc_pickaxe_wood"
+	{
+		"BaseClass"	"item_datadriven"
+		"AbilityTextureName"	"item_quelling_blade"
+		"AbilityBehavior"	"DOTA_ABILITY_BEHAVIOR_PASSIVE"
+		"ItemCost"	"0"
+		"ItemPurchasable"	"0"
+		"ItemSellable"	"0"
+		"ItemDroppable"	"1"
+		"AbilityValues"	{ "bonus_damage" "3" }
+		"Modifiers"
+		{
+			"modifier_item_mc_pickaxe_wood"
+			{
+				"Passive"	"1"
+				"IsHidden"	"1"
+				"Attributes"	"MODIFIER_ATTRIBUTE_MULTIPLE"
+				"Properties"	{ "MODIFIER_PROPERTY_PREATTACK_BONUS_DAMAGE" "%bonus_damage" }
+			}
+		}
+	}
+	"item_mc_pickaxe_stone"
+	{
+		"BaseClass"	"item_datadriven"
+		"AbilityTextureName"	"item_ogre_axe"
+		"AbilityBehavior"	"DOTA_ABILITY_BEHAVIOR_PASSIVE"
+		"ItemCost"	"0"
+		"ItemPurchasable"	"0"
+		"ItemSellable"	"0"
+		"ItemDroppable"	"1"
+		"AbilityValues"	{ "bonus_damage" "6" }
+		"Modifiers"
+		{
+			"modifier_item_mc_pickaxe_stone"
+			{
+				"Passive"	"1"
+				"IsHidden"	"1"
+				"Attributes"	"MODIFIER_ATTRIBUTE_MULTIPLE"
+				"Properties"	{ "MODIFIER_PROPERTY_PREATTACK_BONUS_DAMAGE" "%bonus_damage" }
+			}
+		}
+	}
+	"item_mc_pickaxe_iron"
+	{
+		"BaseClass"	"item_datadriven"
+		"AbilityTextureName"	"item_broadsword"
+		"AbilityBehavior"	"DOTA_ABILITY_BEHAVIOR_PASSIVE"
+		"ItemCost"	"0"
+		"ItemPurchasable"	"0"
+		"ItemSellable"	"0"
+		"ItemDroppable"	"1"
+		"AbilityValues"	{ "bonus_damage" "10" }
+		"Modifiers"
+		{
+			"modifier_item_mc_pickaxe_iron"
+			{
+				"Passive"	"1"
+				"IsHidden"	"1"
+				"Attributes"	"MODIFIER_ATTRIBUTE_MULTIPLE"
+				"Properties"	{ "MODIFIER_PROPERTY_PREATTACK_BONUS_DAMAGE" "%bonus_damage" }
+			}
+		}
+	}
+	"item_mc_pickaxe_diamond"
+	{
+		"BaseClass"	"item_datadriven"
+		"AbilityTextureName"	"item_bfury"
+		"AbilityBehavior"	"DOTA_ABILITY_BEHAVIOR_PASSIVE"
+		"ItemCost"	"0"
+		"ItemPurchasable"	"0"
+		"ItemSellable"	"0"
+		"ItemDroppable"	"1"
+		"AbilityValues"	{ "bonus_damage" "15" }
+		"Modifiers"
+		{
+			"modifier_item_mc_pickaxe_diamond"
+			{
+				"Passive"	"1"
+				"IsHidden"	"1"
+				"Attributes"	"MODIFIER_ATTRIBUTE_MULTIPLE"
+				"Properties"	{ "MODIFIER_PROPERTY_PREATTACK_BONUS_DAMAGE" "%bonus_damage" }
+			}
+		}
+	}
+	"item_mc_sword_iron"
+	{
+		"BaseClass"	"item_datadriven"
+		"AbilityTextureName"	"item_claymore"
+		"AbilityBehavior"	"DOTA_ABILITY_BEHAVIOR_PASSIVE"
+		"ItemCost"	"0"
+		"ItemPurchasable"	"0"
+		"ItemSellable"	"0"
+		"ItemDroppable"	"1"
+		"AbilityValues"	{ "bonus_damage" "25" }
+		"Modifiers"
+		{
+			"modifier_item_mc_sword_iron"
+			{
+				"Passive"	"1"
+				"IsHidden"	"1"
+				"Attributes"	"MODIFIER_ATTRIBUTE_MULTIPLE"
+				"Properties"	{ "MODIFIER_PROPERTY_PREATTACK_BONUS_DAMAGE" "%bonus_damage" }
+			}
+		}
+	}
+	"item_mc_sword_diamond"
+	{
+		"BaseClass"	"item_datadriven"
+		"AbilityTextureName"	"item_desolator"
+		"AbilityBehavior"	"DOTA_ABILITY_BEHAVIOR_PASSIVE"
+		"ItemCost"	"0"
+		"ItemPurchasable"	"0"
+		"ItemSellable"	"0"
+		"ItemDroppable"	"1"
+		"AbilityValues"	{ "bonus_damage" "50" }
+		"Modifiers"
+		{
+			"modifier_item_mc_sword_diamond"
+			{
+				"Passive"	"1"
+				"IsHidden"	"1"
+				"Attributes"	"MODIFIER_ATTRIBUTE_MULTIPLE"
+				"Properties"	{ "MODIFIER_PROPERTY_PREATTACK_BONUS_DAMAGE" "%bonus_damage" }
+			}
+		}
+	}
+	"item_mc_torch"
+	{
+		"BaseClass"	"item_datadriven"
+		"AbilityTextureName"	"item_ward_observer"
+		"AbilityBehavior"	"DOTA_ABILITY_BEHAVIOR_PASSIVE"
+		"ItemCost"	"0"
+		"ItemPurchasable"	"0"
+		"AbilityValues"	{ "night_vision" "600" }
+		"Modifiers"
+		{
+			"modifier_item_mc_torch"
+			{
+				"Passive"	"1"
+				"IsHidden"	"1"
+				"Properties"	{ "MODIFIER_PROPERTY_BONUS_NIGHT_VISION" "%night_vision" }
+			}
+		}
+	}
+}

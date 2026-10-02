@@ -1,0 +1,9 @@
+"AddonInfo"
+{
+	"maps"		"hero_demo_main"
+	"IsPlayable"	"1"
+	"hero_demo_main"
+	{
+		"MaxPlayers"	"4"
+	}
+}

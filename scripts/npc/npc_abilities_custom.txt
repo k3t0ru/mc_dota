@@ -1,0 +1,70 @@
+"DOTAAbilities"
+{
+	"mc_craft_pickaxe_wood"
+	{
+		"BaseClass"	"ability_lua"
+		"ScriptFile"	"abilities/mc_craft"
+		"AbilityBehavior"	"DOTA_ABILITY_BEHAVIOR_NO_TARGET | DOTA_ABILITY_BEHAVIOR_IMMEDIATE"
+		"AbilityTextureName"	"item_quelling_blade"
+		"MaxLevel"	"1"
+	}
+	"mc_craft_pickaxe_stone"
+	{
+		"BaseClass"	"ability_lua"
+		"ScriptFile"	"abilities/mc_craft"
+		"AbilityBehavior"	"DOTA_ABILITY_BEHAVIOR_NO_TARGET | DOTA_ABILITY_BEHAVIOR_IMMEDIATE"
+		"AbilityTextureName"	"item_ogre_axe"
+		"MaxLevel"	"1"
+	}
+	"mc_craft_pickaxe_iron"
+	{
+		"BaseClass"	"ability_lua"
+		"ScriptFile"	"abilities/mc_craft"
+		"AbilityBehavior"	"DOTA_ABILITY_BEHAVIOR_NO_TARGET | DOTA_ABILITY_BEHAVIOR_IMMEDIATE"
+		"AbilityTextureName"	"item_broadsword"
+		"MaxLevel"	"1"
+	}
+	"mc_craft_pickaxe_diamond"
+	{
+		"BaseClass"	"ability_lua"
+		"ScriptFile"	"abilities/mc_craft"
+		"AbilityBehavior"	"DOTA_ABILITY_BEHAVIOR_NO_TARGET | DOTA_ABILITY_BEHAVIOR_IMMEDIATE"
+		"AbilityTextureName"	"item_bfury"
+		"MaxLevel"	"1"
+	}
+	"mc_craft_sword_iron"
+	{
+		"BaseClass"	"ability_lua"
+		"ScriptFile"	"abilities/mc_craft"
+		"AbilityBehavior"	"DOTA_ABILITY_BEHAVIOR_NO_TARGET | DOTA_ABILITY_BEHAVIOR_IMMEDIATE"
+		"AbilityTextureName"	"item_claymore"
+		"MaxLevel"	"1"
+	}
+	"mc_craft_sword_diamond"
+	{
+		"BaseClass"	"ability_lua"
+		"ScriptFile"	"abilities/mc_craft"
+		"AbilityBehavior"	"DOTA_ABILITY_BEHAVIOR_NO_TARGET | DOTA_ABILITY_BEHAVIOR_IMMEDIATE"
+		"AbilityTextureName"	"item_desolator"
+		"MaxLevel"	"1"
+	}
+	"mc_craft_torch"
+	{
+		"BaseClass"	"ability_lua"
+		"ScriptFile"	"abilities/mc_craft"
+		"AbilityBehavior"	"DOTA_ABILITY_BEHAVIOR_NO_TARGET | DOTA_ABILITY_BEHAVIOR_IMMEDIATE"
+		"AbilityTextureName"	"item_ward_observer"
+		"MaxLevel"	"1"
+	}
+	"mc_place_block"
+	{
+		"BaseClass"	"ability_lua"
+		"ScriptFile"	"abilities/mc_place_block"
+		"AbilityBehavior"	"DOTA_ABILITY_BEHAVIOR_POINT"
+		"AbilityTextureName"	"earth_spirit_stone_caller"
+		"AbilityCastRange"	"400"
+		"AbilityCastPoint"	"0.1"
+		"AbilityCooldown"	"0.3"
+		"MaxLevel"	"1"
+	}
+}
