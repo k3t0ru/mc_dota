@@ -32,7 +32,7 @@ public final class Sync {
 
 	// server thread: a block changed somewhere
 	public static void blockChanged(BlockPos p, BlockState s) {
-		if (applying || Math.abs(p.getX()) >= Arena.RADIUS || Math.abs(p.getZ()) >= Arena.RADIUS || p.getY() < -60 || p.getY() > -40) return;
+		if (applying || Math.abs(p.getX()) >= Arena.RADIUS || Math.abs(p.getZ()) >= Arena.RADIUS || p.getY() < -8 || p.getY() > 40) return;
 		if (s.isAir()) out.add(String.format("break %d %d %d", p.getX(), p.getY(), p.getZ()));
 		else out.add(String.format("set %d %d %d %s", p.getX(), p.getY(), p.getZ(), BuiltInRegistries.BLOCK.getKey(s.getBlock()).getPath()));
 	}
@@ -62,6 +62,20 @@ public final class Sync {
 		}
 	}
 
+	// column x,z gets its ground at hh half blocks above y 0: magenta podzol on top (a magenta slab for a half step),
+	// dirt under lowered ground, all-magenta raised ground (Dota's cliff faces show through it)
+	private static void terrain(MinecraftServer server, String x, String z, int hh) {
+		hh = Math.max(-100, Math.min(100, hh)); // stay well inside the world (bottom is y -64)
+		int full = Math.floorDiv(hh, 2); // solid blocks reach up to y = full - 1
+		boolean half = hh % 2 != 0;
+		if (full > 0) run(server, String.format("fill %s 0 %s %s %d %s minecraft:podzol", x, z, x, full - 1, z));
+		if (full < 0) {
+			run(server, String.format("fill %s %d %s %s -1 %s minecraft:air", x, full, z, x, z));
+			run(server, String.format("setblock %s %d %s minecraft:podzol", x, full - 1, z));
+		}
+		if (half) run(server, String.format("setblock %s %d %s minecraft:mud_brick_slab", x, full, z));
+	}
+
 	// server thread
 	private static void apply(MinecraftServer server, String body) {
 		ServerLevel level = server.overworld();
@@ -73,31 +87,28 @@ public final class Sync {
 				switch (p[0]) {
 					case "hero" -> { // hero <id> <name> <x> <z> <hp> <max> [y]: any Dota unit near Steve
 						String tag = "dota_" + p[1];
-						String y = p.length > 7 ? p[7] : "-60";
+						String y = p.length > 7 ? p[7] : "0";
 						seen.add(tag);
 						boolean fresh = standIns.put(p[1], tag) == null;
 						if (fresh) run(server, String.format("summon minecraft:husk %s " + y + " %s {NoAI:1b,Silent:1b,"
-							+ "PersistenceRequired:1b,Tags:[\"dota\",\"%s\"],CustomName:\"%s\",attributes:[{id:\"minecraft:max_health\",base:%d}],"
+							+ "PersistenceRequired:1b,DeathLootTable:\"minecraft:empty\",Tags:[\"dota\",\"%s\"],CustomName:\"%s\",attributes:[{id:\"minecraft:max_health\",base:%d}],"
 							+ "Health:%df}", p[3], p[4], tag, p[2], (int) HERO_HP, (int) HERO_HP));
-						if (fresh) run(server, "effect give @e[tag=" + tag + "] minecraft:invisibility infinite 0 true"); // the Dota unit is what you see
 						run(server, String.format("tp @e[tag=%s,limit=1] %s %s %s", tag, p[3], y, p[4]));
 					}
 					case "dmg" -> run(server, "damage @p " + p[1] + " minecraft:mob_attack");
-					case "reset" -> { // new Dota game: flat barrier floor again and nothing on it
+					case "xp" -> run(server, "xp add @p " + p[1] + " points"); // Steve killed a Dota unit
+					case "reset" -> { // new Dota game: flat ground again (dirt under a magenta podzol top) and nothing on it
 						int r = 112; // only chunks within view distance are loaded; fill fails on anything else
 						for (int x = -r; x < r; x += 4) {
-							run(server, String.format("fill %d -63 %d %d -61 %d minecraft:barrier", x, -r, x + 3, r - 1));
-							run(server, String.format("fill %d -60 %d %d -40 %d minecraft:air", x, -r, x + 3, r - 1));
+							run(server, String.format("fill %d -8 %d %d -2 %d minecraft:dirt", x, -r, x + 3, r - 1));
+							run(server, String.format("fill %d -1 %d %d -1 %d minecraft:podzol", x, -r, x + 3, r - 1));
+							run(server, String.format("fill %d 0 %d %d 30 %d minecraft:air", x, -r, x + 3, r - 1));
 						}
 						run(server, "kill @e[type=minecraft:item]");
 					}
 					case "block" -> run(server, String.format("setblock %s %s %s minecraft:%s", p[1], p[2], p[3], p[4]));
 					case "unblock" -> run(server, String.format("setblock %s %s %s minecraft:air", p[1], p[2], p[3]));
-					case "h" -> { // h <x> <z> <y>: the invisible floor follows Dota's terrain (y = where feet stand)
-						int y = Math.max(-63, Integer.parseInt(p[3]));
-						if (y > -60) run(server, String.format("fill %s -60 %s %s %d %s minecraft:barrier", p[1], p[2], p[1], y - 1, p[2]));
-						else if (y < -60) run(server, String.format("fill %s %d %s %s -61 %s minecraft:air", p[1], y, p[2], p[1], p[2]));
-					}
+					case "h" -> terrain(server, p[1], p[2], Integer.parseInt(p[3]));
 					default -> { }
 				}
 			}

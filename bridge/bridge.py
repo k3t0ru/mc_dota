@@ -6,7 +6,7 @@
 #   dmg <amount>        (Dota hit Steve)          set <x> <y> <z> <kind>       (block placed in MC)
 #   block <x> <y> <z> <kind> / unblock <x> <y> <z>  break <x> <y> <z>          (block gone in MC)
 #   reset               (new Dota game: clear MC's arena)
-#   h <x> <z> <y>       (terrain: MC surface height of a column where it differs from the flat floor)
+#   h <x> <z> <hh>      (terrain: ground height of a column in half blocks above the flat floor)
 # hero lines may carry a 7th field: the MC y the unit stands at (any Dota unit, creeps too)
 # Dota gets back: steve <name> <x> <z> <hp> <maxhp> <yaw>, hit .., mcblock <x> <y> <z> <kind>, mcbreak <x> <y> <z>,
 #                 cam <lookX> <lookY> <yaw> <pitch> <dist> <lookZ>   (lookZ absolute; Lua turns it into a height offset)
@@ -16,7 +16,7 @@
 import math, os, socket, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-GROUND_Y = -60  # MC feet level (top of the invisible barrier floor is -61)
+GROUND_Y = 0  # MC feet level on flat ground (MC_FLOOR in addon_game_mode.lua)
 SCALE = 96  # Dota units per MC block (GRID in addon_game_mode.lua): Steve stands as tall as a Dota hero
 CAM_DIST = 40  # Dota camera sits this far behind its look-at point; small = first person
 MIN_PITCH = float(os.environ.get("MCDOTA_MIN_PITCH", 3))  # lowest pitch Dota accepts (calibration knob)
@@ -43,7 +43,7 @@ class Relay:
                     self.anchor = tuple(float(v) for v in p[1:])
                 elif p[0] == "hero":
                     heroes[p[1]] = line
-                elif p[0] in ("dmg", "block", "unblock", "reset", "h"):
+                elif p[0] in ("dmg", "block", "unblock", "reset", "h", "xp"):
                     self.to_mc.append(line)
             self.heroes = heroes
             out = self.to_dota + ([self.me] if self.me else [])

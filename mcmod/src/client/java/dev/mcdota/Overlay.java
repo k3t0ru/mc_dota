@@ -54,9 +54,12 @@ public final class Overlay implements Runnable {
 		}
 	}
 
-	private static boolean hole(int p) { // magenta key with tolerance for Minecraft's vignette
+	// magenta = hole. Besides the cleared sky, the floor (bedrock) and the stand-ins of Dota units are textured pure
+	// magenta, so they cut holes too: Dota's terrain and units show through and hide Minecraft blocks behind them.
+	// Tolerance covers face shading, ambient occlusion and the vignette.
+	private static boolean hole(int p) {
 		int r = (p >> 16) & 255, g = (p >> 8) & 255, b = p & 255;
-		return r > 200 && b > 200 && g < 40 && Math.abs(r - b) < 16;
+		return r > 90 && b > 90 && g < 40 && Math.abs(r - b) < 24;
 	}
 
 	// translucent GUI (hotbar, chat) blended over the magenta clear comes out pink: show it as plain grey instead

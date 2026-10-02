@@ -23,8 +23,8 @@ PICKAXES = {
 STEVE = "npc_dota_hero_kunkka" -- ponytail: Steve overrides Kunkka's slot; own hero needs a model from Workshop Tools
 GRID = 96 -- one Dota block cell = one Minecraft block (so Steve is hero-sized), cells are aligned to MC.anchor
 CALIBRATE = false -- true: show Dota's own block cubes so they can be lined up with Minecraft's (camera calibration)
-TERRAIN_R = 40 -- cells around the anchor whose height/walkability is mirrored into Minecraft
-MC_FLOOR = -60 -- Minecraft y of the block layer standing on the floor
+TERRAIN_R = 64 -- cells around the anchor whose height is mirrored into Minecraft
+MC_FLOOR = 0 -- Minecraft y where feet stand on flat ground (the world is a superflat whose top layer is y -1)
 
 require( "mc_bridge" )
 LinkLuaModifier( "modifier_mc_block", "modifier_mc_block", LUA_MODIFIER_MOTION_NONE )
@@ -139,16 +139,19 @@ end
 MC.cells = {} -- "bx,bz" -> block unit
 MC.heights = {} -- "bx,bz" -> Minecraft y of the ground surface there
 
-function MC:HeightAt( z ) return MC_FLOOR + math.floor( ( z - MC.anchor.z ) / GRID + 0.5 ) end
+-- ground height in half blocks above MC_FLOOR (Minecraft rebuilds it with full blocks plus slabs)
+function MC:HalfHeightAt( z ) return math.floor( ( z - MC.anchor.z ) / ( GRID / 2 ) + 0.5 ) end
+function MC:HeightAt( z ) return MC_FLOOR + math.floor( MC:HalfHeightAt( z ) / 2 ) end
 
 -- Minecraft's invisible floor follows Dota's terrain (1-block steps; autojump takes them)
 function MC:SendTerrain()
 	for bx = -TERRAIN_R, TERRAIN_R do
 		for bz = -TERRAIN_R, TERRAIN_R do
 			local pos = MC:CellPos( bx, bz )
-			local y = MC:HeightAt( pos.z )
-			MC.heights[ bx .. "," .. bz ] = y
-			if y ~= MC_FLOOR then MCBridge:Send( string.format( "h %d %d %d", bx, bz, y ) ) end
+			local hh = MC:HalfHeightAt( pos.z )
+			if math.abs( pos.z - MC.anchor.z ) > 1500 then hh = 0 end -- off the map edge the ground height is garbage
+			MC.heights[ bx .. "," .. bz ] = MC_FLOOR + math.floor( hh / 2 )
+			if hh ~= 0 then MCBridge:Send( string.format( "h %d %d %d", bx, bz, hh ) ) end
 		end
 	end
 end
@@ -165,7 +168,7 @@ function MC:SpawnBlock( name, pos, fromMC )
 	b:AddNewModifier( b, nil, "modifier_mc_block", {} )
 	b:SetHullRadius( GRID * 0.375 ) -- neighbours' hulls overlap: Dota heroes can't squeeze between blocks
 	if not CALIBRATE then b:AddNoDraw() end -- ponytail: Minecraft draws the block; Dota keeps only the collision (Dota-only players would see nothing)
-	if not fromMC then MCBridge:Send( string.format( "block %d %d %d %s", bx, MC_FLOOR, bz, def.mc ) ) end
+	if not fromMC then MCBridge:Send( string.format( "block %d %d %d %s", bx, MC.heights[ key ] or MC_FLOOR, bz, def.mc ) ) end
 	return b
 end
 
@@ -227,15 +230,20 @@ end
 function MC:OnKilled( e )
 	local dead = EntIndexToHScript( e.entindex_killed )
 	local def = dead and dead.mc_block
-	if not def then return end
+	local killer = e.entindex_attacker and EntIndexToHScript( e.entindex_attacker )
+	if not def then -- Steve's kills give Minecraft experience (loot only from neutrals, later)
+		if killer and killer.mc_player and dead and not dead:IsNull() then
+			MCBridge:Send( string.format( "xp %d", math.max( 1, math.floor( dead:GetDeathXP() / 10 ) ) ) )
+		end
+		return
+	end
 	MC.cells[ dead.mc_cell ] = nil
 	dead:AddNoDraw()
 	if dead.mc_silent then return end
 	local bx, bz = MC:CellOf( dead:GetAbsOrigin() )
-	MCBridge:Send( string.format( "unblock %d %d %d", bx, MC_FLOOR, bz ) )
+	MCBridge:Send( string.format( "unblock %d %d %d", bx, MC.heights[ dead.mc_cell ] or MC_FLOOR, bz ) )
 	local item = CreateItem( def.drop, nil, nil )
 	CreateItemOnPositionSync( dead:GetAbsOrigin(), item )
-	local killer = e.entindex_attacker and EntIndexToHScript( e.entindex_attacker )
 	if killer and killer.IsRealHero and killer:IsRealHero() then
 		killer:AddExperience( def.xp, DOTA_ModifyXP_Unspecified, false, true )
 	end

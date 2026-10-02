@@ -26,10 +26,11 @@ public class McDotaClient implements ClientModInitializer {
 	public void onInitializeClient() {
 		ClientLifecycleEvents.CLIENT_STARTED.register(mc -> {
 			mc.options.cloudStatus().set(CloudStatus.OFF);
+			if (net.minecraft.client.renderer.fog.FogRenderer.toggleFog()) net.minecraft.client.renderer.fog.FogRenderer.toggleFog(); // off: fog tints the magenta floor
 			mc.options.fov().set(FOV); // must match Dota's camera (dota_camera_fov_min/max in tools/dev_launch.sh)
 			mc.options.fovEffectScale().set(0.0); // no sprint/speed zoom: Dota's FOV never changes
 			mc.options.damageTiltStrength().set(0.0); // a hurt camera tilt would tear Minecraft's layer off Dota's
-			mc.options.autoJump().set(false);
+			mc.options.autoJump().set(true); // the floor follows Dota's terrain in whole-block steps
 			mc.options.bobView().set(false); // walking bob shakes only Minecraft's layer, so blocks would swim over the map
 			int[] r = renderSize(); // resizing inside Window's constructor crashes, so do it once the client is up
 			GLFW.glfwSetWindowSize(mc.getWindow().handle(), r[0], r[1]);

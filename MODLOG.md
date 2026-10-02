@@ -137,3 +137,13 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Overlay delay in motion: sweep 125/175/225/275 → 150 ms. Live knob: mcmod/run/mcdota_delay.txt.
 - Invisible walls removed (trees/GridNav made walls almost everywhere), autojump off (user's request), creep loot kept.
 - Verified: 15 stand-ins (creeps, Roshan); /damage 10 on Roshan's stand-in → −57 HP in Dota.
+
+## 2026-10-02 20:25: diggable ground, half-block terrain, occlusion via magenta
+- World = superflat bedrock 1 / stone 59 / dirt 3 / podzol 1 → feet on y 0 (MC_FLOOR = GROUND_Y = 0).
+- Magenta textures in the mod's resources: podzol_top/side, mud_bricks (slab = half step). The overlay turns magenta (with
+  shading tolerance r,b>90 g<40) into holes → Dota's ground is visible, but it still occludes MC blocks behind hills.
+  Husk (stand-ins) is magenta too → Dota units cut through MC blocks in front of them. Fog off (FogRenderer.toggleFog),
+  time locked to noon (night darkens the magenta).
+- Terrain: "h x z hh" in half blocks, R=64; garbage height at the map edge (|dz|>1500) → 0 (otherwise 1261 commands "out of this world").
+- Autojump on, step_height NOT raised (user's request). No loot from stand-ins; Steve's kills → "xp" → /xp add (DeathXP/10).
+- Verified: no terrain errors, clean Dota ground under MC, digging down (dirt shaft, 4 dirt in the inventory).
