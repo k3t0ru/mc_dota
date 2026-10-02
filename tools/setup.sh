@@ -22,5 +22,5 @@ cp -n "$HERE/tools/template/level.dat" "$HERE/mcmod/run/saves/mcdota/level.dat" 
 cp -n "$HERE/tools/template/options.txt" "$HERE/mcmod/run/options.txt" 2>/dev/null || true
 
 # block models + Minecraft textures from the local Minecraft jar (downloaded by the build above), Panorama
-python "$HERE/tools/gen_blocks.py" && sh "$HERE/tools/build_assets.sh"
+python "$HERE/tools/gen_blocks.py" && python "$HERE/tools/gen_villager.py" && sh "$HERE/tools/build_assets.sh"
 echo "Done. Set Dota to windowed 1920x1080 (see SETUP.md), then:  sh tools/dev_launch.sh"

@@ -3,11 +3,13 @@
 # Dota POSTs /sync every server frame:          Minecraft mod POSTs /mc every client tick:
 #   anchor <x> <y> <z>                            me <name> <x> <y> <z> <yaw> <hp> <maxhp>
 #   hero <id> <name> <x> <z> <hp> <maxhp>         hit <heroid> <amount>        (MC hp units)
-#   dmg <amount>        (Dota hit Steve)          set <x> <y> <z> <kind>       (block placed in MC)
+#   dmg <amount> <attackerid> (Dota hit Steve)    set <x> <y> <z> <kind>       (block placed in MC)
 #   block <x> <y> <z> <kind> / unblock <x> <y> <z>  break <x> <y> <z>          (block gone in MC)
 #   reset               (new Dota game: clear MC's arena)
 #   void <x> <z>        (outside the Dota map: bottomless column)   border <size> (MC world border, centred on 0,0)
 #   h <x> <z> <hh> <low> (terrain: column height and its lowest neighbour's, half blocks above the flat floor)
+#   delay <ms> (Dota camera playback delay: Minecraft's overlay waits as long)   trader <x> <z> <profession>
+#   loot <emeralds> <food> <n> (Steve killed a unit)   lvl <n> (Steve's Dota level = MC max health)   xp <points>
 # hero lines may carry a 7th field: the MC y the unit stands at (any Dota unit, creeps too)
 # Dota gets back: steve <name> <x> <z> <hp> <maxhp> <yaw>, hit .., mcblock <x> <y> <z> <kind>, mcbreak <x> <y> <z>,
 #                 cam <lookX> <lookY> <yaw> <pitch> <dist> <lookZ>   (lookZ absolute; Lua turns it into a height offset)
@@ -44,7 +46,7 @@ class Relay:
                     self.anchor = tuple(float(v) for v in p[1:])
                 elif p[0] == "hero":
                     heroes[p[1]] = line
-                elif p[0] in ("dmg", "block", "unblock", "reset", "h", "xp", "void", "border"):
+                elif p[0] in ("dmg", "block", "unblock", "reset", "h", "xp", "void", "border", "loot", "lvl", "delay", "trader"):
                     self.to_mc.append(line)
                     if p[0] in ("reset", "border"):
                         print("to mc:", line, flush=True)
@@ -115,6 +117,9 @@ def main():
             pass
 
     print("bridge on http://127.0.0.1:27100 (/sync for Dota, /mc for Minecraft), camera UDP :27101", flush=True)
+    # no address reuse: on Windows it lets a second bridge bind the same port and split the traffic between them
+    # (Dota's messages went to one bridge, Minecraft polled another); now a second copy fails to start instead
+    ThreadingHTTPServer.allow_reuse_address = False
     ThreadingHTTPServer(("127.0.0.1", 27100), H).serve_forever()
 
 

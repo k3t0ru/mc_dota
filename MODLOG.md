@@ -217,3 +217,27 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Blue blocks = Dota night lighting (+ cyan fog sky). Dota locked to noon (SetDaynightCycleDisabled), +fog_enable 0.
   unlit.vfx for blocks made them INVISIBLE (reverted to global_lit_simple).
 - Gotcha: "Cannot set convar ..., missing required FCVAR flag" on the command line is harmless (fps_max still applied).
+
+## 2026-10-03 01:10: progression (emeralds, traders), denies, towers, void, walking on blocks
+- BUG (big): bridge_pids looked for python.exe, but here python runs as python3.11.exe (Store build) → every launch
+  started ANOTHER bridge (16 were running), and Windows' allow_reuse_address let them all bind :27100 → requests spread
+  over different bridges (Dota's lines to one, Minecraft polled another; lost loot). Fixed: match python%.exe,
+  allow_reuse_address = False (a second copy now fails to start).
+- BUG: Lua modifiers were linked only in addon_game_mode.lua (server VM) → client "unknown modifier type". Now addon_init.lua.
+- BUG: void never appeared: queued column builds ran after their chunk unloaded again ("That position is not loaded") and were
+  lost. Now they wait for the chunk again. The map edge IS the garbage-height test (rays: rim at +256, then -16512);
+  a GridNav flood fill + margin cut the map short (reverted). Terrain columns now restore bedrock/stone/dirt (were voided).
+- Progression (Progress.java): per Dota match; start = wooden sword/pickaxe, bread, planks. Steve's kills (Lua MC:LootFor)
+  → "loot <emeralds> <food> <n>": emeralds = gold bounty / EMERALD_GOLD (25); creeps bread 50%, neutrals beef, heroes and
+  towers golden apple. Steve's Dota level → "lvl" → MC max_health 20 + (lvl-1).
+- Traders: Dota draws them (tools/gen_villager.py: VillagerModel boxes + jar textures, alpha-tested), positions from Lua
+  TRADERS → "trader x z prof" (resent every 5 s); Minecraft keeps invisible villagers there (trading UI). Upgrades cost
+  emeralds + the previous tier item (buyB). Offers in Progress.java.
+- Overlay delay follows Panorama's camera playback delay ("delay" via mc_delay event; +5 ms) → hand/arrows/items no longer
+  drift. run/mcdota_delay.txt (old PC: "0") overrides it → renamed to .bak.
+- Towers/buildings get stand-ins (scale attribute 2.5-3). Shield: "dmg <amt> <attackerid>" → damage ... by <stand-in>.
+- Denies like Dota: creeps < 50%, towers < 10%, heroes never; "!" particle, no loot/xp.
+- Walking on blocks: a column with only a ground-level block = walkable (modifier_mc_block stack 1 → NO_UNIT_COLLISION),
+  units in it get modifier_mc_lift (VISUAL_Z_DELTA 96) and their stand-in y+1. 2 high = wall. No staircases.
+- Test trick: POST "hit <id> <n>" / "set x y z kind" to /mc fakes Minecraft events (an empty POST lists hero lines, but
+  it also eats queued to_mc lines).

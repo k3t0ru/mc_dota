@@ -34,7 +34,14 @@ public final class Overlay implements Runnable {
 	// Dota plays poses back PLAYBACK_MS (fpcam.js, 150) after Minecraft had them, and needs ~1 frame to draw; Minecraft frames are shown
 	// DELAY ms late from a small ring buffer: both layers then move together instead of blocks sliding over the map
 	private static final int RING = 24;
-	private static volatile int delay = Integer.getInteger("mcdota.delay", 0); // live knob: run/mcdota_delay.txt
+	// Hybrid: Dota's camera plays poses back with an automatic delay (fpcam.js) that Panorama reports (dotaDelay);
+	// Minecraft's picture (hand, HUD, arrows, items, mobs) waits as long, so it doesn't slide over Dota's world
+	private static final int DOTA_FRAME_MS = 5; // Dota draws a camera pose a frame later (at 200+ fps)
+	private static volatile int delay = Integer.getInteger("mcdota.delay", 0); // live knob: run/mcdota_delay.txt (wins over Dota's)
+	private static volatile int dotaDelay = -1;
+
+	// sync thread: Dota's current camera playback delay
+	public static void dotaDelay(int ms) { dotaDelay = ms + DOTA_FRAME_MS; }
 	private final int[][] ring = new int[RING][];
 	private final long[] stamp = new long[RING];
 	private int head, lw, lh;
@@ -129,7 +136,8 @@ public final class Overlay implements Runnable {
 				lastFind = now;
 				try {
 					delay = Integer.parseInt(java.nio.file.Files.readString(java.nio.file.Path.of("mcdota_delay.txt")).trim());
-				} catch (Exception ignored) { // no file: keep the default
+				} catch (Exception ignored) { // no file: follow Dota's camera
+					if (dotaDelay >= 0) delay = dotaDelay;
 				}
 				dota = u.FindWindow(null, "Dota 2");
 				RECT r = new RECT();

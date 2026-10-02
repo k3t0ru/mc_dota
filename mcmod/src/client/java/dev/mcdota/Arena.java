@@ -21,9 +21,7 @@ public final class Arena {
 		"gamerule keepInventory true", "gamerule keep_inventory true",
 		"gamerule doImmediateRespawn true", "gamerule immediate_respawn true", "setworldspawn 0 0 0", "spawnpoint @p 0 0 0", // start where the Dota hero spawns (MC 0,0), not wherever the last session ended
 		"attribute @p minecraft:knockback_resistance base set 1", // Dota hits hurt but don't shove the camera around
-		// ponytail: test kit while the world starts empty; real progression comes later
-		"clear @p", "give @p minecraft:diamond_sword", "give @p minecraft:diamond_pickaxe",
-		"give @p minecraft:cobblestone 64", "give @p minecraft:oak_planks 64", "give @p minecraft:oak_log 64",
+		// the starting kit comes with every new Dota match (Progress.newMatch)
 	};
 
 	public static void ensure(Minecraft mc) {

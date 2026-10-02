@@ -47,6 +47,14 @@ GameEvents.Subscribe( "mc_cam", function( e ) {
 	}
 } );
 
+// tell the server (-> bridge -> Minecraft's overlay) how late the camera plays, once a second
+var lastDelaySent = 0;
+function reportDelay() {
+	if ( Date.now() - lastDelaySent < 1000 ) return;
+	lastDelaySent = Date.now();
+	GameEvents.SendCustomGameEventToServer( "mc_delay", { d: Math.round( PLAYBACK_MS >= 0 ? PLAYBACK_MS : delay ) } );
+}
+
 function playbackDelay() {
 	if ( PLAYBACK_MS >= 0 ) return PLAYBACK_MS;
 	if ( recent.length >= 10 ) {
@@ -85,6 +93,7 @@ function smooth( v ) {
 
 function frame() {
 	var t = Date.now() - playbackDelay();
+	reportDelay();
 	var a = null, b = null;
 	for ( var i = 0; i < poses.length; i++ ) {
 		if ( poses[i].t <= t ) a = poses[i];

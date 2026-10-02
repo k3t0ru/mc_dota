@@ -24,14 +24,23 @@ function MCBridge:Tick()
 	local lines = { string.format( "anchor %.1f %.1f %.1f", a.x, a.y, a.z ) }
 	-- every living Dota unit near Steve gets a stand-in in Minecraft (heroes, creeps, neutrals)
 	local center = self.steve and self.steve:GetAbsOrigin() or MC.anchor
+	-- (towers and other buildings too, so Minecraft weapons can hit them; invulnerable ones only once Dota opens them up)
 	for _, h in ipairs( FindUnitsInRadius( DOTA_TEAM_GOODGUYS, center, nil, 2500, DOTA_UNIT_TARGET_TEAM_BOTH,
-		DOTA_UNIT_TARGET_HERO + DOTA_UNIT_TARGET_BASIC, DOTA_UNIT_TARGET_FLAG_NONE, FIND_ANY_ORDER, false ) ) do
+		DOTA_UNIT_TARGET_HERO + DOTA_UNIT_TARGET_BASIC + DOTA_UNIT_TARGET_BUILDING, DOTA_UNIT_TARGET_FLAG_NONE, FIND_ANY_ORDER, false ) ) do
 		if h:IsAlive() and not h.mc_player and not h.mc_block and not h:IsInvulnerable() then
 			local p = h:GetAbsOrigin()
 			local x, z = to_mc( p )
+			local lift = h:IsBuilding() and 0 or MC:LiftUnit( h ) -- standing on a 1-high Minecraft block
 			table.insert( lines, string.format( "hero %d %s %.2f %.2f %d %d %d", h:entindex(),
-				( h:GetUnitName():gsub( "npc_dota_hero_", "" ):gsub( "npc_dota_", "" ) ), x, z, h:GetHealth(), h:GetMaxHealth(), MC:HeightAt( p.z ) ) )
+				( h:GetUnitName():gsub( "npc_dota_hero_", "" ):gsub( "npc_dota_", "" ) ), x, z, h:GetHealth(), h:GetMaxHealth(), MC:HeightAt( p.z ) + lift ) )
 		end
+	end
+	-- trader spots again now and then: a restarted Minecraft client forgets them
+	if GameRules:GetGameTime() - ( self.tradersAt or -100 ) > 5 then self.tradersAt = GameRules:GetGameTime(); MC:SendTraders() end
+	-- Steve's Dota level (he earns hero XP for his kills) is his Minecraft max health
+	if self.steve and not self.steve:IsNull() and self.steve:GetLevel() ~= self.sentLevel then
+		self.sentLevel = self.steve:GetLevel()
+		self:Send( "lvl " .. self.sentLevel )
 	end
 	for _, l in ipairs( self.out ) do table.insert( lines, l ) end
 	local sent = self.out
@@ -65,9 +74,10 @@ function MCBridge:Apply( body, stale )
 
 		local id, amount = line:match( "^hit (%d+) (%S+)" )
 		local hero = id and EntIndexToHScript( tonumber( id ) )
-		-- allies can only be denied like in Dota: below half health
+		-- allies can only be denied like in Dota: creeps below half health, towers below 10%, heroes never
 		local ally = hero and self.steve and hero:GetTeamNumber() == self.steve:GetTeamNumber()
-		if hero and hero:IsAlive() and ( not ally or hero:GetHealthPercent() < 50 ) then
+		local deniable = ally and hero:IsAlive() and not hero:IsHero() and hero:GetHealthPercent() < ( hero:IsTower() and 10 or 50 )
+		if hero and hero:IsAlive() and ( not ally or deniable ) then
 			ApplyDamage( { victim = hero, attacker = self.steve or hero, damage = tonumber( amount ) * DMG_TO_DOTA, damage_type = DAMAGE_TYPE_PURE } )
 		end
 
@@ -75,17 +85,13 @@ function MCBridge:Apply( body, stale )
 		if bx then
 			bx, by, bz = tonumber( bx ), tonumber( by ), tonumber( bz )
 			MC:ShowBlock( bx, by, bz, kind ) -- hybrid: Dota draws every Minecraft block, nailed to its world
-			local ground = MC.heights[ bx .. "," .. bz ] or MC_FLOOR
-			if by >= ground and by <= ground + 1 then -- blocks at a hero's height block Dota pathing
-				MC:SpawnBlock( FROM_MC[ kind ] or "npc_mc_block_cobble", MC:CellPos( bx, bz ), true ).mc_y = by
-			end
+			MC:ColumnChanged( bx, bz )
 		end
 		local rx, ry, rz = line:match( "^mcbreak (%S+) (%S+) (%S+)" )
 		if rx then
 			rx, ry, rz = tonumber( rx ), tonumber( ry ), tonumber( rz )
 			MC:HideBlock( rx, ry, rz )
-			local ground = MC.heights[ rx .. "," .. rz ] or MC_FLOOR
-			if ry >= ground and ry <= ground + 1 then MC:RemoveBlock( rx, rz ) end
+			MC:ColumnChanged( rx, rz )
 		end
 
 		local cx, cy, cz, stage = line:match( "^crack (%S+) (%S+) (%S+) (%S+)" )
@@ -125,6 +131,9 @@ function MCBridge:MoveSteve( name, pos, frac, yaw )
 end
 
 -- Dota hits Steve: Minecraft owns his health, so the hit goes there
-function MCBridge:OnSteveDamaged( victim, damage )
-	self:Send( string.format( "dmg %.2f", damage * DOTA_TO_MC ) )
+-- (the attacker's stand-in is named, so a raised Minecraft shield facing it blocks the hit)
+function MCBridge:OnSteveDamaged( victim, damage, attacker )
+	local amount = damage * DOTA_TO_MC
+	if amount < 0.01 then return end
+	self:Send( string.format( "dmg %.2f %d", amount, attacker or -1 ) )
 end

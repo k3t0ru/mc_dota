@@ -27,7 +27,7 @@ TERRAIN_R = 220 -- max cells around the anchor mirrored into Minecraft (the map'
 MC_FLOOR = 0 -- Minecraft y where feet stand on flat ground (the world is a superflat whose top layer is y -1)
 
 require( "mc_bridge" )
-LinkLuaModifier( "modifier_mc_block", "modifier_mc_block", LUA_MODIFIER_MOTION_NONE )
+require( "addon_init" ) -- Lua modifiers (the client loads addon_init.lua by itself)
 
 function Precache( context )
 	for _, m in ipairs({
@@ -36,6 +36,7 @@ function Precache( context )
 		"models/mc/dirt.vmdl", "models/mc/sand.vmdl", "models/mc/planks.vmdl",
 		"models/mc/crack_0.vmdl", "models/mc/crack_1.vmdl", "models/mc/crack_2.vmdl", "models/mc/crack_3.vmdl", "models/mc/crack_4.vmdl",
 		"models/mc/crack_5.vmdl", "models/mc/crack_6.vmdl", "models/mc/crack_7.vmdl", "models/mc/crack_8.vmdl", "models/mc/crack_9.vmdl",
+		"models/mc/villager_weaponsmith.vmdl", "models/mc/villager_armorer.vmdl", "models/mc/villager_librarian.vmdl",
 		"models/heroes/undying/undying_minion.vmdl",
 		"models/creeps/neutral_creeps/n_creep_troll_skeleton/n_creep_skeleton_melee.vmdl",
 	}) do PrecacheResource( "model", m, context ) end
@@ -120,6 +121,9 @@ function MC:SetupHero( hero )
 		-- Dota's own camera controls would fight Minecraft's (launch args alone get overridden by the user's config)
 		SendToConsole( "dota_camera_edgemove 0; dota_camera_speed 0; dota_camera_lock 0; dota_camera_fov_min 90; dota_camera_fov_max 90; dota_camera_z_interp_speed 100000; fps_max 60" )
 		MC:SendTerrain()
+		MC:SpawnTraders()
+		-- Panorama's camera playback delay: Minecraft's overlay waits as long (see fpcam.js)
+		CustomGameEventManager:RegisterListener( "mc_delay", function( _, e ) MCBridge:Send( "delay " .. math.floor( tonumber( e.d ) or 0 ) ) end )
 		-- ponytail: thinks on the game mode entity never fired here, so timers live on their own entity
 		local timer = SpawnEntityFromTableSynchronous( "info_target", { targetname = "mc_timer" } )
 		local function safe( f ) -- log the real error instead of the engine's "error in error handling"
@@ -159,6 +163,8 @@ function MC:SendTerrain()
 	local R = math.min( TERRAIN_R, math.max( -x1, x2, -z1, z2 ) + 6 ) -- a void strip past the map edge, then the border
 	MCBridge:Send( string.format( "border %d", 2 * R + 1 ) )
 	print( string.format( "[mc] terrain R=%d, map cells x %d..%d z %d..%d", R, x1, x2, z1, z2 ) )
+	-- the world bounds are far bigger than the visible map; past its edge (a rim, then no terrain at all) Dota reports
+	-- heights ~16000 below: that is where Minecraft gets its void
 	local function outside( bx, bz )
 		return bx < x1 or bx > x2 or bz < z1 or bz > z2 or math.abs( MC:CellPos( bx, bz ).z - a.z ) > 1500
 	end
@@ -180,7 +186,7 @@ function MC:SendTerrain()
 				-- lowest neighbour: this column's side wall is exposed down to there and must be magenta too
 				local low = math.min( h, hh( bx + 1, bz ), hh( bx - 1, bz ), hh( bx, bz + 1 ), hh( bx, bz - 1 ) )
 				MC.heights[ bx .. "," .. bz ] = MC_FLOOR + math.floor( h / 2 )
-				if h ~= 0 or low ~= 0 then MCBridge:Send( string.format( "h %d %d %d %d", bx, bz, h, low ) ) end
+				MCBridge:Send( string.format( "h %d %d %d %d", bx, bz, h, low ) ) -- flat ones too: a column voided earlier comes back
 			end
 		end
 	end
@@ -214,7 +220,73 @@ function MC:ShowBlock( bx, by, bz, kind )
 	local p = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/" .. ( MODELS[ kind ] or "cobblestone" ) .. ".vmdl",
 		origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ) } )
 	p:SetModelScale( GRID / 128 ) -- the cube model is 128 units
+	p.mc_kind = kind
 	MC.props[ key ] = p
+end
+
+-- What Dota units can do with a Minecraft column at their height: like a Minecraft player they step up ONE block
+-- (walk on top of it), two stacked blocks are a wall. Returns: block at ground level, block one above.
+function MC:Column( bx, bz )
+	local g = MC.heights[ bx .. "," .. bz ] or MC_FLOOR
+	return MC.props[ bx .. "," .. g .. "," .. bz ], MC.props[ bx .. "," .. ( g + 1 ) .. "," .. bz ], g
+end
+
+-- a Minecraft block appeared/vanished in this column: keep its Dota block unit (mining target, and a wall when 2 high)
+function MC:ColumnChanged( bx, bz )
+	local low, high, g = MC:Column( bx, bz )
+	if not low and not high then MC:RemoveBlock( bx, bz ) return end
+	local b = MC.cells[ bx .. "," .. bz ]
+	if not b or b:IsNull() or not b:IsAlive() then
+		local top = low or high
+		b = MC:SpawnBlock( FROM_MC[ top.mc_kind ] or "npc_mc_block_cobble", MC:CellPos( bx, bz ), true )
+	end
+	b.mc_y = low and g or g + 1 -- what a Dota hero mines out of this column
+	local m = b:FindModifierByName( "modifier_mc_block" )
+	if m then m:SetStackCount( ( low and not high ) and 1 or 0 ) end -- 1 = walkable: no collision
+end
+
+-- a unit standing in a walkable column is drawn one block up (Dota keeps it on its ground; this is only visual)
+-- returns how many blocks up it stands
+function MC:LiftUnit( u )
+	local low, high = MC:Column( MC:CellOf( u:GetAbsOrigin() ) )
+	local lift = ( low and not high ) and 1 or 0
+	local m = u:FindModifierByName( "modifier_mc_lift" )
+	if lift > 0 and not m then u:AddNewModifier( u, nil, "modifier_mc_lift", {} ):SetStackCount( GRID )
+	elseif lift == 0 and m then m:Destroy() end
+	return lift
+end
+
+-- Traders by the spawn (Minecraft cells; they look west, toward the spawn). Dota draws them; Minecraft keeps an
+-- invisible villager on each spot to trade with (Progress.java has the offers)
+TRADERS = { { 4, -2, "weaponsmith" }, { 4, 1, "armorer" }, { 4, 4, "librarian" } }
+function MC:SpawnTraders()
+	for _, t in ipairs( TRADERS ) do
+		local pos = MC:CellPos( t[1], t[2] )
+		local p = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/villager_" .. t[3] .. ".vmdl",
+			origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ), angles = "0 90 0" } ) -- the model looks +Y at yaw 0
+	end
+	MC:SendTraders()
+end
+
+function MC:SendTraders()
+	for _, t in ipairs( TRADERS ) do MCBridge:Send( string.format( "trader %d %d %s", t[1], t[2], t[3] ) ) end
+end
+
+-- Steve's kills drop Minecraft loot: emeralds (the shop currency) by the unit's gold bounty, plus food
+EMERALD_GOLD = 25 -- gold bounty per emerald
+function MC:LootFor( dead )
+	local gold = dead:GetGoldBounty()
+	local food, n = "none", 0
+	if dead:IsRealHero() then
+		gold, food, n = 150 + 10 * dead:GetLevel(), "golden_apple", 1
+	elseif dead:IsBuilding() then
+		gold, food, n = dead:IsTower() and 250 or 150, "golden_apple", 1
+	elseif dead:IsNeutralUnitType() or dead:GetTeamNumber() == DOTA_TEAM_NEUTRALS then
+		food, n = "cooked_beef", RandomInt( 1, 2 )
+	elseif RandomInt( 1, 2 ) == 1 then
+		food, n = "bread", 1
+	end
+	return string.format( "loot %d %s %d", math.max( 1, math.floor( gold / EMERALD_GOLD + 0.5 ) ), food, n )
 end
 
 -- mining cracks (stage 0..9; anything else removes them): a slightly bigger cracked shell over the block
@@ -267,7 +339,7 @@ function MC:DamageFilter( f )
 	if not f.entindex_victim_const or not f.entindex_attacker_const then return true end
 	local victim = EntIndexToHScript( f.entindex_victim_const )
 	if victim.mc_player then
-		MCBridge:OnSteveDamaged( victim, f.damage )
+		MCBridge:OnSteveDamaged( victim, f.damage, f.entindex_attacker_const )
 		return false
 	end
 	local def = victim.mc_block
@@ -294,9 +366,17 @@ function MC:OnKilled( e )
 	local dead = EntIndexToHScript( e.entindex_killed )
 	local def = dead and dead.mc_block
 	local killer = e.entindex_attacker and EntIndexToHScript( e.entindex_attacker )
-	if not def then -- Steve's kills give Minecraft experience (loot only from neutrals, later)
+	if not def then -- Steve's kills give Minecraft experience and loot
+		if killer and killer.mc_player and dead and not dead:IsNull() and dead:GetTeamNumber() == killer:GetTeamNumber() then
+			-- a deny: Dota itself already cuts the enemy's XP; show the "!" and give Steve nothing
+			ParticleManager:ReleaseParticleIndex( ParticleManager:CreateParticle( "particles/msg_fx/msg_deny.vpcf", PATTACH_OVERHEAD_FOLLOW, dead ) )
+			print( "[mc] Steve denied " .. dead:GetUnitName() )
+		end
 		if killer and killer.mc_player and dead and not dead:IsNull() and dead:GetTeamNumber() ~= killer:GetTeamNumber() then -- denies give nothing
 			MCBridge:Send( string.format( "xp %d", math.max( 1, math.floor( dead:GetDeathXP() / 10 ) ) ) )
+			local loot = MC:LootFor( dead )
+			print( "[mc] Steve killed " .. dead:GetUnitName() .. ": " .. loot )
+			MCBridge:Send( loot )
 		end
 		return
 	end
@@ -316,4 +396,5 @@ end
 
 -- each Dota script file has its own environment; share these with abilities and mc_bridge.lua
 _G.CALIBRATE = CALIBRATE
+_G.EMERALD_GOLD, _G.TRADERS = EMERALD_GOLD, TRADERS
 _G.MC, _G.BLOCKS, _G.PICKAXES, _G.GRID, _G.STEVE, _G.FROM_MC, _G.MC_FLOOR = MC, BLOCKS, PICKAXES, GRID, STEVE, FROM_MC, MC_FLOOR

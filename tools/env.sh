@@ -14,4 +14,5 @@ HERE=$(cd "$(dirname "$0")/.." && pwd)
 kill_pids() { for p in "$@"; do taskkill //PID "$p" //F >/dev/null 2>&1; done; }
 mc_pids() { powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"name='java.exe'\" | Where-Object { \$_.CommandLine -like '*fabric.dli*' } | ForEach-Object { \$_.ProcessId }" | tr -d '\r'; }
 dota_pids() { powershell -NoProfile -Command "(Get-Process dota2 -ErrorAction SilentlyContinue).Id" | tr -d '\r'; }
-bridge_pids() { powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"name='python.exe'\" | Where-Object { \$_.CommandLine -like '*bridge.py*' } | ForEach-Object { \$_.ProcessId }" | tr -d '\r'; }
+# python may run as python3.11.exe (Microsoft Store build): match any python*.exe
+bridge_pids() { powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \"name like 'python%.exe'\" | Where-Object { \$_.CommandLine -like '*bridge.py*' } | ForEach-Object { \$_.ProcessId }" | tr -d '\r'; }

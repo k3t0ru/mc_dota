@@ -63,11 +63,15 @@ public final class Sync {
 			});
 	}
 
-	private static void run(MinecraftServer server, String cmd) {
+	static boolean run(MinecraftServer server, String cmd) { return run(server, cmd, true); }
+
+	static boolean run(MinecraftServer server, String cmd, boolean log) {
 		try { // execute directly so failures land in the log instead of vanishing
 			server.getCommands().getDispatcher().execute(cmd, server.createCommandSourceStack().withSuppressedOutput());
+			return true;
 		} catch (Exception e) {
-			org.slf4j.LoggerFactory.getLogger("mcdota").warn("command failed: {} -> {}", cmd, e.getMessage());
+			if (log) org.slf4j.LoggerFactory.getLogger("mcdota").warn("command failed: {} -> {}", cmd, e.getMessage());
+			return false;
 		}
 	}
 
@@ -76,6 +80,10 @@ public final class Sync {
 	// wall down to the lowest neighbour is mud bricks, magenta on every face, so Dota's slope shows through it.
 	private static void terrain(MinecraftServer server, String x, String z, int hh, int low) {
 		hh = Math.max(-100, Math.min(100, hh)); // stay well inside the world (bottom is y -64)
+		// the superflat underneath (bedrock, stone, dirt), in case this column was void before; "nothing filled" is the norm here
+		run(server, String.format("fill %s -64 %s %s -64 %s minecraft:bedrock", x, z, x, z), false);
+		run(server, String.format("fill %s -63 %s %s -5 %s minecraft:stone", x, z, x, z), false);
+		run(server, String.format("fill %s -4 %s %s -2 %s minecraft:dirt", x, z, x, z), false);
 		low = Math.max(-100, Math.min(hh, low));
 		int full = Math.floorDiv(hh, 2), bottom = Math.floorDiv(low, 2) - 1; // solid up to full - 1; skin from bottom
 		Hybrid.setSurface(Integer.parseInt(x), Integer.parseInt(z), full);
@@ -89,30 +97,51 @@ public final class Sync {
 	// Minecraft can only change loaded chunks, and Dota's map is far bigger than the view distance: columns of unloaded
 	// chunks wait here and are built the moment their chunk loads (ServerChunkEvents in McDotaClient)
 	// Ready builds run at most BUDGET per server tick: a whole Dota map at once froze Minecraft for seconds.
-	private static final Map<Long, java.util.List<Runnable>> pending = new HashMap<>();
-	private static final java.util.ArrayDeque<Runnable> ready = new java.util.ArrayDeque<>();
+	// A queued column whose chunk unloaded again before its turn (the player walked on; the backlog can be thousands)
+	// goes back to waiting: running it then failed with "That position is not loaded" and the column was lost for good,
+	// which is why the void past the map edge never appeared.
+	private record Build(int x, int z, Runnable run) { }
+	private static final Map<Long, java.util.List<Build>> pending = new HashMap<>();
+	private static final java.util.ArrayDeque<Build> ready = new java.util.ArrayDeque<>();
 	private static final int BUDGET = 400;
 
 	private static void column(MinecraftServer server, int x, int z, Runnable build) {
-		if (server.overworld().hasChunk(x >> 4, z >> 4)) ready.add(build);
-		else pending.computeIfAbsent(net.minecraft.world.level.ChunkPos.asLong(x >> 4, z >> 4), k -> new java.util.ArrayList<>()).add(build);
+		Build b = new Build(x, z, build);
+		if (server.overworld().hasChunk(x >> 4, z >> 4)) ready.add(b);
+		else wait(b);
+	}
+
+	private static void wait(Build b) {
+		pending.computeIfAbsent(net.minecraft.world.level.ChunkPos.asLong(b.x >> 4, b.z >> 4), k -> new java.util.ArrayList<>()).add(b);
 	}
 
 	// server thread: a chunk just loaded
 	public static void chunkLoaded(MinecraftServer server, int cx, int cz) {
-		java.util.List<Runnable> builds = pending.remove(net.minecraft.world.level.ChunkPos.asLong(cx, cz));
+		java.util.List<Build> builds = pending.remove(net.minecraft.world.level.ChunkPos.asLong(cx, cz));
 		if (builds != null) ready.addAll(builds);
 	}
 
 	// server thread, every tick
-	public static void buildSome() {
+	public static void buildSome(MinecraftServer server) {
 		if (ready.isEmpty()) return;
 		applying = true;
 		try {
-			for (int i = 0; i < BUDGET && !ready.isEmpty(); i++) ready.poll().run();
+			for (int i = 0; i < BUDGET && !ready.isEmpty(); i++) {
+				Build b = ready.poll();
+				if (server.overworld().hasChunk(b.x >> 4, b.z >> 4)) b.run.run();
+				else wait(b);
+			}
 		} finally {
 			applying = false;
 		}
+	}
+
+	// stand-in size for big Dota units (Minecraft's scale attribute), so swords and arrows can reach a tower
+	private static double scale(String name) {
+		if (name.contains("tower")) return 2.5;
+		if (name.contains("rax") || name.contains("fort") || name.contains("filler")) return 3;
+		if (name.contains("roshan")) return 2;
+		return 1;
 	}
 
 	// server thread
@@ -129,14 +158,22 @@ public final class Sync {
 						String y = p.length > 7 ? p[7] : "0";
 						seen.add(tag);
 						boolean fresh = standIns.put(p[1], tag) == null;
-						if (fresh) run(server, String.format("summon minecraft:husk %s " + y + " %s {NoAI:1b,Silent:1b,"
-							+ "PersistenceRequired:1b,NoGravity:1b,DeathLootTable:\"minecraft:empty\",Tags:[\"dota\",\"%s\"],attributes:[{id:\"minecraft:max_health\",base:%d}],"
-							+ "Health:%df}", p[3], p[4], tag, (int) HERO_HP, (int) HERO_HP));
+						if (fresh) run(server, String.format(Locale.ROOT, "summon minecraft:husk %s " + y + " %s {NoAI:1b,Silent:1b,"
+							+ "PersistenceRequired:1b,NoGravity:1b,DeathLootTable:\"minecraft:empty\",Tags:[\"dota\",\"%s\"],attributes:[{id:\"minecraft:max_health\",base:%d},"
+							+ "{id:\"minecraft:scale\",base:%.1f}],Health:%df}", p[3], p[4], tag, (int) HERO_HP, scale(p[2]), (int) HERO_HP));
 						// the Dota unit is what you see (magenta silhouettes came out pink and shaky: Minecraft lights mobs its own way)
 						if (fresh) run(server, "effect give @e[tag=" + tag + "] minecraft:invisibility infinite 0 true");
 						run(server, String.format("tp @e[tag=%s,limit=1] %s %s %s", tag, p[3], y, p[4]));
 					}
-					case "dmg" -> run(server, "damage @p " + p[1] + " minecraft:mob_attack");
+					// from the attacker's stand-in, so a raised shield facing it blocks the hit (no stand-in: plain damage)
+					case "dmg" -> {
+						if (p.length < 3 || !run(server, "damage @p " + p[1] + " minecraft:mob_attack by @e[tag=dota_" + p[2] + ",limit=1]"))
+							run(server, "damage @p " + p[1] + " minecraft:mob_attack");
+					}
+					case "loot" -> Progress.loot(server, Integer.parseInt(p[1]), p[2], Integer.parseInt(p[3]));
+					case "lvl" -> Progress.level(server, Integer.parseInt(p[1]));
+					case "delay" -> Overlay.dotaDelay(Integer.parseInt(p[1]));
+					case "trader" -> Progress.trader(Integer.parseInt(p[1]), Integer.parseInt(p[2]), p[3]);
 					case "xp" -> run(server, "xp add @p " + p[1] + " points"); // Steve killed a Dota unit
 					case "reset" -> { // new Dota game: flat ground again (dirt under a magenta podzol top) and nothing on it
 						int r = 112; // only chunks within view distance are loaded; fill fails on anything else
@@ -146,6 +183,7 @@ public final class Sync {
 							run(server, String.format("fill %d 0 %d %d 30 %d minecraft:air", x, -r, x + 3, r - 1));
 						}
 						run(server, "kill @e[type=minecraft:item]");
+						Progress.newMatch(server);
 						run(server, "kill @e[tag=dota]"); // stand-ins of the previous Dota game
 						standIns.clear();
 						ready.clear(); // terrain of the previous Dota game
@@ -154,7 +192,7 @@ public final class Sync {
 					case "block" -> run(server, String.format("setblock %s %s %s minecraft:%s", p[1], p[2], p[3], p[4]));
 					case "unblock" -> run(server, String.format("setblock %s %s %s minecraft:air", p[1], p[2], p[3]));
 					case "void" -> column(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), () ->
-						run(server, String.format("fill %s -64 %s %s 30 %s minecraft:air", p[1], p[2], p[1], p[2]))); // fall and die
+						run(server, String.format("fill %s -64 %s %s 30 %s minecraft:air", p[1], p[2], p[1], p[2]), false)); // fall and die
 					case "border" -> { run(server, "worldborder center 0.5 0.5"); run(server, "worldborder set " + p[1]); }
 					case "h" -> column(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), () ->
 						terrain(server, p[1], p[2], Integer.parseInt(p[3]), Integer.parseInt(p[4])));
