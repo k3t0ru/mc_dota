@@ -111,7 +111,7 @@ function MC:SetupHero( hero )
 		MC.world_done = true
 		MC.anchor = hero:GetAbsOrigin() -- Minecraft (0,0) maps here
 		-- Dota's own camera controls would fight Minecraft's (launch args alone get overridden by the user's config)
-		SendToConsole( "dota_camera_edgemove 0; dota_camera_speed 0; dota_camera_lock 0; dota_camera_fov_min 90; dota_camera_fov_max 90; dota_camera_z_interp_speed 100000" )
+		SendToConsole( "dota_camera_edgemove 0; dota_camera_speed 0; dota_camera_lock 0; dota_camera_fov_min 90; dota_camera_fov_max 90; dota_camera_z_interp_speed 100000; fps_max 30" )
 		MC:SendTerrain()
 		if MC.lowest then print( string.format( "[mc] lowest cell %d,%d at %d half blocks", MC.lowest.x, MC.lowest.z, MC.lowest.h ) ) end
 		-- ponytail: thinks on the game mode entity never fired here, so timers live on their own entity
