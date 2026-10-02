@@ -1,0 +1,5 @@
+renderDistance:8
+pauseOnLostFocus:false
+rawMouseInput:true
+onboardAccessibility:false
+lang:ru_ru

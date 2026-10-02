@@ -130,7 +130,7 @@ public final class Sync {
 						seen.add(tag);
 						boolean fresh = standIns.put(p[1], tag) == null;
 						if (fresh) run(server, String.format("summon minecraft:husk %s " + y + " %s {NoAI:1b,Silent:1b,"
-							+ "PersistenceRequired:1b,DeathLootTable:\"minecraft:empty\",Tags:[\"dota\",\"%s\"],attributes:[{id:\"minecraft:max_health\",base:%d}],"
+							+ "PersistenceRequired:1b,NoGravity:1b,DeathLootTable:\"minecraft:empty\",Tags:[\"dota\",\"%s\"],attributes:[{id:\"minecraft:max_health\",base:%d}],"
 							+ "Health:%df}", p[3], p[4], tag, (int) HERO_HP, (int) HERO_HP));
 						// the Dota unit is what you see (magenta silhouettes came out pink and shaky: Minecraft lights mobs its own way)
 						if (fresh) run(server, "effect give @e[tag=" + tag + "] minecraft:invisibility infinite 0 true");
@@ -165,7 +165,10 @@ public final class Sync {
 			for (Entity e : level.getAllEntities()) {
 				for (Map.Entry<String, String> s : standIns.entrySet()) {
 					if (e instanceof LivingEntity le && le.getTags().contains(s.getValue()) && le.getHealth() < HERO_HP) {
-						out.add(String.format(Locale.ROOT, "hit %s %.2f", s.getKey(), HERO_HP - le.getHealth()));
+						// only a player's hit counts: void, suffocation inside blocks etc. must not hurt the Dota unit
+						var src = le.getLastDamageSource();
+						if (src != null && src.getEntity() instanceof net.minecraft.world.entity.player.Player)
+							out.add(String.format(Locale.ROOT, "hit %s %.2f", s.getKey(), HERO_HP - le.getHealth()));
 						le.setHealth(HERO_HP);
 					}
 				}

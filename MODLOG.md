@@ -198,3 +198,10 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Look-up limit returned (MIN_PITCH 3): above the horizon Dota has nothing to show anyway.
 - Camera height jerking on high/low ground: offset = wanted - (Dota's ground = lookAt.z - last offset), with no slow
   feedback loop. Verified: want z == actual z while walking.
+
+## 2026-10-02 23:10: rollback of prediction, portability, Roshan
+- Camera prediction rolled back (git revert) — the user found it worse. Dota fps_max 60 stays.
+- Roshan/Tormentor died at start: stand-ins fell into the void / suffocated → "hit" with all their HP. Now NoGravity
+  and only damage whose getLastDamageSource().getEntity() is a Player counts. Verified: Roshan 6130/6130.
+- Portability: tools/env.sh (DOTA_DIR, kill by PID via taskkill, no um), setup.sh (junctions, map, gradle, world/options from
+  tools/template, assets), SETUP.md. Transfer: git bundle mc_dungeons.bundle --all.
