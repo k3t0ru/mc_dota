@@ -265,3 +265,17 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Arrows from the player: no gravity, gone after 80 ticks (Dota's camera can't look up to lob). Sweep: sweeping_damage_ratio 0.8.
 - Sound: Dota muted itself without focus → snd_mute_losefocus 0; Dota music off (snd_musicvolume 0 — persists in the
   user's Dota config!), Minecraft music stays (user's choice).
+
+## 2026-10-03 01:50: user round (sell-back, target bar, denies, traders, ground, sounds)
+- Denies gave Dota XP to Steve (the killing attack): XP/gold filters return false while steve.mc_denying.
+- Sweep never touches allies: "hit <id> <amt> <direct>", direct = projectile or player.getLastHurtMob() == stand-in.
+- Target bar (Target.java): crosshair stand-in -> boss bar "name hp/max", red enemy / green ally / yellow DENY.
+  hero lines carry a last field: 1 = Steve's team.
+- Sell-back trades (item -> emeralds, ~half price): fletcher buys jungle materials, secret shop buys diamonds/netherite/totem.
+  Loot message: only "+N emeralds, +n item" (no gold).
+- Traders on the real map stood inside the fountain: base row now 9+ cells from the spawn toward the world origin (map
+  centre), first traversable cell, facing the spawn.
+- Blocks floated: Dota drew them at the absolute MC height, but MC terrain is half-block steps. MC:BlockPos draws them
+  from Dota's real ground under the cell, counted from the first standable level (ceil(halfh/2)).
+- Strip on the horizon: columns next to the void had real dirt/stone sides; void neighbours count as bottomless for the skin.
+- Footsteps: podzol = SoundType.GRAVEL, skin = MUD_BRICKS → sounds.json maps their step events to grass steps.

@@ -51,6 +51,7 @@ public final class Sync {
 
 	// client thread, every tick
 	public static void tick(Minecraft mc) {
+		Target.tick(mc);
 		MinecraftServer server = mc.getSingleplayerServer();
 		if (busy || mc.player == null || server == null) return;
 		StringBuilder body = new StringBuilder(String.format(Locale.ROOT, "me %s %.2f %.2f %.2f %.1f %.1f %.1f\n",
@@ -190,6 +191,7 @@ public final class Sync {
 						String tag = "dota_" + p[1];
 						String y = p.length > 7 ? p[7] : "0";
 						seen.add(tag);
+						Target.unit(tag, p[2], Integer.parseInt(p[5]), Integer.parseInt(p[6]), p.length > 8 && p[8].equals("1"));
 						boolean fresh = standIns.put(p[1], tag) == null;
 						if (fresh) run(server, String.format(Locale.ROOT, "summon minecraft:husk %s " + y + " %s {NoAI:1b,Silent:1b,"
 							+ "PersistenceRequired:1b,NoGravity:1b,DeathLootTable:\"minecraft:empty\",Tags:[\"dota\",\"%s\"],attributes:[{id:\"minecraft:max_health\",base:%d},"
@@ -236,10 +238,13 @@ public final class Sync {
 			for (Entity e : level.getAllEntities()) {
 				for (Map.Entry<String, String> s : standIns.entrySet()) {
 					if (e instanceof LivingEntity le && le.getTags().contains(s.getValue()) && le.getHealth() < HERO_HP) {
-						// only a player's hit counts: void, suffocation inside blocks etc. must not hurt the Dota unit
+						// only a player's hit counts: void, suffocation inside blocks etc. must not hurt the Dota unit.
+						// direct = the swing's own target or a projectile (a sweep's splash isn't: it never touches allies)
 						var src = le.getLastDamageSource();
-						if (src != null && src.getEntity() instanceof net.minecraft.world.entity.player.Player)
-							out.add(String.format(Locale.ROOT, "hit %s %.2f", s.getKey(), HERO_HP - le.getHealth()));
+						if (src != null && src.getEntity() instanceof net.minecraft.world.entity.player.Player pl) {
+							boolean direct = src.getDirectEntity() != pl || pl.getLastHurtMob() == le;
+							out.add(String.format(Locale.ROOT, "hit %s %.2f %d", s.getKey(), HERO_HP - le.getHealth(), direct ? 1 : 0));
+						}
 						le.setHealth(HERO_HP);
 					}
 				}

@@ -31,8 +31,10 @@ function MCBridge:Tick()
 			local p = h:GetAbsOrigin()
 			local x, z = to_mc( p )
 			local lift = h:IsBuilding() and 0 or MC:LiftUnit( h ) -- standing on a 1-high Minecraft block
-			table.insert( lines, string.format( "hero %d %s %.2f %.2f %d %d %d", h:entindex(),
-				( h:GetUnitName():gsub( "npc_dota_hero_", "" ):gsub( "npc_dota_", "" ) ), x, z, h:GetHealth(), h:GetMaxHealth(), MC:HeightAt( p.z ) + lift ) )
+			-- last field: 1 = Steve's team (Minecraft's target bar shows allies, and when they can be denied)
+			local ally = self.steve and h:GetTeamNumber() == self.steve:GetTeamNumber() and 1 or 0
+			table.insert( lines, string.format( "hero %d %s %.2f %.2f %d %d %d %d", h:entindex(),
+				( h:GetUnitName():gsub( "npc_dota_hero_", "" ):gsub( "npc_dota_", "" ) ), x, z, h:GetHealth(), h:GetMaxHealth(), MC:HeightAt( p.z ) + lift, ally ) )
 		end
 	end
 	-- trader spots again now and then: a restarted Minecraft client forgets them
@@ -72,17 +74,19 @@ function MCBridge:Apply( body, stale )
 		local name, x, z, hp, max, yaw = line:match( "^steve (%S+) (%S+) (%S+) (%S+) (%S+) (%S+)" )
 		if name and not stale then self:MoveSteve( name, to_dota( tonumber( x ), tonumber( z ) ), tonumber( hp ) / tonumber( max ), math.rad( tonumber( yaw ) ) ) end
 
-		local id, amount = line:match( "^hit (%d+) (%S+)" )
+		local id, amount, direct = line:match( "^hit (%d+) (%S+) ?(%S*)" )
 		local hero = id and EntIndexToHScript( tonumber( id ) )
 		-- allies can only be denied like in Dota: creeps below half health, towers below 10%, heroes never
 		local ally = hero and self.steve and hero:GetTeamNumber() == self.steve:GetTeamNumber()
-		local deniable = ally and hero:IsAlive() and not hero:IsHero() and hero:GetHealthPercent() < ( hero:IsTower() and 10 or 50 )
+		-- (only a direct hit: a sword's sweep and other splash never touch allies)
+		local deniable = ally and direct ~= "0" and hero:IsAlive() and not hero:IsHero() and hero:GetHealthPercent() < ( hero:IsTower() and 10 or 50 )
 		if hero and hero:IsAlive() and ( not ally or deniable ) then
 			if ally and self.steve then
 				-- a deny must be an ATTACK, or Dota doesn't count it (no "!", the enemy keeps full XP); DamageFilter swaps in the hit
 				self.steve.mc_attack = tonumber( amount ) * DMG_TO_DOTA
+				self.steve.mc_denying = true -- XP/gold filters: a deny gives the denier nothing
 				self.steve:PerformAttack( hero, true, false, true, true, false, false, true )
-				self.steve.mc_attack = nil
+				self.steve.mc_attack, self.steve.mc_denying = nil, nil
 			else
 				ApplyDamage( { victim = hero, attacker = self.steve or hero, damage = tonumber( amount ) * DMG_TO_DOTA, damage_type = DAMAGE_TYPE_PURE } )
 			end

@@ -1,0 +1,4 @@
+{
+	"block.gravel.step": { "replace": true, "sounds": [ { "name": "block.grass.step", "type": "event" } ] },
+	"block.mud_bricks.step": { "replace": true, "sounds": [ { "name": "block.grass.step", "type": "event" } ] }
+}

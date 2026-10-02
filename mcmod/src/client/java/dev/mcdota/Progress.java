@@ -65,15 +65,15 @@ public final class Progress {
 	public static void loot(MinecraftServer server, String[] p) {
 		int emeralds = Integer.parseInt(p[1]);
 		if (emeralds > 0) Sync.run(server, "give @p minecraft:emerald " + emeralds);
-		StringBuilder got = new StringBuilder("+" + p[2] + " gold");
-		if (emeralds > 0) got.append(" = ").append(emeralds).append(" emerald").append(emeralds > 1 ? "s" : "");
+		java.util.List<String> got = new ArrayList<>();
+		if (emeralds > 0) got.add("+" + emeralds + " emerald" + (emeralds > 1 ? "s" : ""));
 		for (int i = 3; i + 1 < p.length; i += 2) {
 			int n = Integer.parseInt(p[i + 1]);
 			if (n <= 0 || p[i].equals("none")) continue;
 			Sync.run(server, "give @p minecraft:" + p[i] + " " + n);
-			got.append(", ").append(n).append(" ").append(p[i].replace('_', ' '));
+			got.add("+" + n + " " + p[i].replace('_', ' '));
 		}
-		say(server, got.toString(), "green");
+		if (!got.isEmpty()) say(server, String.join(", ", got), "green");
 	}
 
 	// server thread: Steve's Dota level changed
@@ -227,6 +227,12 @@ public final class Progress {
 			+ ",maxUses:9999,rewardExp:0b,xp:0,priceMultiplier:0f}";
 	}
 
+	// the trader buys it back: count of the item -> emeralds (about half its price, like selling items in Dota)
+	private static String sell(String id, int count, int emeralds) {
+		return "{buy:" + item(id, count, null) + ",sell:" + item("emerald", emeralds, null)
+			+ ",maxUses:9999,rewardExp:0b,xp:0,priceMultiplier:0f}";
+	}
+
 	private static String buy(int emeralds, String id) { return offer(emeralds, id, 1, null); }
 	private static String buy(int emeralds, String id, int count) { return offer(emeralds, id, count, null); }
 	private static String book(int emeralds, String ench, int lvl) {
@@ -239,7 +245,10 @@ public final class Progress {
 		TRADERS.add(new Trader("Fletcher", "fletcher", List.of( // basic shop: the everyday materials
 			buy(1, "oak_log", 8), buy(1, "cobblestone", 32), buy(2, "string", 4), buy(1, "flint", 4), buy(1, "feather", 8),
 			buy(2, "leather", 4), buy(2, "iron_ingot"), buy(1, "tripwire_hook"), buy(2, "gunpowder", 4), buy(1, "paper", 6),
-			buy(1, "arrow", 16), buy(1, "bread", 4), buy(2, "cooked_beef", 4))));
+			buy(1, "arrow", 16), buy(1, "bread", 4), buy(2, "cooked_beef", 4),
+			// buys back what the jungle drops
+			sell("feather", 16, 1), sell("leather", 4, 1), sell("string", 8, 1), sell("flint", 8, 1), sell("gunpowder", 4, 1),
+			sell("iron_ingot", 1, 1), sell("oak_log", 16, 1), sell("cooked_beef", 8, 1), sell("rotten_flesh", 16, 1))));
 		TRADERS.add(new Trader("Librarian", "librarian", List.of( // basic shop: enchanting
 			buy(12, "enchanting_table"), buy(2, "bookshelf"), buy(1, "lapis_lazuli", 8), buy(1, "book", 3), buy(8, "anvil"),
 			buy(2, "grindstone"), book(15, "sharpness", 3), book(15, "protection", 3), book(12, "power", 3),
@@ -255,7 +264,8 @@ public final class Progress {
 			buy(4, "diamond"), buy(15, "diamond", 4), buy(20, "netherite_ingot"), buy(5, "netherite_upgrade_smithing_template"),
 			buy(60, "elytra"), buy(8, "golden_apple"), buy(3, "ender_pearl", 2), buy(30, "totem_of_undying"),
 			buy(6, "experience_bottle", 8), book(25, "mending", 1), book(40, "sharpness", 5), book(30, "protection", 4),
-			book(30, "power", 5))));
+			book(30, "power", 5),
+			sell("diamond", 1, 2), sell("netherite_ingot", 1, 10), sell("totem_of_undying", 1, 15), sell("golden_apple", 1, 4))));
 	}
 
 	private static int ticks;

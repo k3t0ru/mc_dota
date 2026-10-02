@@ -69,6 +69,9 @@ function MC:Init()
 	mode:SetDaynightCycleDisabled( true )
 	GameRules:SetTimeOfDay( 0.5 )
 	mode:SetDamageFilter( Dynamic_Wrap( MC, "DamageFilter" ), MC )
+	-- a deny gives the denier nothing (Dota hands out XP for the killing attack)
+	mode:SetModifyExperienceFilter( function( _, f ) return not ( MCBridge.steve and MCBridge.steve.mc_denying ) end, MC )
+	mode:SetModifyGoldFilter( function( _, f ) return not ( MCBridge.steve and MCBridge.steve.mc_denying ) end, MC )
 	mode:SetExecuteOrderFilter( Dynamic_Wrap( MC, "OrderFilter" ), MC )
 
 	ListenToGameEvent( "npc_spawned", Dynamic_Wrap( MC, "OnSpawned" ), MC )
@@ -153,6 +156,7 @@ end
 
 MC.cells = {} -- "bx,bz" -> block unit
 MC.heights = {} -- "bx,bz" -> Minecraft y of the ground surface there
+MC.halfh = {} -- "bx,bz" -> the same in half blocks (odd = a slab on top)
 
 -- ground height in half blocks above MC_FLOOR (Minecraft rebuilds it with full blocks plus slabs)
 function MC:HalfHeightAt( z ) return math.floor( ( z - MC.anchor.z ) / ( GRID / 2 ) + 0.5 ) end
@@ -188,8 +192,12 @@ function MC:SendTerrain()
 			else
 				local h = hh( bx, bz )
 				-- lowest neighbour: this column's side wall is exposed down to there and must be magenta too
-				local low = math.min( h, hh( bx + 1, bz ), hh( bx - 1, bz ), hh( bx, bz + 1 ), hh( bx, bz - 1 ) )
+				-- (a void neighbour is bottomless: the side facing the map edge is skinned all the way down, or its dirt
+				-- and stone showed as a strip along the horizon)
+				local function nb( x, z ) return outside( x, z ) and -100 or hh( x, z ) end
+				local low = math.min( h, nb( bx + 1, bz ), nb( bx - 1, bz ), nb( bx, bz + 1 ), nb( bx, bz - 1 ) )
 				MC.heights[ bx .. "," .. bz ] = MC_FLOOR + math.floor( h / 2 )
+				MC.halfh[ bx .. "," .. bz ] = h
 				MCBridge:Send( string.format( "h %d %d %d %d", bx, bz, h, low ) ) -- flat ones too: a column voided earlier comes back
 			end
 		end
@@ -217,10 +225,20 @@ MC.props = {} -- "x,y,z" -> prop_dynamic
 MODELS = { oak_log = "log", oak_planks = "planks", stone = "stone", cobblestone = "cobblestone", dirt = "dirt", sand = "sand",
 	coal_ore = "coal_ore", iron_ore = "iron_ore", diamond_ore = "diamond_ore", crafting_table = "crafting_table" }
 
+-- Where Dota draws a Minecraft block: counted in blocks from the first level a block can stand on in that column
+-- (on top of its slab, if any), from Dota's REAL ground under the cell. Minecraft's terrain is only half-block steps,
+-- so drawing at the absolute Minecraft height left blocks floating (or sunk) by up to half a block.
+function MC:BlockPos( bx, by, bz )
+	local k = bx .. "," .. bz
+	local first = math.ceil( ( MC.halfh[ k ] or 2 * ( ( MC.heights[ k ] or MC_FLOOR ) - MC_FLOOR ) ) / 2 ) + MC_FLOOR
+	local ground = MC:CellPos( bx, bz )
+	return Vector( ground.x, ground.y, ground.z + ( by - first ) * GRID )
+end
+
 function MC:ShowBlock( bx, by, bz, kind )
 	local key = bx .. "," .. by .. "," .. bz
 	MC:HideBlock( bx, by, bz )
-	local pos = MC.anchor + Vector( ( bx + 0.5 ) * GRID, -( bz + 0.5 ) * GRID, ( by - MC_FLOOR ) * GRID )
+	local pos = MC:BlockPos( bx, by, bz )
 	local p = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/" .. ( MODELS[ kind ] or "cobblestone" ) .. ".vmdl",
 		origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ) } )
 	p:SetModelScale( GRID / 128 ) -- the cube model is 128 units
@@ -262,8 +280,24 @@ end
 
 -- Traders (Minecraft cells; they look west). Dota draws them; Minecraft keeps an invisible villager on each spot to trade
 -- with (Progress.java has the offers). The basic shop stands by the spawn, the secret one at Dota's own secret shop.
-TRADERS = { { 4, -2, "fletcher" }, { 4, 1, "librarian" }, { 4, 4, "toolsmith" }, { 4, 7, "mason" } }
+BASE_TRADERS = { "fletcher", "librarian", "toolsmith", "mason" }
+TRADERS = {}
 function MC:SpawnTraders()
+	-- the basic shop: a row across the way out of the base, a few cells from the spawn toward the map centre (right at the
+	-- spawn they stood inside the fountain), each on the first walkable cell along that way
+	local a = MC.anchor
+	local out = ( Vector( 0, 0, a.z ) - a ):Normalized() -- Dota's map centre is the world origin
+	local side = Vector( -out.y, out.x, 0 )
+	for i, prof in ipairs( BASE_TRADERS ) do
+		for d = 9, 30 do
+			local p = a + out * ( d * GRID ) + side * ( ( i - 2.5 ) * 2.5 * GRID )
+			if GridNav:IsTraversable( p ) and not GridNav:IsBlocked( p ) then
+				local x, z = MC:CellOf( p )
+				table.insert( TRADERS, { x, z, prof } )
+				break
+			end
+		end
+	end
 	-- Dota's shops are trigger_shop volumes (no API tells their type): the secret shop is taken as the nearest one that
 	-- is well away from the spawn (the fountain shop is at the spawn); a map with a single shop uses that one
 	local best, bestD, any
@@ -275,11 +309,13 @@ function MC:SpawnTraders()
 	end
 	local secret = best or any or { 20, 0 }
 	table.insert( TRADERS, { secret[1] + 2, secret[2], "weaponsmith" } )
-	print( string.format( "[mc] secret shop trader at cell %d,%d", secret[1] + 2, secret[2] ) )
+	for _, t in ipairs( TRADERS ) do print( string.format( "[mc] trader %s at cell %d,%d", t[3], t[1], t[2] ) ) end
 	for _, t in ipairs( TRADERS ) do
 		local pos = MC:CellPos( t[1], t[2] )
+		local face = ( a - pos ):Normalized() -- toward the spawn; the model looks +Y at yaw 0
 		SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/villager_" .. t[3] .. ".vmdl",
-			origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ), angles = "0 90 0" } ) -- the model looks +Y at yaw 0
+			origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ),
+			angles = string.format( "0 %f 0", math.deg( math.atan2( face.y, face.x ) ) - 90 ) } )
 	end
 	MC:SendTraders()
 end
@@ -335,7 +371,7 @@ function MC:Crack( bx, by, bz, stage )
 	if MC.crack and not MC.crack:IsNull() then MC.crack:RemoveSelf() end
 	MC.crack = nil
 	if stage < 0 or stage > 9 or not MC.props[ bx .. "," .. by .. "," .. bz ] then return end
-	local pos = MC.anchor + Vector( ( bx + 0.5 ) * GRID, -( bz + 0.5 ) * GRID, ( by - MC_FLOOR ) * GRID - 1 )
+	local pos = MC:BlockPos( bx, by, bz ) - Vector( 0, 0, 1 )
 	MC.crack = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/crack_" .. stage .. ".vmdl",
 		origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ) } )
 	MC.crack:SetModelScale( GRID / 128 * 1.02 )
