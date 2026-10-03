@@ -149,8 +149,10 @@ function frame() {
 		GameUI.SetCameraTarget( -1 );
 		GameUI.SetCameraTargetPosition( [ v[0], v[1], 0 ], 0.001 ); // lerp = transition seconds; called every frame, anything bigger makes the camera trail ("float")
 		GameUI.SetCameraYaw( v[2] );
-		GameUI.SetCameraPitchMin( v[3] );
-		GameUI.SetCameraPitchMax( v[3] );
+		// looking up: Dota's camera takes 360 - x (a negative pitch is a top-down view)
+		var pitch = v[3] < 0 ? v[3] + 360 : v[3];
+		GameUI.SetCameraPitchMin( pitch );
+		GameUI.SetCameraPitchMax( pitch );
 		GameUI.SetCameraDistance( v[4] );
 		var ref = GameUI.GetCameraLookAtPosition()[2] - lastOff; // Dota's own ground under the look-at point
 		lastOff = v[7] - ref;

@@ -33,13 +33,13 @@ public final class MouseInput {
 	private static final boolean[] down = new boolean[3];
 	private static boolean wasPlaying; // first frame after (re)gaining control only re-centres
 
-	// Dota's camera can't look above the horizon, so Steve can't either (else the layers no longer match)
-	public static final float MIN_PITCH = 3; // same as MIN_PITCH in bridge.py
+	// how far up Steve can look: as far as Dota's camera (bridge.py's MIN_PITCH: a pitch of 360 - x looks up in Dota)
+	public static final float MIN_PITCH = System.getenv("MCDOTA_MIN_PITCH") != null
+		? Float.parseFloat(System.getenv("MCDOTA_MIN_PITCH")) : -89;
 	private static final boolean[] menuDown = new boolean[3];
 
 	public static void frame(Minecraft mc) {
-		// (except while gliding on elytra: to climb you have to look up; Dota's camera stays at the horizon meanwhile)
-		if (mc.player != null && mc.player.getXRot() < MIN_PITCH && !mc.player.isFallFlying()) mc.player.setXRot(MIN_PITCH);
+		if (mc.player != null && mc.player.getXRot() < MIN_PITCH) mc.player.setXRot(MIN_PITCH);
 		Overlay ov = McDotaClient.overlay;
 		if (ov != null) ov.showCursor = mc.screen != null;
 		if (ov != null && ov.w > 0 && mc.screen != null) menuMouse(mc, ov);

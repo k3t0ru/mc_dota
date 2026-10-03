@@ -53,7 +53,9 @@ public final class Progress {
 		dead = false;
 		placed = false;
 		for (String c : new String[] {
-			"gamemode survival @p", "clear @p", "xp set @p 0 levels", "xp set @p 0 points",
+			// a session that ended while dead left the "frozen" state in the player's save: no walking, no jumping
+			"gamemode survival @p", "attribute @p minecraft:movement_speed base set 0.1", "attribute @p minecraft:jump_strength base set 0.42",
+			"title @p clear", "clear @p", "xp set @p 0 levels", "xp set @p 0 points",
 			"effect clear @p", "effect give @p minecraft:instant_health 1 10 true", "effect give @p minecraft:saturation 1 20 true",
 			"give @p minecraft:wooden_sword", "give @p minecraft:wooden_pickaxe", "give @p minecraft:crafting_table",
 			"give @p minecraft:bread 8", "give @p minecraft:oak_planks 16",
@@ -61,6 +63,9 @@ public final class Progress {
 		}) Sync.run(server, c);
 		Sync.discard(server, "mcdota_trader"); // re-summoned with fresh trades by tick()
 		attributes(server);
+		xp = 0;
+		need = 240;
+		xpBar(server);
 	}
 
 	// server thread: Steve killed a Dota unit: "loot <emeralds> [<item> <n>]..."
@@ -79,9 +84,25 @@ public final class Progress {
 	}
 
 	// server thread: Steve's Dota level changed
-	public static void level(MinecraftServer server, int lvl) {
-		level = lvl;
-		attributes(server);
+	// Minecraft's XP bar IS Steve's level: the number is his level, the bar the way to the next one, earned by kills
+	// (the XP Dota would give his hero, by Dota's table: level 30 takes a whole match). Kept on death; enchanting and
+	// the anvil need the level but don't spend it (tick() puts it back): it's his level, not a currency.
+	private static int xp, need = 240;
+
+	public static void level(MinecraftServer server, int lvl, int xp, int need) {
+		Progress.xp = xp;
+		Progress.need = need;
+		if (lvl != level) {
+			level = lvl;
+			attributes(server);
+		}
+		xpBar(server);
+	}
+
+	private static void xpBar(MinecraftServer server) {
+		int points = level >= 30 ? 9 * level - 158 : level >= 15 ? 5 * level - 38 : 2 * level + 7; // Minecraft's, for the next level
+		Sync.run(server, "xp set @p " + level + " levels", false);
+		Sync.run(server, "xp set @p " + (need > 0 ? Math.min(points - 1, (int) ((long) xp * points / need)) : 0) + " points", false);
 	}
 
 	// --- Dota's hits ----------------------------------------------------------------------------------------------
@@ -169,9 +190,22 @@ public final class Progress {
 	}
 
 	// server thread: Dota's respawn timer
+	// (shown again every second by tick() with the time left: Minecraft's respawn clears a title shown before it)
+	private static long deadUntil;
+	private static int deadLost;
+
 	public static void deadFor(MinecraftServer server, int seconds, int lost) {
-		Sync.run(server, "title @p times 0 " + seconds * 20 + " 10");
-		Sync.run(server, "title @p subtitle {text:\"-" + lost + " emeralds, respawn in " + seconds + " s\",color:\"gray\"}");
+		deadUntil = System.currentTimeMillis() + seconds * 1000L;
+		deadLost = lost;
+		deadTitle(server);
+	}
+
+	private static void deadTitle(MinecraftServer server) {
+		long left = (deadUntil - System.currentTimeMillis() + 999) / 1000;
+		if (!dead || deadUntil == 0) return; // (until Dota's "respawn": "title @p clear")
+		Sync.run(server, "title @p times 0 40 0");
+		Sync.run(server, "title @p subtitle {text:\"-" + deadLost + " emeralds, " + (left > 0 ? "respawn in " + left + " s" : "respawning...")
+			+ "\",color:\"gray\"}");
 		Sync.run(server, "title @p title {text:\"You died\",color:\"red\"}");
 	}
 
@@ -202,6 +236,7 @@ public final class Progress {
 	// server thread: Dota respawned Steve's hero
 	public static void respawn(MinecraftServer server) {
 		dead = false;
+		deadUntil = 0;
 		for (String c : new String[] { "gamemode survival @p", "attribute @p minecraft:movement_speed base set 0.1",
 			"attribute @p minecraft:jump_strength base set 0.42", "effect clear @p minecraft:resistance", "title @p clear",
 			String.format(Locale.ROOT, "tp @p %.1f %d %.1f", spawn[0] + 0.5, spawn[1], spawn[2] + 0.5),
@@ -328,12 +363,13 @@ public final class Progress {
 		TRADERS.add(new Trader("Secret shop", "weaponsmith", List.of( // far from the spawn: the rare stuff
 			buy(4, "diamond"), buy(15, "diamond", 4), buy(20, "netherite_ingot"), buy(5, "netherite_upgrade_smithing_template"),
 			buy(60, "elytra"), buy(2, "firework_rocket", 8), buy(8, "golden_apple"), buy(3, "ender_pearl", 2),
-			buy(6, "experience_bottle", 8), book(25, "mending", 1), book(40, "sharpness", 5), book(30, "protection", 4),
+book(25, "mending", 1), book(40, "sharpness", 5), book(30, "protection", 4),
 			book(30, "power", 5),
 			sell("diamond", 1, 2), sell("netherite_ingot", 1, 10), sell("golden_apple", 1, 4))));
 	}
 
 	private static int ticks;
+	private static final double NAME_Y = 2.3; // name tags this far above a trader's feet
 
 	// server thread, every tick: arrows' flight time; every 2 s: the traders stand on the ground at their spots
 	public static void tick(MinecraftServer server) {
@@ -343,7 +379,10 @@ public final class Progress {
 			a.discard();
 			return true;
 		});
-		if (++ticks % 40 != 0 || server.getPlayerList().getPlayers().isEmpty()) return;
+		if (++ticks % 20 == 0) deadTitle(server);
+		if (ticks % 40 != 0 || server.getPlayerList().getPlayers().isEmpty()) return;
+		ServerPlayer me = server.getPlayerList().getPlayers().get(0);
+		if (me.experienceLevel != Progress.level) xpBar(server); // spent on enchanting, or orbs: back to his level
 		ServerLevel level = server.overworld();
 		for (Trader t : TRADERS) {
 			double[] at = spots.get(t.profession);
@@ -364,6 +403,18 @@ public final class Progress {
 					tx, y, tz, tag, t.name, t.profession, String.join(",", t.offers)));
 			} else if (Math.abs(e.getY() - y) > 0.1 || Math.abs(e.getX() - tx) > 0.1 || Math.abs(e.getZ() - tz) > 0.1) {
 				e.teleportTo(tx, y, tz);
+			}
+			// his name over his head like a Minecraft name tag (an invisible mob's own tag isn't drawn): a text display,
+			// clear background (a dark one would show as a purple box: the picture's background is magenta)
+			String nameTag = tag + "_name";
+			Entity n = null;
+			for (Entity c : level.getAllEntities()) if (c.getTags().contains(nameTag)) { n = c; break; }
+			if (n == null) {
+				Sync.run(server, String.format(Locale.ROOT, "summon minecraft:text_display %.2f %.2f %.2f {billboard:\"center\","
+					+ "background:0,shadow:1b,Tags:[\"mcdota_trader\",\"%s\"],text:\"%s\"}", tx, y + NAME_Y, tz, nameTag,
+					t.name.replaceAll(" \\(.*", ""))); // (the toolsmith's repair hint stays in his trading screen's title: too wide)
+			} else if (Math.abs(n.getY() - y - NAME_Y) > 0.1 || Math.abs(n.getX() - tx) > 0.1 || Math.abs(n.getZ() - tz) > 0.1) {
+				n.teleportTo(tx, y + NAME_Y, tz);
 			}
 			// a block in the trader's own space (a barrier, a stall part) swallows the clicks meant for him
 			for (int dy = 0; dy < 2; dy++) { // his body (0.6 and 1.6 above the feet: a slab under them is fine)

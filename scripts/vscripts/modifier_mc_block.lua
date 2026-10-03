@@ -1,6 +1,6 @@
 -- Blocks show no health bar until someone starts mining them. Stack count 1 = a lone block at ground level: units walk
 -- over it like a Minecraft player steps up one block (modifier_mc_lift draws them on top), so it must not collide.
--- Blocks Dota built itself (the fountain market) are invulnerable: the fountain would shoot them (they are neutrals).
+-- Blocks Dota built itself (the fountain market) and blocks near a fountain are invulnerable: fountains shoot neutrals.
 modifier_mc_block = class( {} )
 
 function modifier_mc_block:IsHidden() return true end

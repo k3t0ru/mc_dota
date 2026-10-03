@@ -3,7 +3,7 @@ package dev.mcdota;
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.MinecraftServer;
 
-// World rules for playing on top of Dota. The world is a diggable superflat (bedrock, stone, dirt) whose top layer is
+// World rules for playing on top of Dota. The world is a superflat (bedrock, magenta mud bricks) whose top layer is
 // podzol at y -1; podzol (top AND sides: columns not rebuilt yet, e.g. in half-loaded chunks at the view edge, keep the
 // flat default and must not show) and mud-brick slabs for half steps are retextured pure magenta, so the overlay turns the
 // surface into a hole showing Dota's ground, while still hiding Minecraft blocks behind Dota's hills.
@@ -16,7 +16,7 @@ public final class Arena {
 		"gamerule doMobSpawning false", "gamerule spawn_mobs false",
 		"time set noon", "gamerule doDaylightCycle false", "gamerule advance_time false", // night would darken the magenta
 		"effect give @p minecraft:instant_health 1 10 true", "effect give @p minecraft:saturation 1 20 true", // fresh start
-		"bossbar remove mcdota:target", // the old target bar (gone)
+		"bossbar remove mcdota:target", "bossbar remove mcdota:level", // old bars (gone)
 		// death screens need the mouse, which only works in-game here: respawn at the start right away
 		"gamerule keepInventory true", "gamerule keep_inventory true",
 		"gamerule doImmediateRespawn true", "gamerule immediate_respawn true", // spawn point and the start position: Progress.joined/spawnAt

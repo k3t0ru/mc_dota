@@ -98,7 +98,7 @@ public final class Overlay implements Runnable {
 		Pointer bits = null;
 		HWND dota = null;
 		long lastFind = 0, lastLog = System.currentTimeMillis();
-		boolean cursorShown = false;
+		boolean cursorShown = false, visible = true;
 		int frames = 0;
 
 		while (true) {
@@ -113,13 +113,19 @@ public final class Overlay implements Runnable {
 				Keys.INSTANCE.SetClassLongPtrW(hwnd, -12, cursorShown ? Keys.INSTANCE.LoadCursorW(null, new Pointer(32512)) : null);
 				Keys.INSTANCE.ShowCursor(cursorShown);
 			}
-			HWND fg = u.GetForegroundWindow(); // Dota is only the picture: focus always goes back to Minecraft
-			// a mouse press over Dota's window also counts (the overlay's STATIC window doesn't always get the message)
+			HWND fg = u.GetForegroundWindow(); // Dota is only the picture: a click on it gives Minecraft the focus back
+			// a mouse press over Dota's window also counts (the overlay's STATIC window doesn't always get the message).
+			// Only a click: Alt+Tab out of Minecraft lands on Dota first, and taking the focus back then trapped the cursor.
 			POINT cur = new POINT();
 			u.GetCursorPos(cur);
+			boolean ours = hwnd.equals(fg) || (dota != null && dota.equals(fg)) || (McDotaClient.mcHwnd != null && McDotaClient.mcHwnd.equals(fg));
 			boolean pressed = (u.GetAsyncKeyState(0x01) & 0x8000) != 0 || (u.GetAsyncKeyState(0x02) & 0x8000) != 0;
-			if (pressed && W > 0 && cur.x >= X && cur.x < X + W && cur.y >= Y && cur.y < Y + H) clicked = true;
-			if (McDotaClient.mcHwnd != null && !McDotaClient.mcHwnd.equals(fg) && (clicked || hwnd.equals(fg) || (dota != null && dota.equals(fg)))) {
+			if (pressed && ours && W > 0 && cur.x >= X && cur.x < X + W && cur.y >= Y && cur.y < Y + H) clicked = true;
+			if (ours != visible) { // another app in front: the (topmost) picture steps aside, with its hidden cursor
+				visible = ours;
+				u.ShowWindow(hwnd, ours ? 4 /* SW_SHOWNOACTIVATE */ : 0 /* SW_HIDE */);
+			}
+			if (McDotaClient.mcHwnd != null && !McDotaClient.mcHwnd.equals(fg) && clicked) {
 				// Windows refuses SetForegroundWindow from a background process; a synthetic Alt tap lifts that lock
 				Keys.INSTANCE.keybd_event((byte) 0x12, (byte) 0, 0, 0);
 				Keys.INSTANCE.keybd_event((byte) 0x12, (byte) 0, 2, 0);

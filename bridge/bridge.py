@@ -28,7 +28,10 @@ POSELOG = open(os.environ["MCDOTA_POSELOG"], "w", buffering=1) if os.environ.get
 GROUND_Y = 0  # MC feet level on flat ground (MC_FLOOR in addon_game_mode.lua)
 SCALE = 96  # Dota units per MC block (GRID in addon_game_mode.lua): Steve stands as tall as a Dota hero
 CAM_DIST = 40  # Dota camera sits this far behind its look-at point; small = first person
-MIN_PITCH = float(os.environ.get("MCDOTA_MIN_PITCH", 3))  # lowest pitch Dota accepts (calibration knob)
+MIN_PITCH = float(os.environ.get("MCDOTA_MIN_PITCH", -89))  # straight up flips the camera
+# Looking up: Dota takes a negative pitch for a top-down view, but the same angle as 360 - pitch is a real upward camera
+# (verified: probe projections exact at 340 and 315, a block above lines up with the crosshair). Sent signed (so
+# Panorama can blend poses across the horizon); fpcam.js turns it into 360 - x.
 YAW_SIGN, YAW_OFFSET = -1, 180  # Dota yaw = YAW_OFFSET + YAW_SIGN * MC yaw (calibration knob)
 
 

@@ -40,9 +40,15 @@ function MCBridge:Tick()
 	-- trader spots again now and then: a restarted Minecraft client forgets them
 	if GameRules:GetGameTime() - ( self.tradersAt or -100 ) > 5 then self.tradersAt = GameRules:GetGameTime(); MC:SendTraders() end
 	-- Steve's level (counted by MC:SteveXP from the hero XP Dota hands out) is his Minecraft max health
-	if MC.steveLevel and MC.steveLevel ~= self.sentLevel then
-		self.sentLevel = MC.steveLevel
-		self:Send( "lvl " .. self.sentLevel )
+	-- (with the way to the next level: "lvl <level> <xp into it> <xp it takes>": Minecraft's XP bar shows it)
+	if MC.steveLevel then
+		local lvl = MC.steveLevel
+		local from, to = XP_TABLE[ lvl ], XP_TABLE[ lvl + 1 ]
+		local line = string.format( "lvl %d %d %d", lvl, MC.steveXPTotal - from, to and to - from or 0 )
+		if line ~= self.sentLevel then
+			self.sentLevel = line
+			self:Send( line )
+		end
 	end
 	MC:BossBar( self.steve )
 	for _, l in ipairs( self.out ) do table.insert( lines, l ) end
@@ -124,7 +130,13 @@ function MCBridge:Apply( body, stale )
 			local killer = self.lastAttacker and not self.lastAttacker:IsNull() and self.lastAttacker or self.steve
 			self.steve.mc_dead = true
 			self.steve:Kill( nil, killer )
-			self:Send( string.format( "dead %d %s", math.ceil( self.steve:GetTimeUntilRespawn() ), lost ) )
+			if self.steve:IsAlive() then self.steve:ForceKill( false ) end -- no attacker (the void, /kill): Kill by himself does nothing
+			-- (the respawn time is 0 until the next frame)
+			local steve = self.steve
+			steve:SetContextThink( "mc_dead", function()
+				print( string.format( "[mc] Steve died: respawn in %.1f s", steve:GetTimeUntilRespawn() ) )
+				self:Send( string.format( "dead %d %s", math.ceil( steve:GetTimeUntilRespawn() ), lost ) )
+			end, 0.1 )
 		end
 
 		local cx, cy, cz, stage = line:match( "^crack (%S+) (%S+) (%S+) (%S+)" )
@@ -202,6 +214,7 @@ function MCBridge:MoveSteve( name, pos, frac, yaw )
 		u:AddNoDraw() -- ponytail: the camera sits inside him; for PvP give other players a visible blocky Steve instead
 	end
 	if not u:IsAlive() then return end
+	u:AddNoDraw() -- (again every time: a respawn shows the model)
 	u:SetAbsOrigin( pos )
 	u:SetForwardVector( Vector( -math.sin( yaw ), -math.cos( yaw ), 0 ) )
 	u:SetHealth( math.max( 1, frac * u:GetMaxHealth() ) )

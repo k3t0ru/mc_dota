@@ -7,7 +7,8 @@
 #   and texture rotations, Minecraft's default UVs where none are given. Models without elements (chests, beds, signs,
 #   water: block entities and fluids) become a plain cube with their particle texture.
 # - Materials per texture (materials/mcb/<texture>.vmat), alpha-tested when the texture has see-through pixels, both
-#   sides drawn; tinted faces (grass, leaves) get Minecraft's default plains colours baked in. Animated textures: frame 1.
+#   sides drawn; tinted faces (grass, leaves) get Minecraft's default plains colours baked in. Animated textures: frame 1;
+#   fire (FRAMES of its animation strip) gets a model per frame, <model>__f<k>, that Lua cycles (MCB_ANIM).
 # - scripts/vscripts/mc_block_models.lua: blockstate variants (which model, x, y for which properties) for Lua.
 import glob, io, json, os, re, zipfile
 from PIL import Image
@@ -56,10 +57,14 @@ def resolve(textures, ref, depth=0):
     return strip(ref) if ref and not ref.startswith("#") else None
 
 
+FRAMES = 8  # frames of an animated fire texture made into models (of its 32: every 4th)
+ANIMATED = re.compile(r"^block/(soul_)?fire_\d|campfire_fire$")  # textures whose animation Dota plays: fire, soul fire, campfire flames
+
+
 _tex = {}
-def texture(name, tint):
+def texture(name, tint, frame=0):
     """Writes the texture (and its alpha) once; returns (material name, has see-through pixels)."""
-    key = (name, tint)
+    key = (name, tint, frame)
     if key in _tex:
         return _tex[key]
     path = f"assets/minecraft/textures/{name}.png"
@@ -67,14 +72,16 @@ def texture(name, tint):
         _tex[key] = None
         return None
     img = Image.open(io.BytesIO(jar.read(path))).convert("RGBA")
-    if img.height > img.width:  # animated strip: the first frame
-        img = img.crop((0, 0, img.width, img.width))
+    if img.height > img.width:  # animated strip: one frame
+        n = img.height // img.width
+        k = frame * n // FRAMES % n
+        img = img.crop((0, k * img.width, img.width, (k + 1) * img.width))
     if tint is not None:
         r, g, b = TINT.get(tint, TINT[0]) if "leaves" not in name else TINT[2]
         px = [(p[0] * r // 255, p[1] * g // 255, p[2] * b // 255, p[3]) for p in img.getdata()]
         img.putdata(px)
     alpha = img.getextrema()[3][0] < 255
-    mat = re.sub(r"[^a-z0-9_]", "_", name.replace("block/", "")) + ("_tint" if tint is not None else "")
+    mat = re.sub(r"[^a-z0-9_]", "_", name.replace("block/", "")) + ("_tint" if tint is not None else "") + (f"_f{frame}" if frame else "")
     big = img.resize((img.width * UP, img.height * UP), Image.NEAREST)
     big.convert("RGB").save(os.path.join(MAT, mat + ".png"))
     if alpha:
@@ -118,7 +125,10 @@ NORMAL = {"north": (0, 0, -1), "south": (0, 0, 1), "west": (-1, 0, 0), "east": (
 CUBE = [{"from": [0, 0, 0], "to": [16, 16, 16], "faces": {d: {"texture": "#particle"} for d in NORMAL}}]
 
 
-def build(name):
+animated = {}  # model -> True when it shows an ANIMATED texture
+
+
+def build(name, frame=0):
     m = model(name)
     elements = m["elements"] or CUBE
     verts, uvs, faces = [], [], {}  # faces: material -> list of index quads
@@ -126,7 +136,10 @@ def build(name):
         a, b = el["from"], el["to"]
         for d, f in el.get("faces", {}).items():
             tex = resolve(m["textures"], f.get("texture"))
-            t = tex and texture(tex, f.get("tintindex"))
+            moving = bool(tex and ANIMATED.search(tex))
+            if moving and not frame:
+                animated[strip(name)] = True
+            t = tex and texture(tex, f.get("tintindex"), frame if moving else 0)
             if not t:
                 continue
             corners, duv = face_corners(d, a, b)
@@ -148,7 +161,7 @@ def build(name):
     for mat, quads in faces.items():
         obj.append(f"usemtl {mat}")
         obj += ["f " + " ".join(f"{i}/{i}" for i in q) for q in quads]
-    fname = re.sub(r"[^a-z0-9_]", "_", strip(name).replace("block/", ""))
+    fname = re.sub(r"[^a-z0-9_]", "_", strip(name).replace("block/", "")) + (f"__f{frame}" if frame else "")
     with open(os.path.join(MDL, fname + ".obj"), "w") as f:
         f.write("\n".join(obj) + "\n")
     remaps = "".join(f'\t\t\t\t\t\t\t{{ from = "{mat}.vmat" to = "materials/mcb/{mat}.vmat" }},\n' for mat in faces)
@@ -190,7 +203,7 @@ VMDL = """<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} f
 }
 """
 
-built, table = {}, {}
+built, table, anim = {}, {}, {}
 for path in sorted(n for n in names if n.startswith("assets/minecraft/blockstates/")):
     block = path.rsplit("/", 1)[-1][:-5]
     if block in SKIP:
@@ -213,6 +226,10 @@ for path in sorted(n for n in names if n.startswith("assets/minecraft/blockstate
     for key, mname, x, y in variants:
         if mname not in built:
             built[mname] = build(mname)
+            if built[mname] and strip(mname) in animated:  # the other frames
+                for k in range(1, FRAMES):
+                    build(mname, k)
+                anim[built[mname]] = FRAMES
         if built[mname]:
             out.append((key, built[mname], x, y))
     if out:
@@ -225,4 +242,7 @@ with open(LUA, "w") as f:
     for block, vs in sorted(table.items()):
         f.write(f'\t["{block}"] = {{ ' + ", ".join(f'{{ "{k}", "{m}", {x}, {y} }}' for k, m, x, y in vs) + " },\n")
     f.write("}\n_G.MCB = MCB\n")
+    f.write("-- animated models: frames <model>__f1.. (frame 0 is <model> itself)\nMCB_ANIM = { " +
+            ", ".join(f'["{m}"] = {n}' for m, n in sorted(anim.items())) + " }\n_G.MCB_ANIM = MCB_ANIM\n")
+print(f"{len(anim)} animated: {sorted(anim)}")
 print(f"{len(table)} blocks, {sum(1 for v in built.values() if v)} models, {len(_tex)} textures")

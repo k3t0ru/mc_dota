@@ -2,6 +2,16 @@
 
 Things Claude could not check alone (they need a real person playing), newest first. Strike them out or tell Claude.
 
+## 2026-10-03 (17:45)
+- [ ] **Looking up** works now (Dota's camera tilts up too). Check: crossing the horizon is smooth, hitting flying
+      things, ender pearls, elytra climbing.
+- [ ] **XP bar = your level** (health grows with it); enchanting/anvil need the level but don't take it.
+- [ ] **Alt+Tab**: the cursor is free outside the game; click into the picture to play again.
+- [ ] **Enemy side of the map** (Dire jungle/base): ground should match, no dirt strips, no invisible walls.
+- [ ] Fire is animated; creeps die in fire faster. Names over the traders. Death title stays with a countdown.
+- [ ] No Kunkka model after respawn. Creeps no longer attack your blocks; the fountain doesn't shoot blocks near it.
+- [ ] Jumping: was it broken only after dying? (I couldn't reproduce it; a stale "dead" save state is now reset.)
+
 ## 2026-10-03 (16:50)
 - [ ] **Blocks**: every Minecraft block now has its own look in Dota (anvils, fences, glass, torches, fire, logs on
       their side, slabs, leaves...). Look for blocks that look wrong or are turned the wrong way.
@@ -9,7 +19,7 @@ Things Claude could not check alone (they need a real person playing), newest fi
 - [ ] **Fire** lights everywhere and burns creeps; creeps walk through fire, not over it.
 - [ ] **Crits / sweeps** always show their particles; the sweep hits enemies around the target.
 - [ ] **Roshan's boss bar** in the pit (not tested by me: I didn't go to Roshan), towers' bar while hitting them.
-- [ ] **Elytra**: fireworks at the secret shop; you can look up while gliding (Dota's view stays level).
+- [ ] **Elytra**: fireworks at the secret shop.
 - [ ] **Steve**: no Kunkka voice lines, no Dota level-up sound (max health still grows with your level).
 - [ ] **High ground**: stand 3+ blocks up (a pillar) → you should see further (Dota's vision over trees/cliffs).
 - [ ] No black stripes far away, no zombie flashing on creeps.

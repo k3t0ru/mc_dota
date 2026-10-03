@@ -23,7 +23,7 @@ PICKAXES = {
 STEVE = "npc_dota_hero_kunkka" -- ponytail: Steve overrides Kunkka's slot; own hero needs a model from Workshop Tools
 GRID = 96 -- one Dota block cell = one Minecraft block (so Steve is hero-sized), cells are aligned to MC.anchor
 CALIBRATE = false -- true: show Dota's own block cubes so they can be lined up with Minecraft's (camera calibration)
-TERRAIN_R = 220 -- max cells around the anchor mirrored into Minecraft (the map's own size usually ends it first)
+TERRAIN_R = 400 -- max cells from the anchor mirrored into Minecraft (the map's own size ends it first)
 MC_FLOOR = 0 -- Minecraft y where feet stand on flat ground (the world is a superflat whose top layer is y -1)
 
 require( "mc_bridge" )
@@ -36,7 +36,11 @@ function Precache( context )
 	local seen = {}
 	for _, vs in pairs( MCB ) do
 		for _, v in ipairs( vs ) do
-			if not seen[ v[2] ] then seen[ v[2] ] = true PrecacheResource( "model", "models/mcb/" .. v[2] .. ".vmdl", context ) end
+			if not seen[ v[2] ] then
+				seen[ v[2] ] = true
+				PrecacheResource( "model", "models/mcb/" .. v[2] .. ".vmdl", context )
+				for k = 1, ( MCB_ANIM[ v[2] ] or 1 ) - 1 do PrecacheResource( "model", "models/mcb/" .. v[2] .. "__f" .. k .. ".vmdl", context ) end
+			end
 		end
 	end
 	for _, m in ipairs({
@@ -234,9 +238,12 @@ function MC:SendTerrain()
 	local a = MC.anchor
 	local x1, x2 = math.floor( ( GetWorldMinX() - a.x ) / GRID ), math.floor( ( GetWorldMaxX() - a.x ) / GRID )
 	local z1, z2 = math.floor( -( GetWorldMaxY() - a.y ) / GRID ), math.floor( -( GetWorldMinY() - a.y ) / GRID )
-	local R = math.min( TERRAIN_R, math.max( -x1, x2, -z1, z2 ) + 6 ) -- a void strip past the map edge, then the border
-	MCBridge:Send( string.format( "border %d", 2 * R + 1 ) )
-	print( string.format( "[mc] terrain R=%d, map cells x %d..%d z %d..%d", R, x1, x2, z1, z2 ) )
+	-- the map's own box plus a void strip past its edge, then the border. (Not a square around the anchor: the anchor is
+	-- our fountain, in a corner, and a square of 220 left the far corner, the enemy's base, unbuilt behind the border.)
+	local bx1, bx2 = math.max( x1 - 6, -TERRAIN_R ), math.min( x2 + 6, TERRAIN_R )
+	local bz1, bz2 = math.max( z1 - 6, -TERRAIN_R ), math.min( z2 + 6, TERRAIN_R )
+	MCBridge:Send( string.format( "border %d %d %d", math.max( bx2 - bx1, bz2 - bz1 ) + 1, math.floor( ( bx1 + bx2 ) / 2 ), math.floor( ( bz1 + bz2 ) / 2 ) ) )
+	print( string.format( "[mc] terrain cells x %d..%d z %d..%d, map cells x %d..%d z %d..%d", bx1, bx2, bz1, bz2, x1, x2, z1, z2 ) )
 	-- the world bounds are far bigger than the visible map; past its edge (a rim, then no terrain at all) Dota reports
 	-- heights ~16000 below: that is where Minecraft gets its void
 	local function outside( bx, bz )
@@ -251,8 +258,8 @@ function MC:SendTerrain()
 		end
 		return H[ k ]
 	end
-	for bx = -R, R do
-		for bz = -R, R do
+	for bx = bx1, bx2 do
+		for bz = bz1, bz2 do
 			if outside( bx, bz ) then
 				MCBridge:Send( string.format( "void %d %d", bx, bz ) )
 			else
@@ -270,14 +277,22 @@ function MC:SendTerrain()
 	end
 end
 
+-- a fountain shoots any neutral in its range: blocks there are invulnerable (= not a target)
+function MC:NearFountain( pos )
+	for _, e in ipairs( Entities:FindAllByClassname( "ent_dota_fountain" ) ) do
+		if ( e:GetAbsOrigin() - pos ):Length2D() < 1500 then return true end
+	end
+	return false
+end
+
 -- fromMC: the block came from Minecraft, so don't echo it back
 function MC:SpawnBlock( name, pos, fromMC )
 	local def = BLOCKS[ name ]
 	local bx, bz = MC:CellOf( pos )
 	local key = bx .. "," .. bz
 	if MC.cells[ key ] and not MC.cells[ key ]:IsNull() then return MC.cells[ key ] end
-	-- on Steve's side: as neutrals, our fountain and towers shot them
-	local b = CreateUnitByName( name, MC:CellPos( bx, bz ), false, nil, nil, MCBridge.steve and MCBridge.steve:GetTeamNumber() or DOTA_TEAM_GOODGUYS )
+	-- neutrals: on a team, the other team's creeps would attack them (fountains shoot neutrals: see MC:NearFountain)
+	local b = CreateUnitByName( name, MC:CellPos( bx, bz ), false, nil, nil, DOTA_TEAM_NEUTRALS )
 	b.mc_block, b.mc_cell = def, key
 	MC.cells[ key ] = b
 	b:AddNewModifier( b, nil, "modifier_mc_block", {} )
@@ -332,9 +347,31 @@ function MC:ShowBlock( bx, by, bz, kind, solid, state )
 			origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ) } )
 	end
 	p:SetModelScale( GRID / 128 ) -- the models are 128 units a block
+	if v and MCB_ANIM[ v[2] ] then MC:Animate( p, v[2] ) end
 	p.mc_kind = kind
 	p.mc_solid = solid ~= false -- fire, torches, flowers: drawn, but units neither bump into nor stand on them
 	MC.props[ key ] = p
+end
+
+-- fire burns like Minecraft's: its frames are models (<model>__f<k>, tools/gen_mcblocks.py), swapped ~12 times a second
+MC.animated = {}
+function MC:Animate( p, model )
+	p.mc_anim = model
+	MC.animated[ p ] = true
+	if MC.animating then return end
+	MC.animating = true
+	GameRules:GetGameModeEntity():SetContextThink( "mc_anim", function()
+		local t = math.floor( GameRules:GetGameTime() * 12 )
+		for q in pairs( MC.animated ) do
+			if q:IsNull() then MC.animated[ q ] = nil
+			else
+				local k = t % MCB_ANIM[ q.mc_anim ] -- all in step, like Minecraft's (one animated texture)
+				q:SetModel( "models/mcb/" .. q.mc_anim .. ( k > 0 and "__f" .. k or "" ) .. ".vmdl" )
+				q:SetModelScale( GRID / 128 )
+			end
+		end
+		return 1 / 12
+	end, 0 )
 end
 
 -- What Dota units can do with a Minecraft column at their height: like a Minecraft player they step up ONE block
@@ -355,7 +392,7 @@ function MC:ColumnChanged( bx, bz )
 		b = MC:SpawnBlock( FROM_MC[ top.mc_kind ] or "npc_mc_block_cobble", MC:CellPos( bx, bz ), true )
 	end
 	b.mc_y = low and g or g + 1 -- what a Dota hero mines out of this column
-	b.mc_protected = MC.protected[ bx .. "," .. bz ]
+	b.mc_protected = MC.protected[ bx .. "," .. bz ] or MC:NearFountain( b:GetAbsOrigin() )
 	local m = b:FindModifierByName( "modifier_mc_block" )
 	if m then m:SetStackCount( ( low and not high ) and 1 or 0 ) end -- 1 = walkable: no collision
 end
@@ -667,7 +704,6 @@ function MC:OnKilled( e )
 			print( "[mc] Steve denied " .. dead:GetUnitName() ) -- a real attack did it, so Dota shows the "!" and cuts the XP itself
 		end
 		if killer and killer.mc_player and dead and not dead:IsNull() and dead:GetTeamNumber() ~= killer:GetTeamNumber() then -- denies give nothing
-			MCBridge:Send( string.format( "xp %d", math.max( 1, math.floor( dead:GetDeathXP() / 10 ) ) ) )
 			local loot = MC:LootFor( dead )
 			print( "[mc] Steve killed " .. dead:GetUnitName() .. ": " .. loot )
 			MCBridge:Send( loot )

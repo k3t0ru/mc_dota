@@ -389,3 +389,29 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
   allowed while gliding on elytra. 3+ blocks above the ground: flying vision (modifier_mc_highground).
 - tools/check_lua.py now also dry-runs addon_game_mode.lua's top level (Dota API stubbed, our globals nil until
   assigned): catches "MC used before MC = {}" — that runtime error had dropped the whole game mode again.
+
+## 2026-10-03 17:45: looking up, XP bar = level, whole map built, fire animation, names, death title
+- Looking up: Dota's camera takes a pitch of 360 - x as a real upward camera (a negative pitch is a top-down view).
+  Verified: probe projections exact at 340 and 315; a block above lines up with the crosshair at 45 deg up. The bridge
+  sends the signed pitch (MIN_PITCH -89), fpcam.js converts it after blending poses (blending 1 -> 359 jerked the camera
+  through 180 at the horizon). Minecraft's look-up clamp is gone (MouseInput.MIN_PITCH -89).
+- Terrain over the whole map: the anchor is our fountain (a corner), so the old square of +-220 cells left the enemy's
+  side unbuilt (Minecraft's flat dirt showed as strips Steve walked into) and the world border cut it. Now the map's box
+  (+6 void) and a border centred on it ("border size cx cz"). The superflat's underground is magenta mud bricks
+  (template level.dat too): chunks not rebuilt yet show nothing instead of dirt.
+- Terrain changes under the surface never reach Dota (they drew hanging dirt blocks); blocks Minecraft draws itself
+  (water...) replacing a drawn one: "break". Small floating cubes = dropped items (sand falling onto fire), vanilla.
+- Steve's level = Minecraft's XP bar: the number is his level, the bar the way to the next, from the hero XP Dota would
+  give (Dota's table; level 30 takes a match). Enchanting/anvil need the level but don't spend it (put back every 2 s);
+  no XP bottles, no vanilla XP for kills. (A separate level boss bar was tried: two levels confused.)
+- Fire animates: tools/gen_mcblocks.py makes 8 frame models for fire/soul fire/campfires (<model>__f<k>, MCB_ANIM);
+  Lua swaps them 12 times a second. Fire damage on Dota units x3 (~55/s).
+- Trader names: text displays over their heads (an invisible mob's own name tag isn't drawn).
+- Death: Kill() by the hero himself (void, /kill: no attacker) did nothing -> ForceKill; the respawn time is read a
+  frame later (was 0); the title is shown again every second with the countdown until Dota's "respawn".
+- After a respawn the hero model showed (Kunkka in blue): AddNoDraw on every move.
+- Blocks are neutrals again (on Steve's team, enemy creeps attacked them); blocks within 1500 of a fountain are
+  invulnerable (fountains shoot neutrals).
+- Alt+Tab: focus goes back to Minecraft only on a click on the picture (Alt+Tab landed on Dota, which handed the focus
+  straight back and trapped the cursor); with another app in front the overlay hides.
+- New match resets walk speed/jump/title (a session closed while dead left them at 0 in the player's save).

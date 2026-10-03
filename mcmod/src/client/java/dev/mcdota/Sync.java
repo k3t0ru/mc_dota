@@ -42,7 +42,10 @@ public final class Sync {
 	// server thread: a block changed somewhere
 	public static void blockChanged(BlockPos p, BlockState s) {
 		if (applying || p.getY() < -60 || p.getY() > 60) return; // Dota decides what to draw / collide by height
-		if (s.isAir()) out.add(String.format("break %d %d %d", p.getX(), p.getY(), p.getZ()));
+		// under the ground it's the terrain changing by itself (the superflat's grass under the built ground turns to
+		// dirt): Dota drew those as dirt blocks hanging in the air wherever its ground is lower
+		if (p.getY() < Hybrid.surfaceAt(p.getX(), p.getZ())) return;
+		if (s.isAir() || !Hybrid.drawnByDota(s, p)) out.add(String.format("break %d %d %d", p.getX(), p.getY(), p.getZ()));
 		else {
 			// its state too ("axis=x,facing=north,..."): Dota picks the blockstate variant (MC:Variant) to turn its model
 			StringBuilder state = new StringBuilder();
@@ -102,11 +105,10 @@ public final class Sync {
 	// wall down to the lowest neighbour is mud bricks, magenta on every face, so Dota's slope shows through it.
 	private static void terrain(MinecraftServer server, String x, String z, int hh, int low) {
 		hh = Math.max(-100, Math.min(100, hh)); // stay well inside the world (bottom is y -64)
-		// the superflat underneath (bedrock, stone, dirt) if this column was void before (no bedrock at the bottom)
+		// the superflat underneath (bedrock, then magenta mud bricks: an unbuilt column never shows) if this column was void before
 		if (server.overworld().getBlockState(new BlockPos(Integer.parseInt(x), -64, Integer.parseInt(z))).isAir()) {
 			run(server, String.format("fill %s -64 %s %s -64 %s minecraft:bedrock", x, z, x, z), false);
-			run(server, String.format("fill %s -63 %s %s -5 %s minecraft:stone", x, z, x, z), false);
-			run(server, String.format("fill %s -4 %s %s -2 %s minecraft:dirt", x, z, x, z), false);
+			run(server, String.format("fill %s -63 %s %s -2 %s minecraft:mud_bricks", x, z, x, z), false);
 		}
 		low = Math.max(-100, Math.min(hh, low));
 		int full = Math.floorDiv(hh, 2), bottom = Math.floorDiv(low, 2) - 1; // solid up to full - 1; skin from bottom
@@ -199,6 +201,12 @@ public final class Sync {
 		return id.equals("inFire") || id.equals("onFire") || id.equals("lava") || id.equals("hotFloor") || id.equals("campfire") || id.equals("cactus") || id.equals("sweetBerryBush");
 	}
 
+	// Minecraft's fire (1 HP per half second) barely scratches Dota's creeps: 3x, ~55 Dota damage a second
+	private static float fireMult(net.minecraft.world.damagesource.DamageSource src) {
+		String id = src.type().msgId();
+		return id.equals("inFire") || id.equals("onFire") || id.equals("campfire") ? 3 : 1;
+	}
+
 	// stand-in size for big Dota units (Minecraft's scale attribute), so swords and arrows can reach a tower
 	private static double scale(String name) {
 		if (name.contains("tower")) return 2.5;
@@ -237,7 +245,7 @@ public final class Sync {
 					case "dead" -> Progress.deadFor(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]));
 					case "respawn" -> Progress.respawn(server);
 					case "spawnat" -> Progress.spawnAt(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
-					case "lvl" -> Progress.level(server, Integer.parseInt(p[1]));
+					case "lvl" -> Progress.level(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
 					case "delay" -> Overlay.dotaDelay(Integer.parseInt(p[1]));
 					case "boss" -> Progress.boss(server, p);
 					case "fx" -> Progress.hitFx(server, p[1], p[2]);
@@ -256,7 +264,7 @@ public final class Sync {
 					case "reset" -> { // new Dota game: flat ground again (dirt under a magenta podzol top) and nothing on it
 						int r = 112; // only chunks within view distance are loaded; fill fails on anything else
 						for (int x = -r; x < r; x += 4) {
-							run(server, String.format("fill %d -8 %d %d -2 %d minecraft:dirt", x, -r, x + 3, r - 1));
+							run(server, String.format("fill %d -8 %d %d -2 %d minecraft:mud_bricks", x, -r, x + 3, r - 1));
 							run(server, String.format("fill %d -1 %d %d -1 %d minecraft:podzol", x, -r, x + 3, r - 1));
 							run(server, String.format("fill %d 0 %d %d 30 %d minecraft:air", x, -r, x + 3, r - 1));
 						}
@@ -275,7 +283,10 @@ public final class Sync {
 					case "unblock" -> run(server, String.format("setblock %s %s %s minecraft:air", p[1], p[2], p[3]));
 					case "void" -> column(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), () ->
 						run(server, String.format("fill %s -64 %s %s 30 %s minecraft:air", p[1], p[2], p[1], p[2]), false)); // fall and die
-					case "border" -> { run(server, "worldborder center 0.5 0.5"); run(server, "worldborder set " + p[1]); }
+					case "border" -> { // "border <size> [<centre x> <centre z>]": the map's box
+						run(server, p.length > 3 ? "worldborder center " + (Integer.parseInt(p[2]) + 0.5) + " " + (Integer.parseInt(p[3]) + 0.5) : "worldborder center 0.5 0.5");
+						run(server, "worldborder set " + p[1]);
+					}
 					case "h" -> column(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), () ->
 						terrain(server, p[1], p[2], Integer.parseInt(p[3]), Integer.parseInt(p[4])));
 					default -> { }
@@ -289,7 +300,7 @@ public final class Sync {
 						// direct = the swing's own target or a projectile (a sweep's splash isn't: it never touches allies)
 						var src = le.getLastDamageSource();
 						if (src != null && src.getEntity() == null && burning(src)) // fire/lava a player set: splash damage
-							out.add(String.format(Locale.ROOT, "hit %s %.2f 0", s.getKey(), HERO_HP - le.getHealth()));
+							out.add(String.format(Locale.ROOT, "hit %s %.2f 0", s.getKey(), (HERO_HP - le.getHealth()) * fireMult(src)));
 						if (src != null && src.getEntity() instanceof net.minecraft.world.entity.player.Player pl
 							&& !(src.getDirectEntity() == pl && pl.getLastHurtMob() != le)) { // that's Minecraft's own sweep: Lua sweeps (swing)
 							boolean projectile = src.getDirectEntity() instanceof net.minecraft.world.entity.projectile.Projectile; // TNT: splash

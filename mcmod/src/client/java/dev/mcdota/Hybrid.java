@@ -14,6 +14,8 @@ public final class Hybrid {
 
 	public static void setSurface(int x, int z, int y) { surface.put(key(x, z), y); }
 
+	public static int surfaceAt(int x, int z) { return surface.getOrDefault(key(x, z), 0); }
+
 	private static long key(int x, int z) { return ((long) x << 32) ^ (z & 0xffffffffL); }
 
 	private static boolean terrain(BlockState s) {
