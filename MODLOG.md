@@ -353,3 +353,13 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
   PlayerBlockBreakEvents.BEFORE false; explosions skip it too.
 - Coin sound on Steve's kills with emeralds (General.Coins). Test kit: TEST_EMERALDS = 192 at every match start.
 - TESTME.md: what the user still has to check by hand.
+
+## 2026-10-03 14:35: field of view — not possible (Dota refuses it)
+- Wider FOV asked. Dota's camera FOV can't be changed by a custom game: dota_camera_fov_min/max are refused from the
+  launch line, Lua SendToConsole and a script-run cfg ("Cannot execute concommand ..., missing required FCVAR flag");
+  a startup +exec cfg runs silently but the map load resets it; Panorama has no FOV setter (camera API: distance,
+  yaw, pitch, target, height offset only); the player's cfg doesn't store it. The 90 "set" by us was just the default.
+  Measured: focal stays 830 px (right100 = 3037 at dist 40) for every value.
+- Kept: Panorama measures Dota's focal length every probe (2 s) → "mc_fov" → "mcfov" → Minecraft's fov (66 now), so the
+  layers stay matched if anything ever changes it (e.g. another resolution).
+- Gotcha: an unattended match ends by itself (~50 min: Dire creeps destroy the base) and Dota returns to the menu.

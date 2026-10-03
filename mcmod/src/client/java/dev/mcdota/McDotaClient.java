@@ -11,7 +11,9 @@ public class McDotaClient implements ClientModInitializer {
 	// colour of the see-through holes (Minecraft clears its frame to it); magenta never shows up in vanilla terrain
 	public static final int KEY_ARGB = 0xFFFF00FF;
 	public static final int OFFSCREEN_X = -20000;
-	// measured with Game.WorldToScreen at 1600x900: focal 692 px = 66 degrees vertical (Minecraft fov is vertical)
+	// Dota's camera: focal 830 px at 1920x1080 = 66 degrees vertical (Minecraft's fov is vertical). Panorama measures it
+	// every 2 s and sends it ("mcfov"), so this is only the start value. Dota's own angle can't be changed by a custom
+	// game: dota_camera_fov_min/max are refused from the command line, Lua and script-run cfgs ("missing FCVAR flag").
 	public static final int FOV = Integer.getInteger("mcdota.fov", 66);
 	public static Overlay overlay;
 	public static com.sun.jna.platform.win32.WinDef.HWND mcHwnd; // Minecraft's own (off-screen) window

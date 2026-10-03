@@ -25,6 +25,14 @@ function probe( v ) {
 	var yaw = v[2] * Math.PI / 180, fx = -Math.sin( yaw ), fy = Math.cos( yaw ); // unit forward if yaw 0 looks +y
 	var pts = [ [ at[0], at[1], at[2] ], [ at[0] + 100 * fy, at[1] - 100 * fx, at[2] ], [ at[0], at[1], at[2] + 100 ] ];
 	var scr = pts.map( function( p ) { return Math.round( Game.WorldToScreenX( p[0], p[1], p[2] ) ) + "," + Math.round( Game.WorldToScreenY( p[0], p[1], p[2] ) ); } );
+	// Dota's real focal length in pixels -> its vertical field of view, for Minecraft's fov
+	var ax = Game.WorldToScreenX( pts[0][0], pts[0][1], pts[0][2] ), rx = Game.WorldToScreenX( pts[1][0], pts[1][1], pts[1][2] );
+	var dEye = Math.sqrt( Math.pow( eye[0] - at[0], 2 ) + Math.pow( eye[1] - at[1], 2 ) + Math.pow( eye[2] - at[2], 2 ) );
+	if ( ax >= 0 && rx > ax && dEye > 1 ) {
+		var focal = ( rx - ax ) * dEye / 100;
+		var vfov = 2 * Math.atan( Game.GetScreenHeight() / 2 / focal ) * 180 / Math.PI;
+		GameEvents.SendCustomGameEventToServer( "mc_fov", { v: vfov } );
+	}
 	$.Msg( "[mc] probe want look=" + v[0].toFixed( 1 ) + "," + v[1].toFixed( 1 ) + " yaw=" + v[2].toFixed( 1 ) + " pitch=" + v[3].toFixed( 1 ) + " dist=" + v[4] + " off=" + v[5].toFixed( 1 ) +
 		" | eye=" + eye.map( function( n ) { return n.toFixed( 1 ); } ) + " at=" + at.map( function( n ) { return n.toFixed( 1 ); } ) +
 		" | screen at,right100,up100=" + scr.join( " " ) + " | want z=" + ( v[7] || 0 ).toFixed( 1 ) + " zFix=" + zFix.toFixed( 1 ) );

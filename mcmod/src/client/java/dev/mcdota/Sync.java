@@ -224,6 +224,11 @@ public final class Sync {
 					case "spawnat" -> Progress.spawnAt(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
 					case "lvl" -> Progress.level(server, Integer.parseInt(p[1]));
 					case "delay" -> Overlay.dotaDelay(Integer.parseInt(p[1]));
+					case "mcfov" -> { // Dota's measured vertical field of view: Minecraft's matches it
+						int fov = (int) Math.round(Double.parseDouble(p[1]));
+						Minecraft mc = Minecraft.getInstance();
+						mc.execute(() -> { if (mc.options.fov().get() != fov) mc.options.fov().set(Math.max(30, Math.min(110, fov))); });
+					}
 					case "cmd" -> run(server, line.trim().substring(4)); // testing (bridge /cmd)
 					case "trader" -> Progress.trader(Double.parseDouble(p[1]), Double.parseDouble(p[2]), p[3], p.length > 4 ? Double.parseDouble(p[4]) : Double.NaN);
 					case "xp" -> run(server, "xp add @p " + p[1] + " points"); // Steve killed a Dota unit

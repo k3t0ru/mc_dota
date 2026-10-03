@@ -8,7 +8,7 @@
 #   reset               (new Dota game: clear MC's arena)
 #   void <x> <z>        (outside the Dota map: bottomless column)   border <size> (MC world border, centred on 0,0)
 #   h <x> <z> <hh> <low> (terrain: column height and its lowest neighbour's, half blocks above the flat floor)
-#   spawnat <x> <y> <z> (Steve's spawn point)   delay <ms> (Dota camera playback delay: Minecraft's overlay waits as long)   trader <x> <z> <profession>
+#   mcfov <deg> (Minecraft's vertical fov = Dota's measured one)   spawnat <x> <y> <z> (Steve's spawn point)   delay <ms> (Dota camera playback delay: Minecraft's overlay waits as long)   trader <x> <z> <profession>
 #   dead <respawn s> <emeralds lost> / respawn (Steve's Dota hero died / is back)   MC -> Dota: died <emeralds lost>
 #   MC -> Dota: swing <damage> (a melee click: lands on the unit Dota highlights under the crosshair)
 #   loot <emeralds> <gold> [<item> <n>]... (Steve killed a unit; leftover gold carries over in Lua)   lvl <n> (Steve's Dota level = MC max health)   xp <points>
@@ -51,7 +51,7 @@ class Relay:
                     self.anchor = tuple(float(v) for v in p[1:])
                 elif p[0] == "hero":
                     heroes[p[1]] = line
-                elif p[0] in ("dmg", "block", "unblock", "reset", "h", "xp", "void", "border", "loot", "lvl", "delay", "trader", "dead", "respawn", "spawnat"):
+                elif p[0] in ("dmg", "block", "unblock", "reset", "h", "xp", "void", "border", "loot", "lvl", "delay", "trader", "dead", "respawn", "spawnat", "mcfov"):
                     self.to_mc.append(line)
                     if p[0] in ("reset", "border"):
                         print("to mc:", line, flush=True)

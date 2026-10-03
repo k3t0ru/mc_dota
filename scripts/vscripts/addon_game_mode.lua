@@ -136,6 +136,8 @@ function MC:SetupHero( hero )
 		MC:SpawnTraders()
 		-- Panorama's camera playback delay: Minecraft's overlay waits as long (see fpcam.js)
 		CustomGameEventManager:RegisterListener( "mc_delay", function( _, e ) MCBridge:Send( "delay " .. math.floor( tonumber( e.d ) or 0 ) ) end )
+		-- Dota's real vertical field of view, measured by Panorama: Minecraft's fov follows it (the layers stay matched)
+		CustomGameEventManager:RegisterListener( "mc_fov", function( _, e ) MCBridge:Send( string.format( "mcfov %.2f", tonumber( e.v ) or 66 ) ) end )
 		-- the unit Dota shows under the crosshair (the screen centre): Minecraft's melee swings land on it
 		CustomGameEventManager:RegisterListener( "mc_aim", function( _, e )
 			local u = tonumber( e.e ) and tonumber( e.e ) > 0 and EntIndexToHScript( tonumber( e.e ) )
