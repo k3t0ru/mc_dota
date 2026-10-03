@@ -42,6 +42,7 @@ function Precache( context )
 		"models/creeps/neutral_creeps/n_creep_troll_skeleton/n_creep_skeleton_melee.vmdl",
 	}) do PrecacheResource( "model", m, context ) end
 	PrecacheResource( "particle", "particles/units/heroes/hero_clinkz/clinkz_base_attack.vpcf", context )
+	PrecacheResource( "particle", "particles/msg_fx/msg_gold.vpcf", context )
 end
 
 function Activate()
@@ -72,7 +73,10 @@ function MC:Init()
 	mode:SetDamageFilter( Dynamic_Wrap( MC, "DamageFilter" ), MC )
 	-- a deny gives the denier nothing (Dota hands out XP for the killing attack)
 	mode:SetModifyExperienceFilter( function( _, f ) return not ( MCBridge.steve and MCBridge.steve.mc_denying ) end, MC )
-	mode:SetModifyGoldFilter( function( _, f ) return not ( MCBridge.steve and MCBridge.steve.mc_denying ) end, MC )
+	-- Steve has no use for Dota gold (his money is emeralds, MC:LootFor): none, so no yellow "+45" over his kills either
+	mode:SetModifyGoldFilter( function( _, f )
+		return not ( MCBridge.steve and f.player_id_const == MCBridge.steve:GetPlayerOwnerID() )
+	end, MC )
 	mode:SetExecuteOrderFilter( Dynamic_Wrap( MC, "OrderFilter" ), MC )
 
 	ListenToGameEvent( "npc_spawned", Dynamic_Wrap( MC, "OnSpawned" ), MC )
@@ -459,6 +463,16 @@ function MC:SendTraders()
 	end
 end
 
+-- the emeralds a kill gave, rising over the corpse like Dota's gold number, in Minecraft's emerald green
+function MC:Popup( pos, n )
+	local p = ParticleManager:CreateParticle( "particles/msg_fx/msg_gold.vpcf", PATTACH_WORLDORIGIN, nil )
+	ParticleManager:SetParticleControl( p, 0, pos + Vector( 0, 0, 40 ) ) -- head height for a first-person camera
+	ParticleManager:SetParticleControl( p, 1, Vector( 0, n, 0 ) ) -- "+" then the number
+	ParticleManager:SetParticleControl( p, 2, Vector( 2.0, #tostring( n ) + 1, 0 ) ) -- seconds, digits
+	ParticleManager:SetParticleControl( p, 3, Vector( 85, 255, 85 ) ) -- Minecraft's green (55FF55)
+	ParticleManager:ReleaseParticleIndex( p )
+end
+
 -- Steve's kills drop Minecraft loot: emeralds (the shop currency) by the unit's gold bounty, food, and from neutrals the
 -- crafting materials that fit them (Dota's shops have nothing to mine; the jungle is the "mine")
 EMERALD_GOLD = 25 -- gold bounty per emerald
@@ -593,6 +607,8 @@ function MC:OnKilled( e )
 			local loot = MC:LootFor( dead )
 			print( "[mc] Steve killed " .. dead:GetUnitName() .. ": " .. loot )
 			MCBridge:Send( loot )
+			local emeralds = tonumber( loot:match( "^loot (%d+)" ) ) or 0
+			if emeralds > 0 then MC:Popup( dead:GetAbsOrigin(), emeralds ) end
 		end
 		return
 	end

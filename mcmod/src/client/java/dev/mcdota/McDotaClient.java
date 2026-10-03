@@ -56,6 +56,8 @@ public class McDotaClient implements ClientModInitializer {
 		net.fabricmc.fabric.api.event.player.UseEntityCallback.EVENT.register((player, level, hand, entity, hit) -> Progress.interact(player, entity));
 		// clicks land on the overlay, never in Minecraft's window, so grab the mouse ourselves once focus arrives
 		ClientTickEvents.END_CLIENT_TICK.register(Sync::tick);
+		ClientTickEvents.END_CLIENT_TICK.register(MouseWheel::tick);
+		MouseWheel.start();
 		ClientTickEvents.END_CLIENT_TICK.register(mc -> {
 			if (mc.isWindowActive() && mc.screen == null && mc.level != null && !mc.mouseHandler.isMouseGrabbed()) mc.mouseHandler.grabMouse();
 		});

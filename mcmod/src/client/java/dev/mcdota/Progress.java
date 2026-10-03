@@ -66,8 +66,7 @@ public final class Progress {
 	public static void loot(MinecraftServer server, String[] p) {
 		int emeralds = Integer.parseInt(p[1]);
 		if (emeralds > 0) Sync.run(server, "give @p minecraft:emerald " + emeralds);
-		java.util.List<String> got = new ArrayList<>();
-		if (emeralds > 0) got.add("+" + emeralds + " emerald" + (emeralds > 1 ? "s" : ""));
+		java.util.List<String> got = new ArrayList<>(); // the emeralds rise over the corpse in Dota (MC:Popup); the rest here
 		for (int i = 3; i + 1 < p.length; i += 2) {
 			int n = Integer.parseInt(p[i + 1]);
 			if (n <= 0 || p[i].equals("none")) continue;

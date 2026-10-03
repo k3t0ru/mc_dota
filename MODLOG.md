@@ -321,3 +321,12 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
   Verified with a synthesized click: iron sword = 6.0. (Sweeps came out stronger than the main hit because of this.)
 - Denies: a swing at an ally suppresses splash ("hit ... 0") for 0.4 s; Lua scans the batch for the swing first.
 - Testing: tools for clicks — SendInput/mouse_event left clicks over Dota's window reach MouseInput (first one focuses).
+
+## 2026-10-03 12:45: mouse wheel, emerald popup
+- Mouse wheel did nothing: Windows gives it to the window under the cursor (Dota's; Minecraft's is off screen) and
+  Dota ignores input while not in front (Panorama's SetMouseCallback never fired either). MouseWheel.java: a
+  WH_MOUSE_LL hook (JNA, own message-loop thread) swallows the wheel while Minecraft is in front with no menu and
+  switches the hotbar like Minecraft's scroll. Verified with synthesized wheel notches.
+- Kill popup: Steve gets no Dota gold at all (gold filter; he pays in emeralds), so no yellow "+45"; MC:Popup shows
+  the emeralds as msg_gold particle tinted Minecraft green (55FF55) at the corpse, 40 units up (160 rose out of a
+  first-person view). Other loot only on the actionbar. Verified on screen.
