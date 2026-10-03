@@ -76,7 +76,7 @@ class Relay:
                 if p[0] == "me" and len(p) == 8:
                     name, x, y, z, yaw, hp, mx = p[1:]
                     self.me = f"steve {name} {x} {z} {hp} {mx} {yaw} {y}"
-                elif p[0] in ("hit", "crack", "died", "swing"):
+                elif p[0] in ("hit", "crack", "died", "swing", "eff"):
                     self.to_dota.append(line)
                 elif p[0] == "set":
                     self.to_dota.append("mcblock " + " ".join(p[1:]))

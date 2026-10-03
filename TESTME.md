@@ -2,6 +2,12 @@
 
 Things Claude could not check alone (they need a real person playing), newest first. Strike them out or tell Claude.
 
+## 2026-10-04 (00:10)
+- [ ] Sword damage (iron ~105, +S5 ~394; towers take ~40% less: armour), TNT kills creeps next to it (magic damage).
+- [ ] Witch: hat, "Зелья" sign facing her way (I turned it a quarter, unchecked), brewing stand, potions; splash
+      harming/poison/slowness/weakness work on creeps.
+- [ ] Cobweb (mason) slows creeps. Far health bars gone. Hotbar slots not see-through. Fire up to the waist.
+
 ## 2026-10-03 (22:00)
 - [ ] **Walking bob** at the market (traders/stalls): should be gone or much smaller.
 - [ ] **Creeps and towers attack you** after a death right away (they also do from the very start now).

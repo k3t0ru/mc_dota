@@ -26,6 +26,7 @@ SIGNS = {  # id -> kind, 4 lines (keep in step with SIGNS in addon_game_mode.lua
 	"toolsmith_goods": ("wall", ["Кузня", "Ремонт:", "присесть + ПКМ", ""]),
 	"secret_1": ("stand", ["", "Сикрет", "шоп", ""]),
 	"secret_2": ("stand", ["Алмазы", "Незерит", "Элитры", ""]),
+	"witch": ("stand", ["", "Зелья", "", ""]),
 }
 
 jar = zipfile.ZipFile(sorted(glob.glob(os.path.expanduser("~/.gradle/caches/fabric-loom/*/minecraft-client.jar")))[-1])

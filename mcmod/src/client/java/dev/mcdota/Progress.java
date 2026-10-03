@@ -411,6 +411,9 @@ public final class Progress {
 		PRICE.merge(id, (double) emeralds / count, Math::min);
 		return offer(emeralds, id, count, null);
 	}
+	private static String potion(int emeralds, String item, String potion) {
+		return offer(emeralds, item, 1, "\"minecraft:potion_contents\":{potion:\"minecraft:" + potion + "\"}");
+	}
 	private static String book(int emeralds, String ench, int lvl) {
 		return offer(emeralds, "enchanted_book", 1, "\"minecraft:stored_enchantments\":{\"minecraft:" + ench + "\":" + lvl + "}");
 	}
@@ -432,7 +435,13 @@ public final class Progress {
 			buy(1, "crafting_table"), buy(3, "smithing_table"), buy(3, "shield"))));
 		TRADERS.add(new Trader("Каменщик", "mason", List.of( // basic shop: building blocks (nothing to mine on Dota's map)
 			buy(1, "cobblestone", 64), buy(1, "stone", 48), buy(1, "oak_planks", 64), buy(1, "oak_log", 16), buy(1, "dirt", 64),
-			buy(1, "sand", 64))));
+			buy(1, "sand", 64), buy(1, "cobweb", 2))));
+		TRADERS.add(new Trader("Ведьма", "cleric", List.of( // potions: for Steve (drink or splash) and against enemies (splash)
+			potion(3, "potion", "healing"), potion(5, "potion", "strong_healing"), potion(4, "potion", "regeneration"),
+			potion(3, "potion", "swiftness"), potion(5, "potion", "strength"), potion(4, "potion", "fire_resistance"),
+			potion(2, "potion", "leaping"), potion(4, "splash_potion", "healing"), potion(5, "splash_potion", "regeneration"),
+			potion(4, "splash_potion", "harming"), potion(7, "splash_potion", "strong_harming"), potion(4, "splash_potion", "poison"),
+			potion(3, "splash_potion", "slowness"), potion(3, "splash_potion", "weakness"))));
 		TRADERS.add(new Trader("Тайная лавка", "weaponsmith", List.of( // far from the spawn: the rare stuff
 			buy(4, "diamond"), buy(20, "netherite_ingot"), buy(5, "netherite_upgrade_smithing_template"),
 			buy(60, "elytra"), buy(1, "firework_rocket", 4), buy(8, "golden_apple"), buy(2, "ender_pearl"),

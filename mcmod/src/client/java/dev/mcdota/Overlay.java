@@ -68,8 +68,11 @@ public final class Overlay implements Runnable {
 	// magenta, so they cut holes too: Dota's terrain and units show through and hide Minecraft blocks behind them.
 	// Tolerance covers face shading, ambient occlusion and the vignette, and dark magenta too: chunks just loaded at the
 	// edge of the view draw before their light is worked out, and the far fog darkens the ground (black stripes far off)
-	private static boolean hole(int p) {
+	// Not over the HUD or a menu: the hotbar's dark see-through slots over magenta are dark magenta too (they came out
+	// as a checker of holes)
+	private static boolean hole(int p, boolean wide) {
 		int r = (p >> 16) & 255, g = (p >> 8) & 255, b = p & 255;
+		if (!wide) return r > 30 && b > 30 && g * 3 < r && Math.abs(r - b) <= Math.max(24, r / 4);
 		return r > 6 && b > 6 && g * 3 < r && Math.abs(r - b) <= Math.max(12, r / 4);
 	}
 
@@ -190,7 +193,9 @@ public final class Overlay implements Runnable {
 				}
 			}
 			if (have) {
-				for (int i = 0; i < src.length; i++) src[i] = hole(src[i]) ? 0x01000000 : unpink(src[i]) | 0xFF000000; // premultiplied; alpha 1 = invisible but clickable
+				// (the dark tolerance only in the world above the HUD: the bottom fifth is the hotbar, health and food)
+				int wideRows = showCursor ? 0 : lh * 4 / 5;
+				for (int i = 0; i < src.length; i++) src[i] = hole(src[i], i / lw < wideRows) ? 0x01000000 : unpink(src[i]) | 0xFF000000; // premultiplied; alpha 1 = invisible but clickable
 				for (int y = 0, o = 0; y < H; y++) {
 					int row = ymap[y];
 					for (int x = 0; x < W; x++) dst[o++] = src[row + xmap[x]];

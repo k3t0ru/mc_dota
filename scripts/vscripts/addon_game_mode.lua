@@ -49,11 +49,11 @@ function Precache( context )
 		"models/mc/dirt.vmdl", "models/mc/sign_fletcher_name.vmdl", "models/mc/sign_fletcher_goods.vmdl",
 		"models/mc/sign_mason_name.vmdl", "models/mc/sign_mason_goods.vmdl", "models/mc/sign_librarian_name.vmdl",
 		"models/mc/sign_librarian_goods.vmdl", "models/mc/sign_toolsmith_name.vmdl", "models/mc/sign_toolsmith_goods.vmdl",
-		"models/mc/sign_secret_1.vmdl", "models/mc/sign_secret_2.vmdl", "models/mc/sand.vmdl", "models/mc/planks.vmdl", "models/mc/spruce_planks.vmdl",
+		"models/mc/sign_secret_1.vmdl", "models/mc/sign_secret_2.vmdl", "models/mc/sign_witch.vmdl", "models/mc/sand.vmdl", "models/mc/planks.vmdl", "models/mc/spruce_planks.vmdl",
 		"models/mc/red_wool.vmdl", "models/mc/white_wool.vmdl", "models/mc/blue_wool.vmdl",
 		"models/mc/crack_0.vmdl", "models/mc/crack_1.vmdl", "models/mc/crack_2.vmdl", "models/mc/crack_3.vmdl", "models/mc/crack_4.vmdl",
 		"models/mc/crack_5.vmdl", "models/mc/crack_6.vmdl", "models/mc/crack_7.vmdl", "models/mc/crack_8.vmdl", "models/mc/crack_9.vmdl",
-		"models/mc/villager_fletcher.vmdl", "models/mc/villager_librarian.vmdl", "models/mc/villager_toolsmith.vmdl", "models/mc/villager_weaponsmith.vmdl", "models/mc/villager_mason.vmdl",
+		"models/mc/villager_fletcher.vmdl", "models/mc/villager_librarian.vmdl", "models/mc/villager_toolsmith.vmdl", "models/mc/villager_weaponsmith.vmdl", "models/mc/villager_mason.vmdl", "models/mc/villager_cleric.vmdl",
 		"models/heroes/undying/undying_minion.vmdl",
 		"models/creeps/neutral_creeps/n_creep_troll_skeleton/n_creep_skeleton_melee.vmdl",
 	}) do PrecacheResource( "model", m, context ) end
@@ -372,12 +372,14 @@ function MC:ShowBlock( bx, by, bz, kind, solid, state )
 	p:SetModelScale( GRID / 128 ) -- the models are 128 units a block
 	if v and MCB_ANIM[ v[2] ] then MC:Animate( p, v[2] ) end
 	p.mc_kind = kind
+	if kind == "cobweb" then MC.cobwebs[ p ] = true end
 	p.mc_solid = solid ~= false -- fire, torches, flowers: drawn, but units neither bump into nor stand on them
 	MC.props[ key ] = p
 end
 
 -- fire burns like Minecraft's: its frames are models (<model>__f<k>, tools/gen_mcblocks.py), swapped ~12 times a second
 MC.animated = {}
+MC.cobwebs = {} -- cobweb props: MCBridge:Tick slows units in them
 function MC:Animate( p, model )
 	p.mc_anim = model
 	MC.animated[ p ] = true
@@ -443,7 +445,7 @@ MC.protected = {} -- "bx,bz" -> true
 -- lagged behind Dota's picture and drifted. kind: "wall" (against the block behind, facing = the way the text looks)
 -- or "stand" (rot = Minecraft's 0-15 standing rotation).
 SIGN_MODELS = { "fletcher_name", "fletcher_goods", "mason_name", "mason_goods", "librarian_name", "librarian_goods",
-	"toolsmith_name", "toolsmith_goods", "secret_1", "secret_2" }
+	"toolsmith_name", "toolsmith_goods", "secret_1", "secret_2", "witch" }
 function MC:Facing( fx, fz ) return fx > 0 and "east" or fx < 0 and "west" or fz > 0 and "south" or "north" end
 local FACING_YAW = { south = 0, west = 90, north = 180, east = 270 } -- Minecraft's clockwise turn from the model's south
 SIGN_TURN = -90 -- the imported model's board runs along Dota y: a quarter turn puts it along the wall
@@ -490,6 +492,8 @@ function MC:SpawnTraders()
 	local function rel( u, v ) return sx + u * U[1] + v * V[1], sz + u * U[2] + v * V[2] end
 	local function ground( x, z ) return MC.heights[ x .. "," .. z ] or MC_FLOOR end
 	MC.spawnX, MC.spawnZ = rel( 5, 4 )
+	MC.witchX, MC.witchZ = rel( 10, 3 )
+	MC.witchF = { -U[1], -U[2] }
 	local function free( x, z ) return math.abs( x - MC.spawnX ) > 1 or math.abs( z - MC.spawnZ ) > 1 end
 	-- Two market stalls (after Dio Rods' "Market Stall"), two traders in each, told apart by their awnings.
 	-- Each stall: centre, F = toward its open front, D = along it.
@@ -590,6 +594,23 @@ function MC:SpawnTraders()
 		if secretShop then x, z = MC:CellOf( secretShop:GetAbsOrigin() ) end
 		table.insert( TRADERS, { x + 2.5, z + 0.5, "weaponsmith" } )
 	end
+	-- the witch (potions): standing on the square, facing the spawn
+	table.insert( TRADERS, { MC.witchX + 0.5, MC.witchZ + 0.5, "cleric", MC.witchF[1], MC.witchF[2] } )
+	do -- her sign on one side, a brewing stand on the other (just for the look)
+		local fx, fz = MC.witchF[1], MC.witchF[2]
+		local sx, sz = MC.witchX - fz, MC.witchZ + fx
+		local rot = math.floor( ( math.deg( math.atan2( -fx, fz ) ) % 360 ) / 22.5 + 0.5 ) % 16
+		MC:Sign( sx, MC.heights[ sx .. "," .. sz ] or MC_FLOOR, sz, "witch", -( rot * 22.5 - 90 ) + SIGN_TURN ) -- (text the way she looks: checked on screen)
+		local bx2, bz2 = MC.witchX + fz, MC.witchZ - fx
+		MC:PlaceBlock( bx2, MC.heights[ bx2 .. "," .. bz2 ] or MC_FLOOR, bz2, "brewing_stand" )
+	end
+	-- Dota's banners on poles: Minecraft's world has none (and they hid the view)
+	local hidden = 0
+	for _, e in ipairs( Entities:FindAllByClassname( "prop_dynamic" ) ) do
+		local m = e:GetModelName() or ""
+		if m:find( "banner" ) or m:find( "flag" ) then e:AddEffects( EF_NODRAW ) hidden = hidden + 1 end
+	end
+	print( "[mc] banners hidden: " .. hidden )
 	for _, t in ipairs( TRADERS ) do
 		print( string.format( "[mc] trader %s at %.1f, %.1f", t[3], t[1], t[2] ) )
 		local pos = t[6] and ( a + Vector( t[1] * GRID, -t[2] * GRID, ( t[6] - MC_FLOOR ) * GRID ) )

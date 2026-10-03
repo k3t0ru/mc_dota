@@ -265,6 +265,12 @@ public final class Sync {
 		return id.equals("inFire") || id.equals("onFire") || id.equals("lava") || id.equals("hotFloor") || id.equals("campfire") || id.equals("cactus") || id.equals("sweetBerryBush");
 	}
 
+	// potions' harm: instant damage, poison
+	private static boolean magic(net.minecraft.world.damagesource.DamageSource src) {
+		String id = src.type().msgId();
+		return id.equals("magic") || id.equals("indirectMagic") || id.equals("wither");
+	}
+
 	// Minecraft's fire (1 HP per half second) barely scratches Dota's creeps: 3x, ~55 Dota damage a second
 	private static float fireMult(net.minecraft.world.damagesource.DamageSource src) {
 		String id = src.type().msgId();
@@ -294,13 +300,14 @@ public final class Sync {
 						seen.add(tag);
 						lastSeen.put(p[1], System.currentTimeMillis());
 						boolean fresh = standIns.put(p[1], tag) == null;
-						if (fresh) run(server, String.format(Locale.ROOT, "summon minecraft:husk %s " + y + " %s {NoAI:1b,Silent:1b,"
+						if (fresh) run(server, String.format(Locale.ROOT, "summon minecraft:pillager %s " + y + " %s {NoAI:1b,Silent:1b,"
 							+ "PersistenceRequired:1b,NoGravity:1b,DeathLootTable:\"minecraft:empty\",Tags:[\"dota\",\"%s\"],attributes:[{id:\"minecraft:max_health\",base:%d},"
 							+ "{id:\"minecraft:scale\",base:%.1f}],Health:%df,"
 							// invisible from the first tick (an effect given afterwards let a zombie flash for a moment): the Dota unit
 							// is what you see (magenta silhouettes came out pink and shaky: Minecraft lights mobs its own way)
 							+ "active_effects:[{id:\"minecraft:invisibility\",duration:-1,amplifier:0b,show_particles:0b}]}",
 							p[3], p[4], tag, (int) HERO_HP, scale(p[2]), (int) HERO_HP));
+						if (fresh) run(server, String.format("item replace entity @e[tag=%s,limit=1] weapon.mainhand with minecraft:air", tag), false); // (its crossbow)
 						run(server, String.format("tp @e[tag=%s,limit=1] %s %s %s", tag, p[3], y, p[4]));
 					}
 					// from the attacker's stand-in, so a raised shield facing it blocks the hit (no stand-in: plain damage)
@@ -374,17 +381,30 @@ public final class Sync {
 						// only a player's hit counts: void, suffocation inside blocks etc. must not hurt the Dota unit.
 						// direct = the swing's own target or a projectile (a sweep's splash isn't: it never touches allies)
 						var src = le.getLastDamageSource();
-						if (src != null && src.getEntity() == null && burning(src)) // fire/lava a player set: splash damage
-							out.add(String.format(Locale.ROOT, "hit %s %.2f 0 fire", s.getKey(), (HERO_HP - le.getHealth()) * fireMult(src))); // (burning: cooked loot)
+						// the kind of hit for Dota: fire (burning: cooked loot), boom (TNT: magic damage, scaled), magic (potions)
+						String kind = src == null ? "" : src.is(net.minecraft.tags.DamageTypeTags.IS_EXPLOSION) ? "boom"
+							: magic(src) ? "magic" : burning(src) ? "fire" : "-";
+						if (src != null && src.getEntity() == null && (burning(src) || magic(src))) // fire/lava/poison a player set: splash damage
+							out.add(String.format(Locale.ROOT, "hit %s %.2f 0 %s", s.getKey(), (HERO_HP - le.getHealth()) * fireMult(src), kind));
 						if (src != null && src.getEntity() instanceof net.minecraft.world.entity.player.Player pl
 							&& !(src.getDirectEntity() == pl && pl.getLastHurtMob() != le)) { // that's Minecraft's own sweep: Lua sweeps (swing)
 							boolean projectile = src.getDirectEntity() instanceof net.minecraft.world.entity.projectile.Projectile; // TNT: splash
 							boolean melee = src.getDirectEntity() == pl && pl.getLastHurtMob() == le;
 							// the swing's own target: AttackMixin's "swing" hits what Dota highlights instead
 							if (!melee)
-								out.add(String.format(Locale.ROOT, "hit %s %.2f %d", s.getKey(), HERO_HP - le.getHealth(), projectile ? 1 : 0));
+								out.add(String.format(Locale.ROOT, "hit %s %.2f %d %s", s.getKey(), HERO_HP - le.getHealth(), projectile ? 1 : 0, kind));
 						}
 						le.setHealth(HERO_HP);
+					}
+					// splash potions' lasting effects on a stand-in: Dota applies them (slowness, weakness)
+					if (e instanceof LivingEntity le && le.getTags().contains(s.getValue())) {
+						for (var ef : java.util.List.of(net.minecraft.world.effect.MobEffects.SLOWNESS, net.minecraft.world.effect.MobEffects.WEAKNESS)) {
+							var inst = le.getEffect(ef);
+							if (inst == null) continue;
+							out.add(String.format(Locale.ROOT, "eff %s %s %d %.1f", s.getKey(), ef == net.minecraft.world.effect.MobEffects.SLOWNESS ? "slow" : "weak",
+								inst.getAmplifier() + 1, inst.getDuration() / 20f));
+							le.removeEffect(ef);
+						}
 					}
 				}
 			}

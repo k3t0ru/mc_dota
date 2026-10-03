@@ -10,7 +10,7 @@ MAT, MDL = os.path.join(ROOT, "materials", "mc"), os.path.join(ROOT, "models", "
 os.makedirs(MAT, exist_ok=True); os.makedirs(MDL, exist_ok=True)
 PX = 96 / 16  # Dota units per Minecraft model pixel (one block = GRID 96)
 TEX, UP = 64, 8  # villager texture size, nearest upscale (crisp pixels)
-PROFESSIONS = ("fletcher", "librarian", "toolsmith", "mason", "weaponsmith")  # TRADERS in addon_game_mode.lua
+PROFESSIONS = ("fletcher", "librarian", "toolsmith", "mason", "weaponsmith", "cleric")  # cleric = our witch (witch.png)  # TRADERS in addon_game_mode.lua
 
 # (texture u, v), box min (x, y, z) and size (w, h, d) in model pixels (y points DOWN, the face looks to -z),
 # inflation, and the part pose: offset and x rotation (radians)
@@ -28,6 +28,16 @@ BOXES = [
 ]
 
 
+# the witch's hat (WitchModel: brim, then three ever smaller tiers, each a little higher; their slight tilts left out),
+# on a 64 x 128 texture
+HAT = [
+    ((0, 64), (0, 0, 0), (10, 2, 10), 0, (-5, -10.03, -5), 0),
+    ((0, 76), (0, 0, 0), (7, 4, 7), 0, (-3.25, -14.03, -3), 0),
+    ((0, 87), (0, 0, 0), (4, 4, 4), 0, (-1.5, -18.03, -1), 0),
+    ((0, 95), (0, 0, 0), (1, 2, 1), 0.25, (0.25, -20.03, 1), 0),
+]
+
+
 def dota(p, offset, rot):
     """Model pixel point -> Dota units. Minecraft draws models flipped (-x, -y); its world maps to Dota as
     x -> X, z -> -Y, up -> Z. The villager then faces Dota -X (checked in game) with its feet (model y 24) at Z 0."""
@@ -38,9 +48,9 @@ def dota(p, offset, rot):
     return (-x * PX, -z * PX, (24 - y) * PX)
 
 
-def mesh():
+def mesh(boxes=BOXES, tex_h=TEX):
     verts, uvs, faces = [], [], []
-    for (u, v), (x0, y0, z0), (w, h, d), g, off, rot in BOXES:
+    for (u, v), (x0, y0, z0), (w, h, d), g, off, rot in boxes:
         x1, y1, z1 = x0 + w + g, y0 + h + g, z0 + d + g
         x0, y0, z0 = x0 - g, y0 - g, z0 - g
         c = [(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0), (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)]
@@ -54,7 +64,7 @@ def mesh():
             face = []
             for corner, (tu, tv) in zip(idx, ((ub, va), (ua, va), (ua, vb), (ub, vb))):
                 verts.append(dota(c[corner], off, rot))
-                uvs.append((tu / TEX, 1 - tv / TEX))
+                uvs.append((tu / TEX, 1 - tv / tex_h))
                 face.append(len(verts))
             faces.append(face)
     obj = [f"v {x:.3f} {z:.3f} {-y:.3f}" for x, y, z in verts]  # OBJ is Y-up; ModelDoc makes it Z-up
@@ -85,7 +95,7 @@ VMDL = """<!-- kv3 encoding:text:version{{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d}}
 			}},
 			{{
 				_class = "RenderMeshList"
-				children = [ {{ _class = "RenderMeshFile" filename = "models/mc/villager.obj" import_scale = 1.0 }} ]
+				children = [ {{ _class = "RenderMeshFile" filename = "models/mc/{obj}.obj" import_scale = 1.0 }} ]
 			}},
 		]
 		model_archetype = ""
@@ -114,15 +124,20 @@ jar = zipfile.ZipFile(sorted(jars)[-1])
 tex = lambda p: Image.open(io.BytesIO(jar.read(f"assets/minecraft/textures/entity/villager/{p}.png"))).convert("RGBA")
 with open(os.path.join(MDL, "villager.obj"), "w") as f:
     f.write(mesh())
+with open(os.path.join(MDL, "witch.obj"), "w") as f:
+    f.write(mesh(BOXES + HAT, 128))
 for prof in PROFESSIONS:
-    img = tex("villager")
-    for layer in ("type/plains", f"profession/{prof}"):
-        img = Image.alpha_composite(img, tex(layer))
-    big = img.resize((TEX * UP, TEX * UP), Image.NEAREST)
+    if prof == "cleric":  # the witch trader: Minecraft's witch skin (a villager's layout, plus its hat)
+        img = Image.open(io.BytesIO(jar.read("assets/minecraft/textures/entity/witch.png"))).convert("RGBA")
+    else:
+        img = tex("villager")
+        for layer in ("type/plains", f"profession/{prof}"):
+            img = Image.alpha_composite(img, tex(layer))
+    big = img.resize((img.width * UP, img.height * UP), Image.NEAREST)
     big.convert("RGB").save(os.path.join(MAT, f"villager_{prof}.png"))
     big.split()[3].save(os.path.join(MAT, f"villager_{prof}_alpha.png"))
     with open(os.path.join(MAT, f"villager_{prof}.vmat"), "w") as f:
         f.write(VMAT.format(prof=prof))
     with open(os.path.join(MDL, f"villager_{prof}.vmdl"), "w") as f:
-        f.write(VMDL.format(prof=prof))
+        f.write(VMDL.format(prof=prof, obj="witch" if prof == "cleric" else "villager"))
 print("villagers:", ", ".join(PROFESSIONS))

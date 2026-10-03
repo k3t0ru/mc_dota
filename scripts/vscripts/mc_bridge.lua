@@ -4,14 +4,16 @@
 BRIDGE_URL = "http://127.0.0.1:27100/sync"
 DMG_TO_DOTA = 10  -- 1 MC hp of damage to a hero stand-in = 10 Dota damage
 
--- melee grows steeper than Minecraft's numbers: a wooden sword (4) hits like a level 1 hero (~55), a netherite one with
--- Sharpness V (11) ~650, so a fully enchanted netherite sword takes Roshan in ~10 s like a 6-slotted level 30 carry.
--- Dota damage of a full swing = 1.86 * damage^2.44 (at least 10 per point: a fist); a swing's cooldown/crit keep their
--- share. Returns the factor for the swing's Minecraft numbers (HitUnit multiplies by DMG_TO_DOTA).
-function MeleeScale( full )
+-- Melee in Dota damage: a full swing does 6 x weapon^1.6 (wooden sword 4 -> 55, a level 1 hero; stone 5 -> 79, iron 6 ->
+-- 105, diamond 7 -> 135, netherite 8 -> 167), x (1 + 0.55 per Sharpness level): netherite + Sharpness V ~ 626 (Roshan in
+-- ~10 s like a 6-slotted level 30 carry), iron + V ~ 394. Physical: the target's armour counts (a tower takes ~40% less).
+-- A swing's cooldown/crit keep their share. Returns the factor for the swing's Minecraft numbers (HitUnit x DMG_TO_DOTA).
+function MeleeScale( full, base, sharp )
 	if not full or full <= 0 then return 1 end
-	return math.max( full * DMG_TO_DOTA, 1.86 * full ^ 2.44 ) / ( full * DMG_TO_DOTA )
+	base = base and base > 0 and base or full
+	return 6 * base ^ 1.6 * ( 1 + 0.55 * ( sharp or 0 ) ) / ( full * DMG_TO_DOTA )
 end
+TNT_MULT = 3.5 -- Minecraft's TNT (up to ~56 at the blast, less further off) x 10 x this: kills a creep standing next to it
 DOTA_TO_MC = 0.02 -- 1 Dota damage to Steve = 0.02 MC hp (a 50-damage hit = half a heart)
 
 MCBridge = { out = { "reset" }, inflight = 0, sentAt = 0, seq = 0, applied = 0 } -- a new Dota game starts Minecraft's arena from scratch
@@ -60,6 +62,17 @@ function MCBridge:Tick()
 		end
 	end
 	MC:BossBar( self.steve )
+	self:FarBars()
+	-- cobwebs hold units like in Minecraft (90% slower while inside)
+	for p in pairs( MC.cobwebs ) do
+		if p:IsNull() then MC.cobwebs[ p ] = nil
+		else
+			for _, u in ipairs( FindUnitsInRadius( DOTA_TEAM_NEUTRALS, p:GetAbsOrigin(), nil, GRID * 0.6, DOTA_UNIT_TARGET_TEAM_BOTH,
+				DOTA_UNIT_TARGET_HERO + DOTA_UNIT_TARGET_BASIC, DOTA_UNIT_TARGET_FLAG_NONE, FIND_ANY_ORDER, false ) ) do
+				if not u.mc_player and not u.mc_block then u:AddNewModifier( u, nil, "modifier_mc_potion", { duration = 0.3, kind = "slow", level = 6 } ) end
+			end
+		end
+	end
 	-- our fountain heals Steve (Minecraft owns his health and hunger): twice a second while he is in its aura
 	local s = self.steve
 	if s and not s:IsNull() and s:IsAlive() and s:HasModifier( "modifier_fountain_aura_buff" )
@@ -109,14 +122,22 @@ function MCBridge:Apply( body, stale )
 			self:HighGround( tonumber( x ), tonumber( z ), tonumber( my ) )
 		end
 
-		local id, amount, direct, fire = line:match( "^hit (%d+) (%S+) ?(%S*) ?(%S*)" ) -- arrows, sweeps: through the stand-ins
-		if id and fire == "fire" then -- burning: a neutral dying now drops cooked meat
+		local id, amount, direct, kind = line:match( "^hit (%d+) (%S+) ?(%S*) ?(%S*)" ) -- arrows, sweeps: through the stand-ins
+		if id and kind == "fire" then -- burning: a neutral dying now drops cooked meat
 			local u = EntIndexToHScript( tonumber( id ) )
 			if u and not u:IsNull() then u.mc_burnUntil = GameRules:GetGameTime() + 1.5 end
 		end
 		-- (no splash right after a swing at an ally: a deny is a single hit, the sword's sweep must not hit the enemies around)
 		local denying = GameRules:GetGameTime() - ( self.denySwingAt or -1 ) < 0.4
-		if id and not ( denying and direct == "0" ) then self:HitUnit( EntIndexToHScript( tonumber( id ) ), tonumber( amount ), direct ~= "0" ) end
+		if id and not ( denying and direct == "0" ) then self:HitUnit( EntIndexToHScript( tonumber( id ) ), tonumber( amount ), direct ~= "0", kind ) end
+		-- a splash potion's lasting effect on a Dota unit (Minecraft's stand-in got it): Dota's version of it
+		local eid, ekind, elvl, esec = line:match( "^eff (%d+) (%S+) (%S+) (%S+)" )
+		if eid then
+			local u = EntIndexToHScript( tonumber( eid ) )
+			if u and not u:IsNull() and u:IsAlive() then
+				u:AddNewModifier( self.steve or u, nil, "modifier_mc_potion", { duration = tonumber( esec ), kind = ekind, level = tonumber( elvl ) } )
+			end
+		end
 		local dev = line:match( "^dev (.+)" ) -- testing (bridge /dota): a console command, only with cheats on
 		if dev and ( GameRules:IsCheatMode() or IsInToolsMode() ) then
 			local name, dist, free = dev:match( "^testunit (%S+) (%S+) ?(%S*)" ) -- a stunned unit in front of Steve, to aim at ("free": not stunned)
@@ -148,6 +169,21 @@ function MCBridge:Apply( body, stale )
 			elseif dev:match( "^nodraw " ) and self.steve then -- does Dota's AI ignore a hero it doesn't draw?
 				self.nodrawOff = dev == "nodraw 0"
 				if self.nodrawOff then self.steve:RemoveEffects( EF_NODRAW ) end
+			elseif dev == "classes" then -- every entity class on the map, with a count (looking for the sky/fog)
+				local c, e = {}, Entities:First()
+				while e do c[ e:GetClassname() ] = ( c[ e:GetClassname() ] or 0 ) + 1 e = Entities:Next( e ) end
+				local t = {}
+				for k, n in pairs( c ) do table.insert( t, k .. "=" .. n ) end
+				table.sort( t )
+				print( "[mc] classes " .. table.concat( t, " " ) )
+			elseif dev == "props" then -- the map's own dynamic props and world layers
+				local seen = {}
+				for _, e in ipairs( Entities:FindAllByClassname( "prop_dynamic" ) ) do
+					local m = e:GetModelName() or ""
+					if not m:find( "^models/mc" ) and not seen[ m ] then seen[ m ] = true print( "[mc] prop " .. m ) end
+				end
+				for _, e in ipairs( Entities:FindAllByClassname( "info_world_layer" ) ) do print( "[mc] layer " .. ( e:GetName() or "?" ) ) end
+				for _, e in ipairs( Entities:FindAllByClassname( "env_fog_controller" ) ) do print( "[mc] fog " .. ( e:GetName() or "?" ) ) end
 			elseif dev == "dumpedge" then -- entities with models out at the map's edge (what Steve sees on the horizon)
 				local e, n, seen = Entities:First(), 0, {}
 				while e and n < 60 do
@@ -166,13 +202,13 @@ function MCBridge:Apply( body, stale )
 				SendToServerConsole( dev )
 			end
 		end
-		local swing, crit, sweep, full, fire = line:match( "^swing (%S+) ?(%S*) ?(%S*) ?(%S*) ?(%S*)" ) -- a melee swing: whatever Dota highlights under the crosshair
+		local swing, crit, sweep, full, fire, wbase, sharp = line:match( "^swing (%S+) ?(%S*) ?(%S*) ?(%S*) ?(%S*) ?(%S*) ?(%S*)" ) -- a melee swing: whatever Dota highlights under the crosshair
 		if swing and self.aim and not self.aim:IsNull() and GameRules:GetGameTime() - ( self.aimAt or 0 ) <= 0.6
 			and self.steve and self.steve:IsAlive() then
 			local reach = MELEE_REACH * GRID + self.aim:GetHullRadius()
 			local d = ( self.aim:GetAbsOrigin() - self.steve:GetAbsOrigin() ):Length2D()
 			if self.aim:GetTeamNumber() == self.steve:GetTeamNumber() then self.denySwingAt = GameRules:GetGameTime() end
-			local k = MeleeScale( tonumber( full ) )
+			local k = MeleeScale( tonumber( full ), tonumber( wbase ), tonumber( sharp ) )
 			if d <= reach then self:Swing( self.aim, tonumber( swing ) * k, crit == "1", ( tonumber( sweep ) or 0 ) * k, tonumber( fire ) or 0 ) end
 		end
 
@@ -279,7 +315,7 @@ function MCBridge:HighGround( x, z, y )
 	elseif not high and u:HasModifier( "modifier_mc_highground" ) then u:RemoveModifierByName( "modifier_mc_highground" ) end
 end
 
-function MCBridge:HitUnit( hero, amount, direct )
+function MCBridge:HitUnit( hero, amount, direct, kind )
 	if not hero or hero:IsNull() or not hero:IsAlive() or not hero.GetTeamNumber or hero.mc_player or hero.mc_block then return end
 	local ally = self.steve and hero:GetTeamNumber() == self.steve:GetTeamNumber()
 	local deniable = ally and direct and not hero:IsHero() and hero:GetHealthPercent() < ( hero:IsTower() and 10 or 50 )
@@ -291,8 +327,33 @@ function MCBridge:HitUnit( hero, amount, direct )
 		self.steve:PerformAttack( hero, true, false, true, true, false, false, true )
 		self.steve.mc_attack, self.steve.mc_denying = nil, nil
 	else
-		ApplyDamage( { victim = hero, attacker = self.steve or hero, damage = amount * DMG_TO_DOTA, damage_type = DAMAGE_TYPE_PURE } )
+		-- melee and arrows: physical (armour); TNT, potions, fire: magical (magic resistance)
+		local magic = kind == "boom" or kind == "magic" or kind == "fire"
+		ApplyDamage( { victim = hero, attacker = self.steve or hero, damage = amount * DMG_TO_DOTA * ( kind == "boom" and TNT_MULT or 1 ),
+			damage_type = magic and DAMAGE_TYPE_MAGICAL or DAMAGE_TYPE_PHYSICAL } )
 		if hero:IsBuilding() then MC.bossUnit, MC.bossUntil = hero, GameRules:GetGameTime() + 5 end
+	end
+end
+
+-- Dota draws health bars at a fixed size on screen: far away they covered the view. Units beyond FAR_BARS from Steve
+-- get none (modifier_mc_nobar), checked a few times a second.
+FAR_BARS = 1600
+function MCBridge:FarBars()
+	local s = self.steve
+	if not s or s:IsNull() or GameRules:GetGameTime() - ( self.barsAt or 0 ) < 0.3 then return end
+	self.barsAt = GameRules:GetGameTime()
+	local near = {}
+	for _, u in ipairs( FindUnitsInRadius( s:GetTeamNumber(), s:GetAbsOrigin(), nil, FAR_BARS, DOTA_UNIT_TARGET_TEAM_BOTH,
+		DOTA_UNIT_TARGET_ALL, DOTA_UNIT_TARGET_FLAG_INVULNERABLE + DOTA_UNIT_TARGET_FLAG_MAGIC_IMMUNE_ENEMIES, FIND_ANY_ORDER, false ) ) do
+		near[ u ] = true
+	end
+	for _, u in ipairs( FindUnitsInRadius( s:GetTeamNumber(), Vector( 0, 0, 0 ), nil, 30000, DOTA_UNIT_TARGET_TEAM_BOTH,
+		DOTA_UNIT_TARGET_ALL, DOTA_UNIT_TARGET_FLAG_INVULNERABLE + DOTA_UNIT_TARGET_FLAG_MAGIC_IMMUNE_ENEMIES, FIND_ANY_ORDER, false ) ) do
+		if not u.mc_block and not u.mc_player then
+			local has = u:HasModifier( "modifier_mc_nobar" )
+			if near[ u ] and has then u:RemoveModifierByName( "modifier_mc_nobar" )
+			elseif not near[ u ] and not has then u:AddNewModifier( u, nil, "modifier_mc_nobar", {} ) end
+		end
 	end
 end
 

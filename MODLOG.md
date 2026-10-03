@@ -480,3 +480,18 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
   keys out dark magenta too (hole() tolerance). Render distance 13 -> 10 (Dota had dropped to ~60 fps).
 - Minecraft fps cap: framerateLimit = mcdota.fps (MC_FPS 60 in env.sh), Dota fps_max 0.
 - Russian: Minecraft's language ru_ru (run/options.txt), our messages, trader names, boss bar names (MC:BuildingName), clock, signs (Minecraft's Cyrillic glyphs from nonlatin_european); javac encoding UTF-8.
+
+## 2026-10-04 00:10: damage rework, potions witch, cobweb, far health bars, HUD keying
+- Melee: 6 x weapon^1.6 x (1 + 0.55 per Sharpness) Dota damage (wood 55, iron 105, diamond 135, netherite 167;
+  netherite + S5 ~626, iron + S5 ~394), PHYSICAL (armour counts). AttackMixin sends weapon damage and Sharpness level.
+- Hit kinds from Minecraft: boom (TNT, x3.5, magical), magic (potions: harming, poison), fire (magical, cooked loot).
+- Stand-ins are pillagers now (not undead: harming hurts, poison works; crossbow removed). Slowness/weakness on a
+  stand-in -> "eff" -> modifier_mc_potion in Dota.
+- Witch trader (Minecraft villager "cleric", Dota model = witch skin + hat, gen_villager.py): healing, regeneration,
+  swiftness, strength, fire resistance, leaping (drink/splash), splash harming/poison/slowness/weakness. Her "Зелья"
+  sign and a brewing stand beside her. Cobweb at the mason; Dota units in one are 90% slower.
+- Health bars of units further than 1600 from Steve are hidden (modifier_mc_nobar).
+- Overlay: dark-magenta keying only above the HUD and with no menu open (the hotbar's empty slots became see-through).
+- Flames on burning stand-ins up to a creep's waist.
+- Dota's banners are map geometry (not entities: only 3 prop_dynamic on the map) -> can't be removed by script.
+- From now on the user tests by hand; I build and launch.
