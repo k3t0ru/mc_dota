@@ -402,7 +402,7 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Terrain changes under the surface never reach Dota (they drew hanging dirt blocks); blocks Minecraft draws itself
   (water...) replacing a drawn one: "break". Small floating cubes = dropped items (sand falling onto fire), vanilla.
 - Steve's level = Minecraft's XP bar: the number is his level, the bar the way to the next, from the hero XP Dota would
-  give (Dota's table; level 30 takes a match). Enchanting/anvil need the level but don't spend it (put back every 2 s);
+  give (Dota's table, past 30 each level 600 XP dearer than the last: no cap). Enchanting/anvil need the level but don't spend it (put back every 2 s);
   no XP bottles, no vanilla XP for kills. (A separate level boss bar was tried: two levels confused.)
 - Fire animates: tools/gen_mcblocks.py makes 8 frame models for fire/soul fire/campfires (<model>__f<k>, MCB_ANIM);
   Lua swaps them 12 times a second. Fire damage on Dota units x3 (~55/s).

@@ -85,7 +85,7 @@ public final class Progress {
 
 	// server thread: Steve's Dota level changed
 	// Minecraft's XP bar IS Steve's level: the number is his level, the bar the way to the next one, earned by kills
-	// (the XP Dota would give his hero, by Dota's table: level 30 takes a whole match). Kept on death; enchanting and
+	// (the XP Dota would give his hero, by Dota's table, then ever steeper past 30: no cap). Kept on death; enchanting and
 	// the anvil need the level but don't spend it (tick() puts it back): it's his level, not a currency.
 	private static int xp, need = 240;
 

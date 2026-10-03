@@ -43,8 +43,8 @@ function MCBridge:Tick()
 	-- (with the way to the next level: "lvl <level> <xp into it> <xp it takes>": Minecraft's XP bar shows it)
 	if MC.steveLevel then
 		local lvl = MC.steveLevel
-		local from, to = XP_TABLE[ lvl ], XP_TABLE[ lvl + 1 ]
-		local line = string.format( "lvl %d %d %d", lvl, MC.steveXPTotal - from, to and to - from or 0 )
+		local from, to = MC:XPFor( lvl ), MC:XPFor( lvl + 1 )
+		local line = string.format( "lvl %d %d %d", lvl, MC.steveXPTotal - from, to - from )
 		if line ~= self.sentLevel then
 			self.sentLevel = line
 			self:Send( line )

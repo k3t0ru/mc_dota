@@ -68,10 +68,18 @@ MC = {}
 -- Dota's hero XP table (total XP for each level): Steve's level from the XP he would have got
 XP_TABLE = { 0, 240, 640, 1160, 1760, 2440, 3200, 4000, 4900, 5900, 7000, 8200, 9500, 10900, 12400, 14000, 15700, 17500,
 	19400, 21400, 23600, 26000, 28600, 31400, 34400, 37600, 41000, 44600, 48400, 52400 }
+function MC:XPFor( lvl ) -- total XP for a level
+	while not XP_TABLE[ lvl ] do
+		local n = #XP_TABLE
+		XP_TABLE[ n + 1 ] = XP_TABLE[ n ] + ( XP_TABLE[ n ] - XP_TABLE[ n - 1 ] ) + 600
+	end
+	return XP_TABLE[ lvl ]
+end
 function MC:SteveXP( xp )
 	MC.steveXPTotal = ( MC.steveXPTotal or 0 ) + ( xp or 0 )
 	local lvl = 1
-	while XP_TABLE[ lvl + 1 ] and MC.steveXPTotal >= XP_TABLE[ lvl + 1 ] do lvl = lvl + 1 end
+	-- no cap, like Minecraft: past Dota's 30 each level costs 600 more than the one before
+	while MC.steveXPTotal >= MC:XPFor( lvl + 1 ) do lvl = lvl + 1 end
 	MC.steveLevel = lvl
 end
 
