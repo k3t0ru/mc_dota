@@ -41,8 +41,8 @@ public class McDotaClient implements ClientModInitializer {
 			// no mipmaps: far away they blend the see-through magenta with its neighbours into dark pixels that the overlay
 			// can't key out (flickering black stripes of blocks in the distance)
 			if (mc.options.mipmapLevels().get() != 0) { mc.options.mipmapLevels().set(0); mc.updateMaxMipLevel(0); mc.delayTextureReload(); }
-			mc.options.renderDistance().set(Integer.getInteger("mcdota.view", 5));
-			mc.options.simulationDistance().set(Integer.getInteger("mcdota.view", 5));
+			mc.options.renderDistance().set(Integer.getInteger("mcdota.view", 13)); // (was 5: chunks popped in close by)
+			mc.options.simulationDistance().set(Integer.getInteger("mcdota.sim", 5));
 			int[] r = renderSize(); // resizing inside Window's constructor crashes, so do it once the client is up
 			GLFW.glfwSetWindowSize(mc.getWindow().handle(), r[0], r[1]);
 			GLFW.glfwSetWindowPos(mc.getWindow().handle(), OFFSCREEN_X, 0);

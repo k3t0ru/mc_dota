@@ -468,3 +468,4 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Fountain: no invulnerability at all (Dota's modifier_fountain_invulnerability removed every move): it only heals/feeds.
 - Striped horizon: tried far planes 6000/10000/14000/40000 (stripes in all; gone only at Dota's default ~3000, which
   also hides the far map), fow_unseen 0, ent_fire env_sky/fog Disable: no effect. Kept 40000.
+- Minecraft render distance 5 -> 13 chunks (simulation stays 5): Minecraft 59 fps, Dota 185 fps at the market.
