@@ -347,6 +347,15 @@ public final class Sync {
 						column(server, Integer.parseInt(p[1]), Integer.parseInt(p[3]), () ->
 						run(server, String.format("setblock %s %s %s minecraft:%s", p[1], p[2], p[3], p[4]))); }
 					case "unblock" -> run(server, String.format("setblock %s %s %s minecraft:air", p[1], p[2], p[3]));
+					case "sign" -> { // "sign x y z <block[state]> line|line|...": the stalls' signs (after their blocks: same queue)
+						protectedBlocks.add(new BlockPos(Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3])));
+						String[] lines = line.split(" ", 6).length > 5 ? line.split(" ", 6)[5].split("\\|") : new String[0];
+						StringBuilder msgs = new StringBuilder();
+						for (int i = 0; i < 4; i++)
+							msgs.append(i > 0 ? "," : "").append('"').append(i < lines.length ? lines[i].replace("\\", "").replace("\"", "") : "").append('"');
+						String cmd = String.format("setblock %s %s %s minecraft:%s{is_waxed:1b,front_text:{messages:[%s]}}", p[1], p[2], p[3], p[4], msgs);
+						column(server, Integer.parseInt(p[1]), Integer.parseInt(p[3]), () -> run(server, cmd));
+					}
 					case "void" -> column(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), () ->
 						run(server, String.format("fill %s -64 %s %s 30 %s minecraft:air", p[1], p[2], p[1], p[2]), false)); // fall and die
 					case "border" -> { // "border <size> [<centre x> <centre z>]": the map's box

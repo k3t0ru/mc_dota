@@ -18,3 +18,5 @@ content/models/mcb/
 content/materials/mcb/
 models/mcb/
 scripts/vscripts/mc_block_models.lua
+content/models/mc/sign_*
+content/materials/mc/sign_*

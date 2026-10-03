@@ -46,7 +46,10 @@ function Precache( context )
 	for _, m in ipairs({
 		"models/mc/stone.vmdl", "models/mc/cobblestone.vmdl", "models/mc/log.vmdl", "models/mc/coal_ore.vmdl",
 		"models/mc/iron_ore.vmdl", "models/mc/diamond_ore.vmdl", "models/mc/crafting_table.vmdl",
-		"models/mc/dirt.vmdl", "models/mc/sand.vmdl", "models/mc/planks.vmdl", "models/mc/spruce_planks.vmdl",
+		"models/mc/dirt.vmdl", "models/mc/sign_fletcher_name.vmdl", "models/mc/sign_fletcher_goods.vmdl",
+		"models/mc/sign_mason_name.vmdl", "models/mc/sign_mason_goods.vmdl", "models/mc/sign_librarian_name.vmdl",
+		"models/mc/sign_librarian_goods.vmdl", "models/mc/sign_toolsmith_name.vmdl", "models/mc/sign_toolsmith_goods.vmdl",
+		"models/mc/sign_secret_1.vmdl", "models/mc/sign_secret_2.vmdl", "models/mc/sand.vmdl", "models/mc/planks.vmdl", "models/mc/spruce_planks.vmdl",
 		"models/mc/red_wool.vmdl", "models/mc/white_wool.vmdl", "models/mc/blue_wool.vmdl",
 		"models/mc/crack_0.vmdl", "models/mc/crack_1.vmdl", "models/mc/crack_2.vmdl", "models/mc/crack_3.vmdl", "models/mc/crack_4.vmdl",
 		"models/mc/crack_5.vmdl", "models/mc/crack_6.vmdl", "models/mc/crack_7.vmdl", "models/mc/crack_8.vmdl", "models/mc/crack_9.vmdl",
@@ -424,6 +427,21 @@ TRADERS = {} -- { Minecraft x, z (exact), profession, facing x, z }
 -- a block Dota decides on: Minecraft gets it (queued behind that column's terrain), Dota draws it and collides with it
 -- (protected: invulnerable in Dota, so the fountain doesn't shoot the market and nobody mines it)
 MC.protected = {} -- "bx,bz" -> true
+-- the traders' signs: Dota models with their text baked in (tools/gen_signs.py has the texts). Minecraft's own signs
+-- lagged behind Dota's picture and drifted. kind: "wall" (against the block behind, facing = the way the text looks)
+-- or "stand" (rot = Minecraft's 0-15 standing rotation).
+SIGN_MODELS = { "fletcher_name", "fletcher_goods", "mason_name", "mason_goods", "librarian_name", "librarian_goods",
+	"toolsmith_name", "toolsmith_goods", "secret_1", "secret_2" }
+function MC:Facing( fx, fz ) return fx > 0 and "east" or fx < 0 and "west" or fz > 0 and "south" or "north" end
+local FACING_YAW = { south = 0, west = 90, north = 180, east = 270 } -- Minecraft's clockwise turn from the model's south
+SIGN_TURN = -90 -- the imported model's board runs along Dota y: a quarter turn puts it along the wall
+function MC:Sign( x, y, z, id, yaw, back )
+	local pos = MC:BlockPos( x, y, z )
+	local p = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/sign_" .. id .. ".vmdl",
+		origin = string.format( "%f %f %f", pos.x, pos.y, pos.z + GRID / 2 ), angles = string.format( "0 %d 0", -yaw + SIGN_TURN ) } ) -- (checked on screen)
+	p:SetModelScale( GRID / 128 )
+end
+
 function MC:PlaceBlock( x, y, z, kind )
 	MC.protected[ x .. "," .. z ] = true
 	MCBridge:Send( string.format( "block %d %d %d %s", x, y, z, kind ) )
@@ -515,6 +533,13 @@ function MC:SpawnTraders()
 		for i, prof in ipairs( st.traders ) do
 			local x, z = at( i == 1 and -1 or 1, 0 )
 			table.insert( TRADERS, { x + 0.5, z + 0.5, prof, st.F[1], st.F[2], base } )
+			-- his signs: his name on the awning's lip above him, what he sells on the counter's front
+			local yaw = FACING_YAW[ MC:Facing( st.F[1], st.F[2] ) ]
+			local du = i == 1 and -1 or 1
+			local sx2, sz2 = at( du, 3 )
+			MC:Sign( sx2, base + 3, sz2, prof .. "_name", yaw, st.F )
+			sx2, sz2 = at( du, 2 )
+			MC:Sign( sx2, base, sz2, prof .. "_goods", yaw, st.F )
 		end
 	end
 	print( string.format( "[mc] market: shop %d,%d, red stall %d,%d, blue stall %d,%d, spawn %d,%d", sx, sz, rx, rz, bx, bz, MC.spawnX, MC.spawnZ ) )
@@ -537,6 +562,17 @@ function MC:SpawnTraders()
 		keeper:AddEffects( EF_NODRAW )
 		local p, f = keeper:GetAbsOrigin(), keeper:GetForwardVector()
 		table.insert( TRADERS, { ( p.x - a.x ) / GRID, -( p.y - a.y ) / GRID, "weaponsmith", f.x, -f.y } )
+		-- his two standing signs in front of him, left and right, facing where he looks
+		local tx, tz, fx, fz = ( p.x - a.x ) / GRID, -( p.y - a.y ) / GRID, f.x, -f.y
+		local rot = math.floor( ( math.deg( math.atan2( -fx, fz ) ) % 360 ) / 22.5 + 0.5 ) % 16
+		for _, side in ipairs( { -1, 1 } ) do
+			-- (the name sign: a block nearer him and turned a quarter, by hand)
+			local w = 0.6 -- (both a block nearer him than first planned, by hand)
+			local f = side < 0 and 0.6 or 1.6 -- (and a block further back)
+			local x, z = math.floor( tx + f * fx - w * side * fz ), math.floor( tz + f * fz + w * side * fx )
+			MC:Sign( x, MC.heights[ x .. "," .. z ] or MC_FLOOR, z, side < 0 and "secret_1" or "secret_2", -( rot * 22.5 - ( side < 0 and 90 or 0 ) ) + SIGN_TURN )
+			print( string.format( "[mc] secret sign at %d %d rot %d (trader %.1f %.1f facing %.2f %.2f)", x, z, rot, tx, tz, fx, fz ) )
+		end
 	else
 		local x, z = 20, 0
 		if secretShop then x, z = MC:CellOf( secretShop:GetAbsOrigin() ) end
@@ -751,4 +787,5 @@ end
 -- each Dota script file has its own environment; share these with abilities and mc_bridge.lua
 _G.CALIBRATE = CALIBRATE
 _G.EMERALD_GOLD, _G.TRADERS, _G.XP_TABLE = EMERALD_GOLD, TRADERS, XP_TABLE
+_G.SIGN_MODELS = SIGN_MODELS
 _G.MC, _G.BLOCKS, _G.PICKAXES, _G.GRID, _G.STEVE, _G.FROM_MC, _G.MC_FLOOR = MC, BLOCKS, PICKAXES, GRID, STEVE, FROM_MC, MC_FLOOR

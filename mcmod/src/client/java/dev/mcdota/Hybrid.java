@@ -38,6 +38,7 @@ public final class Hybrid {
 
 	// render thread (chunk compile): Dota draws this one
 	public static boolean drawnByDota(BlockState s, BlockPos p) {
-		return !s.isAir() && s.getFluidState().isEmpty() && !terrain(s) && p.getY() >= surface.getOrDefault(key(p.getX(), p.getZ()), 0);
+		return !s.isAir() && s.getFluidState().isEmpty() && !terrain(s) && !s.is(net.minecraft.tags.BlockTags.ALL_SIGNS) // (signs: their text)
+			&& p.getY() >= surface.getOrDefault(key(p.getX(), p.getZ()), 0);
 	}
 }

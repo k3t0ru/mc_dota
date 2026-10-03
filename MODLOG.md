@@ -469,3 +469,13 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Striped horizon: tried far planes 6000/10000/14000/40000 (stripes in all; gone only at Dota's default ~3000, which
   also hides the far map), fow_unseen 0, ent_fire env_sky/fog Disable: no effect. Kept 40000.
 - Minecraft render distance 5 -> 13 chunks (simulation stays 5): Minecraft 59 fps, Dota 185 fps at the market.
+
+## 2026-10-03 23:00: signs, crosshair, black stripes, view 10
+- Traders' name tags replaced by signs drawn by Dota (tools/gen_signs.py: Minecraft's sign board with its text baked in,
+  Minecraft's font; local jar, gitignored). Minecraft-drawn signs lagged Dota's picture (drifted). Stalls: name on the
+  awning lip, goods on the counter (wall signs flush on the block); the secret trader: two standing signs in front.
+  Dota imports the model mirrored and turned: SIGN_TURN -90 and yaw negated (checked on screen).
+- Crosshair: Minecraft draws it inverting what's under it (magenta -> green): plain GUI sprite (CrosshairMixin).
+- Black stripes far off while chunks load: just-built chunks draw dark magenta before their light is computed; the overlay
+  keys out dark magenta too (hole() tolerance). Render distance 13 -> 10 (Dota had dropped to ~60 fps).
+- Minecraft fps cap: framerateLimit = mcdota.fps (MC_FPS 60 in env.sh), Dota fps_max 0.

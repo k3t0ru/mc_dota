@@ -438,7 +438,6 @@ public final class Progress {
 	}
 
 	private static int ticks;
-	private static final double NAME_Y = 2.3; // name tags this far above a trader's feet
 
 	// server thread, every tick: arrows' flight time; every 2 s: the traders stand on the ground at their spots
 	public static void tick(MinecraftServer server) {
@@ -472,18 +471,6 @@ public final class Progress {
 					tx, y, tz, tag, t.name, t.profession, String.join(",", t.offers)));
 			} else if (Math.abs(e.getY() - y) > 0.1 || Math.abs(e.getX() - tx) > 0.1 || Math.abs(e.getZ() - tz) > 0.1) {
 				e.teleportTo(tx, y, tz);
-			}
-			// his name over his head like a Minecraft name tag (an invisible mob's own tag isn't drawn): a text display,
-			// clear background (a dark one would show as a purple box: the picture's background is magenta)
-			String nameTag = tag + "_name";
-			Entity n = null;
-			for (Entity c : level.getAllEntities()) if (c.getTags().contains(nameTag)) { n = c; break; }
-			if (n == null) {
-				Sync.run(server, String.format(Locale.ROOT, "summon minecraft:text_display %.2f %.2f %.2f {billboard:\"center\","
-					+ "background:0,shadow:1b,Tags:[\"mcdota_trader\",\"%s\"],text:\"%s\"}", tx, y + NAME_Y, tz, nameTag,
-					t.name.replaceAll(" \\(.*", ""))); // (the toolsmith's repair hint stays in his trading screen's title: too wide)
-			} else if (Math.abs(n.getY() - y - NAME_Y) > 0.1 || Math.abs(n.getX() - tx) > 0.1 || Math.abs(n.getZ() - tz) > 0.1) {
-				n.teleportTo(tx, y + NAME_Y, tz);
 			}
 			// a block in the trader's own space (a barrier, a stall part) swallows the clicks meant for him
 			for (int dy = 0; dy < 2; dy++) { // his body (0.6 and 1.6 above the feet: a slab under them is fine)
