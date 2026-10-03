@@ -24,7 +24,7 @@ SIGNS = {  # id -> kind, 4 lines (keep in step with SIGNS in addon_game_mode.lua
 	"librarian_goods": ("wall", ["Зачарования", "книги, столы", "", ""]),
 	"toolsmith_name": ("wall", ["", "Инструменты", "", ""]),
 	"toolsmith_goods": ("wall", ["Кузня", "Ремонт:", "присесть + ПКМ", ""]),
-	"secret_1": ("stand", ["", "Тайная", "лавка", ""]),
+	"secret_1": ("stand", ["", "Сикрет", "шоп", ""]),
 	"secret_2": ("stand", ["Алмазы", "Незерит", "Элитры", ""]),
 }
 
