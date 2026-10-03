@@ -39,8 +39,12 @@ public class AttackMixin {
 			dmg += ench * s;
 			// the sweep's splash: 1 + sweeping ratio x attack damage (vanilla), Lua deals it around the target
 			float sweepDmg = sweep ? 1f + (float) sp.getAttributeValue(Attributes.SWEEPING_DAMAGE_RATIO) * base : 0f;
-			// and the full swing's damage (no cooldown, no crit): Lua's damage curve goes by it (MeleeScale)
-			dev.mcdota.Sync.out(String.format(java.util.Locale.ROOT, "swing %.2f %d %.2f %.2f", dmg, crit ? 1 : 0, sweepDmg, base + ench));
+			// and the full swing's damage (no cooldown, no crit): Lua's damage curve goes by it (MeleeScale);
+			// Fire Aspect's burn (4 s a level, as in vanilla) for the target's stand-in
+			int fire = 0;
+			for (var e : sp.getMainHandItem().getEnchantments().entrySet())
+				if (e.getKey().is(net.minecraft.world.item.enchantment.Enchantments.FIRE_ASPECT)) fire = 4 * e.getIntValue();
+			dev.mcdota.Sync.out(String.format(java.util.Locale.ROOT, "swing %.2f %d %.2f %.2f %d", dmg, crit ? 1 : 0, sweepDmg, base + ench, fire));
 		});
 	}
 }

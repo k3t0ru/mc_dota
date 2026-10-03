@@ -604,7 +604,8 @@ function MC:LootFor( dead )
 	elseif name:find( "roshan" ) then -- the Aegis: a totem, plus the rare stuff
 		items = { "totem_of_undying", 1, "netherite_ingot", 1, "diamond", 3 }
 	elseif dead:IsNeutralUnitType() or dead:GetTeamNumber() == DOTA_TEAM_NEUTRALS then
-		items = { "cooked_beef", RandomInt( 1, 2 ) }
+		-- raw meat, cooked if it died burning (as in Minecraft)
+		items = { ( dead.mc_burnUntil or 0 ) > GameRules:GetGameTime() and "cooked_beef" or "beef", RandomInt( 1, 2 ) }
 		for _, l in ipairs( NEUTRAL_LOOT ) do
 			if name:find( l[1] ) then table.insert( items, l[2] ) table.insert( items, l[3] ) break end
 		end
@@ -713,6 +714,16 @@ function MC:OnKilled( e )
 		end
 		if killer and killer.mc_player and dead and not dead:IsNull() and dead:GetTeamNumber() ~= killer:GetTeamNumber() then -- denies give nothing
 			local loot = MC:LootFor( dead )
+			if dead:GetUnitName():find( "roshan" ) then -- Steve's Roshan: Minecraft's totem only, no Aegis (or cheese) in Dota
+				local at = dead:GetAbsOrigin()
+				GameRules:GetGameModeEntity():SetContextThink( "mc_noaegis", function()
+					for _, d in ipairs( Entities:FindAllByClassnameWithin( "dota_item_drop", at, 800 ) ) do
+						local it = d:GetContainedItem()
+						if it and not it:IsNull() then it:RemoveSelf() end
+						d:RemoveSelf()
+					end
+				end, 0.1 )
+			end
 			print( "[mc] Steve killed " .. dead:GetUnitName() .. ": " .. loot )
 			MCBridge:Send( loot )
 			local emeralds = tonumber( loot:match( "^loot (%d+)" ) ) or 0

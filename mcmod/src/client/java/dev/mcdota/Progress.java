@@ -105,6 +105,16 @@ public final class Progress {
 		Sync.run(server, "xp set @p " + (need > 0 ? Math.min(points - 1, (int) ((long) xp * points / need)) : 0) + " points", false);
 	}
 
+	// server thread, twice a second in our fountain's aura: 5% health and a drumstick back each time (full in ~10 s)
+	public static void fountain(MinecraftServer server) {
+		if (dead || server.getPlayerList().getPlayers().isEmpty()) return;
+		ServerPlayer p = server.getPlayerList().getPlayers().get(0);
+		p.heal(p.getMaxHealth() * 0.05f);
+		var food = p.getFoodData();
+		food.setFoodLevel(Math.min(20, food.getFoodLevel() + 1));
+		food.setSaturation(Math.min(food.getFoodLevel(), food.getSaturationLevel() + 1));
+	}
+
 	// --- Dota's hits ----------------------------------------------------------------------------------------------
 	// A raised shield facing the attacker's stand-in (within 90 degrees) blocks the whole hit and takes the wear, like a
 	// melee hit in Minecraft; the damage otherwise comes from that stand-in (armour applies as usual).
@@ -147,7 +157,7 @@ public final class Progress {
 
 	// server thread: a swing Dota landed: Minecraft's crit / sweep effects on the target's stand-in (Minecraft only
 	// shows them when its own crosshair hit the stand-in, so they were missing now and then)
-	public static void hitFx(MinecraftServer server, String kind, String id) {
+	public static void hitFx(MinecraftServer server, String kind, String id, int seconds) {
 		Entity e = null;
 		for (Entity c : server.overworld().getAllEntities()) if (c.getTags().contains("dota_" + id)) { e = c; break; }
 		if (e == null) return;
@@ -162,6 +172,7 @@ public final class Progress {
 				Sync.run(server, "particle minecraft:sweep_attack " + at + " 0 0 0 0 1 force", false);
 				Sync.run(server, "playsound minecraft:entity.player.attack.sweep player @a " + at + " 1 1", false);
 			}
+			case "burn" -> e.igniteForSeconds(seconds); // Fire Aspect: Minecraft's fire burns the Dota unit (fire hits)
 			default -> Sync.run(server, "playsound minecraft:entity.player.attack.strong player @a " + at + " 1 1", false);
 		}
 	}
@@ -172,6 +183,7 @@ public final class Progress {
 
 	// server thread: the Minecraft player died
 	public static void died(ServerPlayer player) {
+		org.slf4j.LoggerFactory.getLogger("mcdota").info("death: {} (dead {})", "died", dead);
 		MinecraftServer server = player.level().getServer();
 		int have = player.getInventory().countItem(Items.EMERALD);
 		int lose = Math.min(have, 2 + level);
@@ -182,6 +194,7 @@ public final class Progress {
 
 	// server thread: back in the world after Minecraft's instant respawn: frozen until Dota's hero is back
 	public static void afterRespawn(MinecraftServer server) {
+		org.slf4j.LoggerFactory.getLogger("mcdota").info("death: {} (dead {})", "afterRespawn", dead);
 		attributes(server);
 		if (!dead) return;
 		for (String c : new String[] { "gamemode adventure @p", "attribute @p minecraft:movement_speed base set 0",
@@ -195,6 +208,7 @@ public final class Progress {
 	private static int deadLost;
 
 	public static void deadFor(MinecraftServer server, int seconds, int lost) {
+		org.slf4j.LoggerFactory.getLogger("mcdota").info("death: {} (dead {})", "deadFor", dead);
 		deadUntil = System.currentTimeMillis() + seconds * 1000L;
 		deadLost = lost;
 		deadTitle(server);
@@ -235,6 +249,7 @@ public final class Progress {
 
 	// server thread: Dota respawned Steve's hero
 	public static void respawn(MinecraftServer server) {
+		org.slf4j.LoggerFactory.getLogger("mcdota").info("death: {} (dead {})", "respawn", dead);
 		dead = false;
 		deadUntil = 0;
 		for (String c : new String[] { "gamemode survival @p", "attribute @p minecraft:movement_speed base set 0.1",
@@ -286,6 +301,7 @@ public final class Progress {
 
 	// server thread: a player used an entity; sneak + right click on the toolsmith repairs the held item
 	public static InteractionResult interact(Player player, Entity target) {
+		if (!player.level().isClientSide() && target.getTags().contains("mcdota_trader")) sellOffers(player, target);
 		if (player.level().isClientSide() || !player.isShiftKeyDown() || !target.getTags().contains("mcdota_trader_toolsmith"))
 			return InteractionResult.PASS;
 		MinecraftServer server = player.level().getServer();
@@ -317,6 +333,67 @@ public final class Progress {
 	public static void trader(double x, double z, String profession, double y) { spots.put(profession, new double[] { x, z, y }); }
 
 	private static final List<Trader> TRADERS = new ArrayList<>();
+	// emeralds for one of each item the shops sell (buy() fills it), plus what only drops
+	private static final Map<String, Double> PRICE = new HashMap<>(Map.of(
+		"rotten_flesh", 1 / 8.0, "beef", 1 / 4.0, "porkchop", 1 / 4.0, "totem_of_undying", 40.0, "emerald", 0.0));
+
+	// --- selling: any trader buys anything worth something, not a list of fixed offers --------------------------
+	// When the trading screen opens, the trader's own offers get one more for each kind of thing in the player's
+	// inventory: worth an emerald or more -> one for that many emeralds (tools, weapons and armour by what's left of
+	// them, each one on its own), less -> as many as make one emerald. A trader pays half the price, like Dota.
+	public static void sellOffers(Player player, Entity target) {
+		if (!(target instanceof net.minecraft.world.entity.npc.villager.AbstractVillager v)) return;
+		Trader t = null;
+		for (Trader c : TRADERS) if (target.getTags().contains("mcdota_trader_" + c.profession)) t = c;
+		if (t == null) return;
+		var offers = v.getOffers();
+		while (offers.size() > t.offers.size()) offers.remove(offers.size() - 1);
+		java.util.Set<String> seen = new java.util.HashSet<>();
+		var inv = player.getInventory();
+		for (int i = 0; i < inv.getContainerSize() && offers.size() < t.offers.size() + 27; i++) {
+			ItemStack st = inv.getItem(i);
+			if (st.isEmpty()) continue;
+			double w = worth(st);
+			if (w <= 0) continue;
+			boolean single = st.isDamageableItem() || levels(st) > 0; // its own price: the exact one
+			net.minecraft.world.item.trading.ItemCost cost;
+			int emeralds;
+			String key = BuiltInRegistries.ITEM.getKey(st.getItem()).getPath();
+			if (w >= 1) {
+				emeralds = (int) Math.floor(w);
+				cost = single ? new net.minecraft.world.item.trading.ItemCost(st.getItemHolder(), 1,
+					net.minecraft.core.component.DataComponentExactPredicate.someOf(st.getComponents(),
+						net.minecraft.core.component.DataComponents.DAMAGE, net.minecraft.core.component.DataComponents.ENCHANTMENTS,
+						net.minecraft.core.component.DataComponents.STORED_ENCHANTMENTS))
+					: new net.minecraft.world.item.trading.ItemCost(st.getItem(), 1);
+				if (single) key += "@" + st.getDamageValue() + st.getComponents().get(net.minecraft.core.component.DataComponents.ENCHANTMENTS)
+					+ st.getComponents().get(net.minecraft.core.component.DataComponents.STORED_ENCHANTMENTS);
+			} else {
+				int n = (int) Math.ceil(1 / w - 1e-9);
+				if (n > st.getMaxStackSize()) continue;
+				emeralds = 1;
+				cost = new net.minecraft.world.item.trading.ItemCost(st.getItem(), n);
+			}
+			if (!seen.add(key)) continue;
+			offers.add(new net.minecraft.world.item.trading.MerchantOffer(cost, java.util.Optional.empty(),
+				new ItemStack(Items.EMERALD, emeralds), single ? 1 : 9999, 0, 0f));
+		}
+	}
+
+	private static int levels(ItemStack st) {
+		int n = 0;
+		for (var e : net.minecraft.world.item.enchantment.EnchantmentHelper.getEnchantmentsForCrafting(st).entrySet()) n += e.getIntValue();
+		return n;
+	}
+
+	// what a trader pays for one: half its price; gear by its durability left; enchantments ~4 emeralds a level
+	private static double worth(ItemStack st) {
+		String id = BuiltInRegistries.ITEM.getKey(st.getItem()).getPath();
+		Integer gear = VALUE.get(id);
+		double v = gear != null ? gear * (st.isDamageableItem() ? 1.0 - (double) st.getDamageValue() / st.getMaxDamage() : 1)
+			: PRICE.getOrDefault(id, 0.0);
+		return (v + 4 * levels(st)) / 2;
+	}
 
 	private static String item(String id, int count, String components) {
 		return "{id:\"minecraft:" + id + "\",count:" + count + (components == null ? "" : ",components:{" + components + "}") + "}";
@@ -327,14 +404,11 @@ public final class Progress {
 			+ ",maxUses:9999,rewardExp:0b,xp:0,priceMultiplier:0f}";
 	}
 
-	// the trader buys it back: count of the item -> emeralds (about half its price, like selling items in Dota)
-	private static String sell(String id, int count, int emeralds) {
-		return "{buy:" + item(id, count, null) + ",sell:" + item("emerald", emeralds, null)
-			+ ",maxUses:9999,rewardExp:0b,xp:0,priceMultiplier:0f}";
+	private static String buy(int emeralds, String id) { return buy(emeralds, id, 1); }
+	private static String buy(int emeralds, String id, int count) {
+		PRICE.merge(id, (double) emeralds / count, Math::min);
+		return offer(emeralds, id, count, null);
 	}
-
-	private static String buy(int emeralds, String id) { return offer(emeralds, id, 1, null); }
-	private static String buy(int emeralds, String id, int count) { return offer(emeralds, id, count, null); }
 	private static String book(int emeralds, String ench, int lvl) {
 		return offer(emeralds, "enchanted_book", 1, "\"minecraft:stored_enchantments\":{\"minecraft:" + ench + "\":" + lvl + "}");
 	}
@@ -343,30 +417,24 @@ public final class Progress {
 		// income: a lane creep ~1-2 emeralds, a neutral camp ~4-8 plus materials, a hero 6-17, a tower 10 (EMERALD_GOLD in Lua)
 		// craft costs that follow: iron sword 4, iron armour 46, diamond sword 8, diamond armour 96, netherite +25 a piece
 		TRADERS.add(new Trader("Fletcher", "fletcher", List.of( // basic shop: the everyday materials
-			buy(1, "oak_log", 8), buy(1, "cobblestone", 32), buy(2, "string", 4), buy(1, "flint", 4), buy(1, "feather", 8),
-			buy(2, "leather", 4), buy(2, "iron_ingot"), buy(1, "tripwire_hook"), buy(2, "gunpowder", 4), buy(1, "paper", 6),
-			buy(1, "arrow", 16), buy(1, "bread", 4), buy(2, "cooked_beef", 4), buy(6, "tnt"), buy(2, "flint_and_steel"),
-			buy(2, "water_bucket"), buy(4, "lava_bucket"), buy(2, "clock"), // the clock shows Dota's game time (ClockHud)
-			// buys back what the jungle drops
-			sell("feather", 16, 1), sell("leather", 4, 1), sell("string", 8, 1), sell("flint", 8, 1), sell("gunpowder", 4, 1),
-			sell("iron_ingot", 1, 1), sell("oak_log", 16, 1), sell("cooked_beef", 8, 1), sell("rotten_flesh", 16, 1))));
+			buy(1, "oak_log", 8), buy(1, "cobblestone", 32), buy(1, "string", 2), buy(1, "flint", 4), buy(1, "feather", 8),
+			buy(1, "leather", 2), buy(2, "iron_ingot"), buy(1, "tripwire_hook"), buy(1, "gunpowder", 2), buy(1, "paper", 6),
+			buy(1, "arrow", 16), buy(1, "bread", 4), buy(1, "cooked_beef", 2), buy(6, "tnt"), buy(2, "flint_and_steel"),
+			buy(2, "clock")))); // the clock shows Dota's game time (ClockHud)
 		TRADERS.add(new Trader("Librarian", "librarian", List.of( // basic shop: enchanting
 			buy(12, "enchanting_table"), buy(2, "bookshelf"), buy(1, "lapis_lazuli", 8), buy(1, "book", 3), buy(8, "anvil"),
-			buy(2, "grindstone"), book(15, "sharpness", 3), book(15, "protection", 3), book(12, "power", 3),
-			book(10, "quick_charge", 2), book(10, "multishot", 1), book(8, "piercing", 3), book(12, "fire_aspect", 2),
+			book(15, "sharpness", 3), book(15, "protection", 3), book(12, "power", 3), book(10, "quick_charge", 2),
+			book(10, "multishot", 1), book(8, "piercing", 3), book(12, "fire_aspect", 2), book(12, "flame", 1),
 			book(8, "unbreaking", 3), book(6, "feather_falling", 4))));
 		TRADERS.add(new Trader("Toolsmith (sneak + right click: repair)", "toolsmith", List.of( // basic shop: smithing
-			buy(1, "crafting_table"), buy(3, "smithing_table"), buy(7, "iron_ingot", 4), buy(3, "shield"))));
-		TRADERS.add(new Trader("Mason", "mason", List.of( // basic shop: building blocks (nothing to mine on Dota's map);
-			// only blocks Dota has models for (MODELS in addon_game_mode.lua), anything else would show up as cobblestone there
+			buy(1, "crafting_table"), buy(3, "smithing_table"), buy(3, "shield"))));
+		TRADERS.add(new Trader("Mason", "mason", List.of( // basic shop: building blocks (nothing to mine on Dota's map)
 			buy(1, "cobblestone", 64), buy(1, "stone", 48), buy(1, "oak_planks", 64), buy(1, "oak_log", 16), buy(1, "dirt", 64),
 			buy(1, "sand", 64))));
 		TRADERS.add(new Trader("Secret shop", "weaponsmith", List.of( // far from the spawn: the rare stuff
-			buy(4, "diamond"), buy(15, "diamond", 4), buy(20, "netherite_ingot"), buy(5, "netherite_upgrade_smithing_template"),
-			buy(60, "elytra"), buy(2, "firework_rocket", 8), buy(8, "golden_apple"), buy(3, "ender_pearl", 2),
-			book(25, "mending", 1), book(40, "sharpness", 5), book(30, "protection", 4),
-			book(30, "power", 5),
-			sell("diamond", 1, 2), sell("netherite_ingot", 1, 10), sell("golden_apple", 1, 4))));
+			buy(4, "diamond"), buy(20, "netherite_ingot"), buy(5, "netherite_upgrade_smithing_template"),
+			buy(60, "elytra"), buy(1, "firework_rocket", 4), buy(8, "golden_apple"), buy(2, "ender_pearl"),
+			book(25, "mending", 1), book(40, "sharpness", 5), book(30, "protection", 4), book(30, "power", 5))));
 	}
 
 	private static int ticks;

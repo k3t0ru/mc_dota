@@ -63,6 +63,7 @@ public class McDotaClient implements ClientModInitializer {
 		});
 		net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> Progress.entityLoaded(entity));
 		net.fabricmc.fabric.api.event.player.UseEntityCallback.EVENT.register((player, level, hand, entity, hit) -> Progress.interact(player, entity));
+		net.fabricmc.fabric.api.event.player.UseBlockCallback.EVENT.register(Sync::placeOnStep);
 		// no digging into the ground (Hybrid.ground): not even the mining cracks start
 		net.fabricmc.fabric.api.event.player.AttackBlockCallback.EVENT.register((player, level, hand, pos, dir) ->
 			Hybrid.ground(level.getBlockState(pos), pos) && !player.isCreative() ? net.minecraft.world.InteractionResult.FAIL : net.minecraft.world.InteractionResult.PASS);

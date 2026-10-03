@@ -60,6 +60,13 @@ function MCBridge:Tick()
 		end
 	end
 	MC:BossBar( self.steve )
+	-- our fountain heals Steve (Minecraft owns his health and hunger): twice a second while he is in its aura
+	local s = self.steve
+	if s and not s:IsNull() and s:IsAlive() and s:HasModifier( "modifier_fountain_aura_buff" )
+		and GameRules:GetGameTime() - ( self.fountainAt or 0 ) >= 0.5 then
+		self.fountainAt = GameRules:GetGameTime()
+		self:Send( "fountain" )
+	end
 	-- Dota's clock for Minecraft's (shown while Steve carries a clock: ClockHud)
 	local t = math.floor( GameRules:GetDOTATime( false, true ) )
 	if t ~= self.sentTime then
@@ -102,30 +109,48 @@ function MCBridge:Apply( body, stale )
 			self:HighGround( tonumber( x ), tonumber( z ), tonumber( my ) )
 		end
 
-		local id, amount, direct = line:match( "^hit (%d+) (%S+) ?(%S*)" ) -- arrows, sweeps: through the stand-ins
+		local id, amount, direct, fire = line:match( "^hit (%d+) (%S+) ?(%S*) ?(%S*)" ) -- arrows, sweeps: through the stand-ins
+		if id and fire == "fire" then -- burning: a neutral dying now drops cooked meat
+			local u = EntIndexToHScript( tonumber( id ) )
+			if u and not u:IsNull() then u.mc_burnUntil = GameRules:GetGameTime() + 1.5 end
+		end
 		-- (no splash right after a swing at an ally: a deny is a single hit, the sword's sweep must not hit the enemies around)
 		local denying = GameRules:GetGameTime() - ( self.denySwingAt or -1 ) < 0.4
 		if id and not ( denying and direct == "0" ) then self:HitUnit( EntIndexToHScript( tonumber( id ) ), tonumber( amount ), direct ~= "0" ) end
 		local dev = line:match( "^dev (.+)" ) -- testing (bridge /dota): a console command, only with cheats on
 		if dev and ( GameRules:IsCheatMode() or IsInToolsMode() ) then
-			local name, dist = dev:match( "^testunit (%S+) (%S+)" ) -- a stunned unit in front of Steve, to aim at
+			local name, dist, free = dev:match( "^testunit (%S+) (%S+) ?(%S*)" ) -- a stunned unit in front of Steve, to aim at ("free": not stunned)
 			if name and self.steve then
 				local team = name:find( "goodguys" ) and DOTA_TEAM_GOODGUYS or DOTA_TEAM_BADGUYS
 				local u = CreateUnitByName( name, self.steve:GetAbsOrigin() + self.steve:GetForwardVector() * tonumber( dist ), false, nil, nil, team )
-				u:AddNewModifier( u, nil, "modifier_stunned", { duration = 60 } )
+				if free ~= "free" then u:AddNewModifier( u, nil, "modifier_stunned", { duration = 60 } ) end
 				print( string.format( "[mc] test unit %s #%d hp %d at %s (steve %s)", name, u:entindex(), u:GetHealth(), tostring( u:GetAbsOrigin() ), tostring( self.steve:GetAbsOrigin() ) ) )
+			elseif dev == "dumpedge" then -- entities with models out at the map's edge (what Steve sees on the horizon)
+				local e, n, seen = Entities:First(), 0, {}
+				while e and n < 60 do
+					local o = e:GetAbsOrigin()
+					local m = e.GetModelName and e:GetModelName() or ""
+					if m ~= "" and ( math.abs( o.x ) > 7000 or math.abs( o.y ) > 7000 ) and not seen[ m ] then
+						seen[ m ] = true
+						n = n + 1
+						print( string.format( "[mc] edge %s %s %d %d %d", e:GetClassname(), m, o.x, o.y, o.z ) )
+					end
+					e = Entities:Next( e )
+				end
+			elseif dev:match( "^client " ) then -- the host's client console (camera/render settings live there)
+				SendToConsole( dev:sub( 8 ) )
 			else
 				SendToServerConsole( dev )
 			end
 		end
-		local swing, crit, sweep, full = line:match( "^swing (%S+) ?(%S*) ?(%S*) ?(%S*)" ) -- a melee swing: whatever Dota highlights under the crosshair
+		local swing, crit, sweep, full, fire = line:match( "^swing (%S+) ?(%S*) ?(%S*) ?(%S*) ?(%S*)" ) -- a melee swing: whatever Dota highlights under the crosshair
 		if swing and self.aim and not self.aim:IsNull() and GameRules:GetGameTime() - ( self.aimAt or 0 ) <= 0.6
 			and self.steve and self.steve:IsAlive() then
 			local reach = MELEE_REACH * GRID + self.aim:GetHullRadius()
 			local d = ( self.aim:GetAbsOrigin() - self.steve:GetAbsOrigin() ):Length2D()
 			if self.aim:GetTeamNumber() == self.steve:GetTeamNumber() then self.denySwingAt = GameRules:GetGameTime() end
 			local k = MeleeScale( tonumber( full ) )
-			if d <= reach then self:Swing( self.aim, tonumber( swing ) * k, crit == "1", ( tonumber( sweep ) or 0 ) * k ) end
+			if d <= reach then self:Swing( self.aim, tonumber( swing ) * k, crit == "1", ( tonumber( sweep ) or 0 ) * k, tonumber( fire ) or 0 ) end
 		end
 
 		local bx, by, bz, kind, solid, state = line:match( "^mcblock (%S+) (%S+) (%S+) (%S+) ?(%S*) ?(%S*)" )
@@ -177,10 +202,14 @@ end
 MELEE_REACH = 3.5 -- blocks from Steve to the target's edge (Minecraft's reach is 3)
 -- a melee swing Dota landed: the hit, Minecraft's crit/sweep effects on it, and the sweep's splash around it (enemies
 -- within a block of the target; never during a deny)
-function MCBridge:Swing( target, amount, crit, sweep )
+function MCBridge:Swing( target, amount, crit, sweep, fire )
 	local denying = self.steve and target:GetTeamNumber() == self.steve:GetTeamNumber()
 	self:HitUnit( target, amount, true )
 	self:Send( string.format( "fx %s %d", crit and "crit" or "hit", target:entindex() ) )
+	if ( fire or 0 ) > 0 and not denying and not target:IsNull() and target:IsAlive() then -- Fire Aspect
+		self:Send( string.format( "fx burn %d %d", target:entindex(), fire ) )
+		target.mc_burnUntil = GameRules:GetGameTime() + fire
+	end
 	if sweep > 0 and not denying and self.steve then
 		local around = FindUnitsInRadius( self.steve:GetTeamNumber(), target:GetAbsOrigin(), nil, GRID + target:GetHullRadius(),
 			DOTA_UNIT_TARGET_TEAM_ENEMY, DOTA_UNIT_TARGET_HERO + DOTA_UNIT_TARGET_BASIC, DOTA_UNIT_TARGET_FLAG_NONE, FIND_ANY_ORDER, false )

@@ -37,6 +37,10 @@ public final class MouseWheel {
 					pending += (short) (info.mouseData >> 16) / 120;
 					return new WinDef.LRESULT(1); // swallowed
 				}
+				if (code >= 0 && wParam.intValue() == 0x020A && inMenu()) { // a menu (the trading list): it scrolls
+					menuScroll += (short) (info.mouseData >> 16) / 120.0;
+					return new WinDef.LRESULT(1);
+				}
 				if (code >= 0 && wParam.intValue() == 0x0200 && capture && System.nanoTime() - captureAt < 250_000_000L
 					&& McDotaClient.mcHwnd != null && McDotaClient.mcHwnd.equals(u.GetForegroundWindow())) { // WM_MOUSEMOVE, cursor not moved yet
 					WinDef.POINT at = new WinDef.POINT();
@@ -58,6 +62,13 @@ public final class MouseWheel {
 		t.start();
 	}
 
+	private static volatile double menuScroll;
+
+	private static boolean inMenu() {
+		Minecraft mc = Minecraft.getInstance();
+		return mc.screen != null && McDotaClient.mcHwnd != null && McDotaClient.mcHwnd.equals(User32.INSTANCE.GetForegroundWindow());
+	}
+
 	private static boolean playing() {
 		Minecraft mc = Minecraft.getInstance();
 		return mc.player != null && mc.screen == null && mc.isWindowActive();
@@ -65,6 +76,11 @@ public final class MouseWheel {
 
 	// client thread, every tick: like Minecraft's own scroll, wheel up = the previous slot
 	public static void tick(Minecraft mc) {
+		double m = menuScroll;
+		if (m != 0) {
+			menuScroll -= m;
+			((dev.mcdota.mixin.MouseHandlerInvoker) mc.mouseHandler).mcdota$scroll(mc.getWindow().handle(), 0, m);
+		}
 		int n = pending;
 		if (n == 0 || mc.player == null) return;
 		pending -= n;

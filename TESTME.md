@@ -2,6 +2,17 @@
 
 Things Claude could not check alone (they need a real person playing), newest first. Strike them out or tell Claude.
 
+## 2026-10-03 (20:30)
+- [ ] **Whole map visible** (fog of war hides units as in Dota). The striped dark wall on the horizon is Dota's map edge.
+- [ ] **No invisible walls** at the Dire T4s / Dire top T1-T2 (I walked through x=128 / z=-128 where it was).
+- [ ] **Selling**: open any trader -> offers to buy what you carry (gear by durability). Mouse wheel scrolls the list.
+- [ ] **Prices**: everything one at a time (except 1-emerald stacks). No buckets, no grindstone.
+- [ ] **Fountain** heals and feeds you quickly. **Roshan**: only the totem, no Aegis in Dota.
+- [ ] **Fire Aspect** sword sets creeps on fire; neutrals drop raw beef, cooked if they died burning.
+- [ ] **Pillar up** on a half-step (jump + place under you). Sharper block textures. No zombie flashes.
+- [ ] After dying/respawning, do creeps and towers attack you again? (couldn't reproduce)
+- [ ] Traders/stalls jittering up and down while walking: still there?
+
 ## 2026-10-03 (19:25)
 - [ ] **Sword damage**: wooden ~55, iron ~147, diamond ~214, netherite ~300, netherite + Sharpness V ~650 per full
       swing (crits x1.5). Roshan with a maxed netherite sword should take ~10 s. Tell me if it feels off.

@@ -10,4 +10,5 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 public interface MouseHandlerInvoker {
 	@Invoker("onMove") void mcdota$move(long window, double x, double y);
 	@Invoker("onButton") void mcdota$button(long window, MouseButtonInfo button, int action);
+	@Invoker("onScroll") void mcdota$scroll(long window, double dx, double dy);
 }

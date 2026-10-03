@@ -7,6 +7,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.net.URI;
@@ -82,6 +83,31 @@ public final class Sync {
 				finally { applying = false; }
 			});
 		return false;
+	}
+
+	// A block put onto a half step's top goes straight into the slab's place (what halfStep does afterwards anyway), so
+	// it also works with Steve standing on the step: jumping and placing under himself there was impossible (the space
+	// above the slab is his), now the block takes the slab's place and lifts him onto it.
+	public static net.minecraft.world.InteractionResult placeOnStep(net.minecraft.world.entity.player.Player player,
+			net.minecraft.world.level.Level level, net.minecraft.world.InteractionHand hand, net.minecraft.world.phys.BlockHitResult hit) {
+		BlockPos pos = hit.getBlockPos();
+		var pass = net.minecraft.world.InteractionResult.PASS;
+		if (hit.getDirection() != net.minecraft.core.Direction.UP || player.isSpectator()
+			|| !level.getBlockState(pos).is(net.minecraft.world.level.block.Blocks.MUD_BRICK_SLAB)
+			|| !Hybrid.slabAt(pos.getX(), pos.getZ()) || pos.getY() != Hybrid.surfaceAt(pos.getX(), pos.getZ())) return pass;
+		ItemStack st = player.getItemInHand(hand);
+		if (!(st.getItem() instanceof net.minecraft.world.item.BlockItem bi)) return pass;
+		BlockState s = bi.getBlock().defaultBlockState();
+		if (!s.isCollisionShapeFullBlock(level, pos)) return pass;
+		if (!level.isClientSide()) {
+			level.setBlockAndUpdate(pos, s);
+			level.playSound(null, pos, s.getSoundType().getPlaceSound(), net.minecraft.sounds.SoundSource.BLOCKS, 1, 0.8f);
+			if (!player.getAbilities().instabuild) st.shrink(1);
+			if (player.getBoundingBox().intersects(new net.minecraft.world.phys.AABB(pos)) || player.getY() < pos.getY() + 1
+				&& player.getBoundingBox().intersects(new net.minecraft.world.phys.AABB(pos.above())))
+				player.teleportTo(player.getX(), pos.getY() + 1, player.getZ());
+		}
+		return net.minecraft.world.InteractionResult.SUCCESS;
 	}
 
 	// blocks Dota built (the market, the fountain's barriers): explosions leave them alone (ExplosionMixin)
@@ -166,6 +192,7 @@ public final class Sync {
 	// 100+ ms whenever the player walked into new chunks on the big map (the picture twitched while walking)
 	private static final long BUDGET_NANOS = 6_000_000;
 	private static long lastReport;
+	private static int sweep;
 
 	private static void column(MinecraftServer server, int x, int z, Runnable build) {
 		Build b = new Build(x, z, build);
@@ -194,6 +221,14 @@ public final class Sync {
 			lastReport = System.currentTimeMillis();
 			org.slf4j.LoggerFactory.getLogger("mcdota").info("terrain: {} columns ready, {} chunks waiting to load; server tick {} ms",
 				readyCount, pending.size(), String.format(Locale.ROOT, "%.1f", server.getCurrentSmoothedTickTime()));
+		}
+		// chunks whose load event never came (they were already loaded, or loaded part-way when their columns arrived):
+		// the far half of the map stayed unbuilt, Minecraft's flat floor stood as an invisible wall above Dota's ground
+		if (++sweep % 40 == 0 && !pending.isEmpty()) {
+			var level = server.overworld();
+			for (Long k : new java.util.ArrayList<>(pending.keySet()))
+				if (level.hasChunk(net.minecraft.world.level.ChunkPos.getX(k), net.minecraft.world.level.ChunkPos.getZ(k)))
+					pending.remove(k).forEach(Sync::ready);
 		}
 		if (readyCount == 0) return;
 		var players = server.getPlayerList().getPlayers();
@@ -274,11 +309,12 @@ public final class Sync {
 					case "dead" -> Progress.deadFor(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]));
 					case "respawn" -> Progress.respawn(server);
 					case "time" -> ClockHud.set(Integer.parseInt(p[1]), p[2].equals("1"));
+					case "fountain" -> Progress.fountain(server);
 					case "spawnat" -> Progress.spawnAt(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
 					case "lvl" -> Progress.level(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
 					case "delay" -> Overlay.dotaDelay(Integer.parseInt(p[1]));
 					case "boss" -> Progress.boss(server, p);
-					case "fx" -> Progress.hitFx(server, p[1], p[2]);
+					case "fx" -> Progress.hitFx(server, p[1], p[2], p.length > 3 ? Integer.parseInt(p[3]) : 0);
 					case "mcfov" -> { // Dota's measured vertical field of view: Minecraft's matches it
 						int fov = (int) Math.round(Double.parseDouble(p[1]));
 						Minecraft mc = Minecraft.getInstance();
@@ -330,7 +366,7 @@ public final class Sync {
 						// direct = the swing's own target or a projectile (a sweep's splash isn't: it never touches allies)
 						var src = le.getLastDamageSource();
 						if (src != null && src.getEntity() == null && burning(src)) // fire/lava a player set: splash damage
-							out.add(String.format(Locale.ROOT, "hit %s %.2f 0", s.getKey(), (HERO_HP - le.getHealth()) * fireMult(src)));
+							out.add(String.format(Locale.ROOT, "hit %s %.2f 0 fire", s.getKey(), (HERO_HP - le.getHealth()) * fireMult(src))); // (burning: cooked loot)
 						if (src != null && src.getEntity() instanceof net.minecraft.world.entity.player.Player pl
 							&& !(src.getDirectEntity() == pl && pl.getLastHurtMob() != le)) { // that's Minecraft's own sweep: Lua sweeps (swing)
 							boolean projectile = src.getDirectEntity() instanceof net.minecraft.world.entity.projectile.Projectile; // TNT: splash

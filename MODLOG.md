@@ -429,3 +429,23 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Clock (fletcher, 2 emeralds): while one is in the inventory, Dota's game time and day/night top-left, Minecraft
   style (ClockHud via Fabric HudElementRegistry; Lua sends "time <s> <day>"). Verified.
 - Water and lava buckets at the fletcher (2 / 4 emeralds).
+
+## 2026-10-03 20:30: whole map visible, unbuilt-chunk walls, shops sell anything, fountain, fire aspect, raw meat
+- Whole map visible: Dota's camera far plane cut the world at ~3000 units (black beyond). Launch args
+  +r_farz 40000 +dota_camera_zfar_zoomed_in/out 40000 (client convars: SendToConsole can't set them, FCVAR). Units out of
+  vision stay hidden by Dota's fog of war. The striped backdrop over the horizon is the map's static edge geometry.
+- Invisible walls (Dire T4s, Dire top T1/T2): chunks whose load event never came stayed unbuilt (Minecraft's flat floor
+  above Dota's ground = a wall along a chunk edge, x = 128). Every 2 s pending chunks that are loaded get built.
+- Stand-ins never drawn on the client (StandInMixin: husks' bodies invisible; the effect arrived a few frames late, so
+  a husk flashed in the air now and then). Flames still show (FlameMixin).
+- Shops: every item one at a time (bulk only for 1-emerald stacks), no duplicate offers, no buckets, no grindstone.
+  Any trader buys anything: on opening the trade screen, offers for what's in the inventory are appended (half the
+  price; gear by durability left; +2 emeralds an enchantment level; cheap things in bulk for 1 emerald; each damaged/
+  enchanted item its own exact offer). Mouse wheel scrolls menus (the trade list) via MouseHandler.onScroll.
+- Fountain: twice a second in its aura 5% health + 1 food (Lua sees modifier_fountain_aura_buff, "fountain").
+- Roshan killed by Steve: Dota's drops (Aegis, cheese) removed, the totem comes from Minecraft's loot.
+- Neutrals drop raw beef, cooked if they died burning (hit lines from fire carry "fire"; Lua marks mc_burnUntil).
+  Fire Aspect works through the swing: "fx burn <id> <s>" sets the stand-in on fire (4 s a level). Flame (bows) sold.
+- Blocks into half steps also by clicking the slab's top (UseBlockCallback): pillaring up from a step works.
+- Block textures 256 px (UP 16): at 128 Dota's filtering blurred Minecraft's pixels up close.
+- Dev: /dota "client <cmd>" (client console), "dumpedge", "testunit <unit> <dist> free" (not stunned).

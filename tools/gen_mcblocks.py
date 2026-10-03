@@ -19,7 +19,7 @@ MDL, MAT = os.path.join(CONTENT, "models", "mcb"), os.path.join(CONTENT, "materi
 LUA = os.path.join(HERE, "..", "scripts", "vscripts", "mc_block_models.lua")
 os.makedirs(MDL, exist_ok=True); os.makedirs(MAT, exist_ok=True)
 UNIT = 8  # Dota units per model pixel in model space (a block is 128; MC:ShowBlock scales the prop to GRID)
-UP = 8  # nearest upscale of the 16 px textures (crisp pixels)
+UP = 16  # nearest upscale of the 16 px textures (crisp pixels: at 8 Dota's filtering blurred them up close)
 TINT = {0: (145, 189, 89), 1: (145, 189, 89), 2: (119, 171, 47)}  # grass / plains foliage; leaves use #77AB2F
 SKIP = {"air", "cave_air", "void_air", "structure_void", "light", "barrier", "moving_piston", "piston_head"}
 
