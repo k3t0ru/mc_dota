@@ -46,7 +46,7 @@ function Precache( context )
 	for _, m in ipairs({
 		"models/mc/stone.vmdl", "models/mc/cobblestone.vmdl", "models/mc/log.vmdl", "models/mc/coal_ore.vmdl",
 		"models/mc/iron_ore.vmdl", "models/mc/diamond_ore.vmdl", "models/mc/crafting_table.vmdl",
-		"models/mc/dirt.vmdl", "models/mc/sign_fletcher_name.vmdl", "models/mc/sign_fletcher_goods.vmdl",
+		"models/mc/sky.vmdl", "models/mc/dirt.vmdl", "models/mc/sign_fletcher_name.vmdl", "models/mc/sign_fletcher_goods.vmdl",
 		"models/mc/sign_mason_name.vmdl", "models/mc/sign_mason_goods.vmdl", "models/mc/sign_librarian_name.vmdl",
 		"models/mc/sign_librarian_goods.vmdl", "models/mc/sign_toolsmith_name.vmdl", "models/mc/sign_toolsmith_goods.vmdl",
 		"models/mc/sign_secret_1.vmdl", "models/mc/sign_secret_2.vmdl", "models/mc/sign_witch.vmdl", "models/mc/sand.vmdl", "models/mc/planks.vmdl", "models/mc/spruce_planks.vmdl",
@@ -213,6 +213,7 @@ function MC:SetupHero( hero )
 		SendToConsole( "dota_camera_edgemove 0; dota_camera_speed 0; dota_camera_lock 0; dota_camera_fov_min 90; dota_camera_fov_max 90; snd_mute_losefocus 0; snd_musicvolume 0" ) -- Dota's sound plays with Minecraft holding focus; music is Minecraft's
 		MC:SendTerrain()
 		MC:SpawnTraders()
+		MC:Sky()
 		-- Panorama's camera playback delay: Minecraft's overlay waits as long (see fpcam.js)
 		CustomGameEventManager:RegisterListener( "mc_delay", function( _, e ) MCBridge:Send( "delay " .. math.floor( tonumber( e.d ) or 0 ) ) end )
 		-- Dota's real vertical field of view, measured by Panorama: Minecraft's fov follows it (the layers stay matched)
@@ -298,6 +299,14 @@ function MC:SendTerrain()
 			end
 		end
 	end
+end
+
+-- a dark sky dome over the map (tools/gen_sky.py): hides Dota's striped map edge, never meant to be seen from the ground
+SKY_R = 14000 -- the map's corners are ~11300 from its centre; Dota's far plane is 40000 (dev_launch.sh)
+function MC:Sky()
+	if MC.sky and not MC.sky:IsNull() then return end
+	MC.sky = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/sky.vmdl", origin = "0 0 0", disableshadows = "1" } )
+	MC.sky:SetModelScale( SKY_R / 100 )
 end
 
 -- a fountain shoots any neutral in its range: blocks there are invulnerable (= not a target)
@@ -600,7 +609,7 @@ function MC:SpawnTraders()
 		local fx, fz = MC.witchF[1], MC.witchF[2]
 		local sx, sz = MC.witchX - fz, MC.witchZ + fx
 		local rot = math.floor( ( math.deg( math.atan2( -fx, fz ) ) % 360 ) / 22.5 + 0.5 ) % 16
-		MC:Sign( sx, MC.heights[ sx .. "," .. sz ] or MC_FLOOR, sz, "witch", -( rot * 22.5 - 90 ) + SIGN_TURN ) -- (text the way she looks: checked on screen)
+		MC:Sign( sx, MC.heights[ sx .. "," .. sz ] or MC_FLOOR, sz, "witch", -( rot * 22.5 + 90 ) + SIGN_TURN ) -- (text the way she looks: checked on screen)
 		local bx2, bz2 = MC.witchX + fz, MC.witchZ - fx
 		MC:PlaceBlock( bx2, MC.heights[ bx2 .. "," .. bz2 ] or MC_FLOOR, bz2, "brewing_stand" )
 	end
@@ -733,6 +742,10 @@ end
 
 -- remember what each unit was explicitly told to attack (to tell clicks from auto-attacks)
 function MC:OrderFilter( f )
+	for _, idx in pairs( f.units ) do
+		local u = EntIndexToHScript( idx )
+		if u and u.mc_player then return false end -- Steve moves and attacks from Minecraft only
+	end
 	for _, idx in pairs( f.units ) do
 		EntIndexToHScript( idx ).mc_ordered = f.order_type == DOTA_UNIT_ORDER_ATTACK_TARGET and f.entindex_target or nil
 	end

@@ -202,6 +202,12 @@ function MCBridge:Apply( body, stale )
 				SendToServerConsole( dev )
 			end
 		end
+		if line == "light" and self.aim and not self.aim:IsNull() and self.aim:IsAlive() and self.steve
+			and GameRules:GetGameTime() - ( self.aimAt or 0 ) <= 0.6
+			and ( self.aim:GetAbsOrigin() - self.steve:GetAbsOrigin() ):Length2D() <= MELEE_REACH * GRID + self.aim:GetHullRadius() then
+			self:Send( string.format( "fx burn %d 8", self.aim:entindex() ) ) -- flint and steel on a unit: 8 s of fire
+			self.aim.mc_burnUntil = GameRules:GetGameTime() + 8
+		end
 		local swing, crit, sweep, full, fire, wbase, sharp = line:match( "^swing (%S+) ?(%S*) ?(%S*) ?(%S*) ?(%S*) ?(%S*) ?(%S*)" ) -- a melee swing: whatever Dota highlights under the crosshair
 		if swing and self.aim and not self.aim:IsNull() and GameRules:GetGameTime() - ( self.aimAt or 0 ) <= 0.6
 			and self.steve and self.steve:IsAlive() then
@@ -250,7 +256,8 @@ function MCBridge:Apply( body, stale )
 			print( string.format( "[mc] eye %.0f above Dota ground (ground %.0f, anchor %.0f, cell %s)", eyeZ - GetGroundHeight( p, nil ), GetGroundHeight( p, nil ), MC.anchor.z, MC:CellOf( p ) .. "," .. select( 2, MC:CellOf( p ) ) ) )
 		end
 		if lx then -- Panorama wants the look-at height above the ground under it
-			lz = MCBridge:SmoothEye( tonumber( lx ), tonumber( ly ), tonumber( yawc ), tonumber( pitch ), tonumber( dist ), tonumber( lz ) )
+			-- (MCBridge:SmoothEye, Dota's ground under the eye, jerked on cliffs and ledges: Minecraft's eye with smoothed
+			-- step-ups instead, CameraSender)
 			local off = lz - GetGroundHeight( Vector( tonumber( lx ), tonumber( ly ), 0 ), nil )
 			CustomGameEventManager:Send_ServerToAllClients( "mc_cam", { v = table.concat( { lx, ly, yawc, pitch, dist, string.format( "%.1f", off ), sent, lz }, " " ) } )
 		end
@@ -369,6 +376,9 @@ function MCBridge:MoveSteve( name, pos, frac, yaw )
 		u.mc_player = name
 		u:SetCustomHealthLabel( name, 120, 255, 120 )
 		u:AddNoDraw() -- ponytail: the camera sits inside him; for PvP give other players a visible blocky Steve instead
+		-- he never attacks on his own (Dota's auto-attack went for the blocks next to him); Minecraft does his fighting
+		u:SetIdleAcquire( false )
+		u:SetAcquisitionRange( 0 )
 	end
 	if not u:IsAlive() then return end
 	if not self.nodrawOff then u:AddNoDraw() end -- (again every time: a respawn shows the model)

@@ -92,7 +92,15 @@ public final class Sync {
 			net.minecraft.world.level.Level level, net.minecraft.world.InteractionHand hand, net.minecraft.world.phys.BlockHitResult hit) {
 		BlockPos pos = hit.getBlockPos();
 		var pass = net.minecraft.world.InteractionResult.PASS;
-		if (hit.getDirection() != net.minecraft.core.Direction.UP || player.isSpectator()
+		if (player.getItemInHand(hand).is(net.minecraft.world.item.Items.FLINT_AND_STEEL) && !level.isClientSide()) out("light");
+		// clicked on the side of a block: the cell beside it, if that's a terrain slab (a half step), is where it goes
+		if (hit.getDirection().getAxis().isHorizontal()) {
+			BlockPos t = pos.relative(hit.getDirection());
+			if (level.getBlockState(t).is(net.minecraft.world.level.block.Blocks.MUD_BRICK_SLAB) && Hybrid.slabAt(t.getX(), t.getZ())
+				&& t.getY() == Hybrid.surfaceAt(t.getX(), t.getZ()))
+				pos = t; // as if its top was clicked (below: the block replaces the slab)
+			else return pass;
+		} else if (hit.getDirection() != net.minecraft.core.Direction.UP || player.isSpectator()
 			|| !level.getBlockState(pos).is(net.minecraft.world.level.block.Blocks.MUD_BRICK_SLAB)
 			|| !Hybrid.slabAt(pos.getX(), pos.getZ()) || pos.getY() != Hybrid.surfaceAt(pos.getX(), pos.getZ())) return pass;
 		ItemStack st = player.getItemInHand(hand);

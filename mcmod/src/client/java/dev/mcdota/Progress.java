@@ -423,7 +423,7 @@ public final class Progress {
 		// craft costs that follow: iron sword 4, iron armour 46, diamond sword 8, diamond armour 96, netherite +25 a piece
 		TRADERS.add(new Trader("Лучник", "fletcher", List.of( // basic shop: the everyday materials
 			buy(1, "oak_log", 8), buy(1, "cobblestone", 32), buy(1, "string", 2), buy(1, "flint", 4), buy(1, "feather", 8),
-			buy(1, "leather", 2), buy(2, "iron_ingot"), buy(1, "tripwire_hook"), buy(1, "gunpowder", 2), buy(1, "paper", 6),
+			buy(1, "leather", 2), buy(2, "iron_ingot"), buy(1, "gunpowder", 2), buy(1, "paper", 6),
 			buy(1, "arrow", 16), buy(1, "bread", 4), buy(1, "cooked_beef", 2), buy(6, "tnt"), buy(2, "flint_and_steel"),
 			buy(2, "clock")))); // the clock shows Dota's game time (ClockHud)
 		TRADERS.add(new Trader("Библиотекарь", "librarian", List.of( // basic shop: enchanting

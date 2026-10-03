@@ -20,3 +20,5 @@ models/mcb/
 scripts/vscripts/mc_block_models.lua
 content/models/mc/sign_*
 content/materials/mc/sign_*
+content/models/mc/sky.*
+content/materials/mc/sky.*

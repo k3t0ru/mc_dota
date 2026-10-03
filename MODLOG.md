@@ -495,3 +495,9 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Flames on burning stand-ins up to a creep's waist.
 - Dota's banners are map geometry (not entities: only 3 prop_dynamic on the map) -> can't be removed by script.
 - From now on the user tests by hand; I build and launch.
+- Round 2026-10-04 00:40: dark sky dome (tools/gen_sky.py: smooth unlit sphere, R 14000) over Dota's striped map edge;
+  step-ups smoothed in Minecraft's camera pose (CameraSender: an offset gliding back in ~0.1 s) instead of
+  MCBridge:SmoothEye (Dota's ground under the eye jerked on cliffs/ledges); Steve's hero takes no orders and never
+  auto-attacks (a click in Dota's window sent Kunkka at blocks); flint and steel sets the aimed unit on fire ("light");
+  a block clicked on its side next to a terrain half step takes the slab's place; tripwire hooks no longer sold;
+  witch sign turned 180.
