@@ -415,3 +415,17 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Alt+Tab: focus goes back to Minecraft only on a click on the picture (Alt+Tab landed on Dota, which handed the focus
   straight back and trapped the cursor); with another app in front the overlay hides.
 - New match resets walk speed/jump/title (a session closed while dead left them at 0 in the player's save).
+
+## 2026-10-03 19:25: melee curve, flames at the feet, half-step blocks, clock, buckets
+- Melee damage curve (mc_bridge.lua MeleeScale): a full swing does 1.86 * damage^2.44 Dota damage (at least 10 per
+  point): wooden sword 4 -> ~55 (a level 1 hero), stone ~94, iron ~147, diamond ~214, netherite ~300, netherite +
+  Sharpness V (11) ~650 (Roshan in ~10 s like a 6-slotted level 30 carry). Cooldown and crit keep their share
+  (AttackMixin sends the full swing's damage as a 4th field). Verified: one full netherite+S5 swing kills a 550 hp creep.
+- Burning stand-ins: flames only around the feet (FlameMixin: invisible non-player entities get a short, narrow
+  bounding box in their render state; FlameFeatureRenderer sizes the flame by it). Verified on an invisible husk.
+- Blocks on half steps: a full block placed on a terrain slab took y surface+1 with a half-block gap under it, so Dota
+  drew it floating. It now takes the slab's place (half sunk into Dota's ground, like Minecraft blocks on a slope), and
+  the slab comes back when it's broken (Hybrid.slabAt, Sync.halfStep). Verified: stone and planks sit on the ground.
+- Clock (fletcher, 2 emeralds): while one is in the inventory, Dota's game time and day/night top-left, Minecraft
+  style (ClockHud via Fabric HudElementRegistry; Lua sends "time <s> <day>"). Verified.
+- Water and lava buckets at the fletcher (2 / 4 emeralds).

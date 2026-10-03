@@ -3,6 +3,15 @@
 -- Dota heroes get invisible stand-ins in Minecraft so swords can hit them; blocks exist on both sides.
 BRIDGE_URL = "http://127.0.0.1:27100/sync"
 DMG_TO_DOTA = 10  -- 1 MC hp of damage to a hero stand-in = 10 Dota damage
+
+-- melee grows steeper than Minecraft's numbers: a wooden sword (4) hits like a level 1 hero (~55), a netherite one with
+-- Sharpness V (11) ~650, so a fully enchanted netherite sword takes Roshan in ~10 s like a 6-slotted level 30 carry.
+-- Dota damage of a full swing = 1.86 * damage^2.44 (at least 10 per point: a fist); a swing's cooldown/crit keep their
+-- share. Returns the factor for the swing's Minecraft numbers (HitUnit multiplies by DMG_TO_DOTA).
+function MeleeScale( full )
+	if not full or full <= 0 then return 1 end
+	return math.max( full * DMG_TO_DOTA, 1.86 * full ^ 2.44 ) / ( full * DMG_TO_DOTA )
+end
 DOTA_TO_MC = 0.02 -- 1 Dota damage to Steve = 0.02 MC hp (a 50-damage hit = half a heart)
 
 MCBridge = { out = { "reset" }, inflight = 0, sentAt = 0, seq = 0, applied = 0 } -- a new Dota game starts Minecraft's arena from scratch
@@ -51,6 +60,12 @@ function MCBridge:Tick()
 		end
 	end
 	MC:BossBar( self.steve )
+	-- Dota's clock for Minecraft's (shown while Steve carries a clock: ClockHud)
+	local t = math.floor( GameRules:GetDOTATime( false, true ) )
+	if t ~= self.sentTime then
+		self.sentTime = t
+		self:Send( string.format( "time %d %d", t, GameRules:IsDaytime() and 1 or 0 ) )
+	end
 	for _, l in ipairs( self.out ) do table.insert( lines, l ) end
 	local sent = self.out
 	self.out = {}
@@ -103,13 +118,14 @@ function MCBridge:Apply( body, stale )
 				SendToServerConsole( dev )
 			end
 		end
-		local swing, crit, sweep = line:match( "^swing (%S+) ?(%S*) ?(%S*)" ) -- a melee swing: whatever Dota highlights under the crosshair
+		local swing, crit, sweep, full = line:match( "^swing (%S+) ?(%S*) ?(%S*) ?(%S*)" ) -- a melee swing: whatever Dota highlights under the crosshair
 		if swing and self.aim and not self.aim:IsNull() and GameRules:GetGameTime() - ( self.aimAt or 0 ) <= 0.6
 			and self.steve and self.steve:IsAlive() then
 			local reach = MELEE_REACH * GRID + self.aim:GetHullRadius()
 			local d = ( self.aim:GetAbsOrigin() - self.steve:GetAbsOrigin() ):Length2D()
 			if self.aim:GetTeamNumber() == self.steve:GetTeamNumber() then self.denySwingAt = GameRules:GetGameTime() end
-			if d <= reach then self:Swing( self.aim, tonumber( swing ), crit == "1", tonumber( sweep ) or 0 ) end
+			local k = MeleeScale( tonumber( full ) )
+			if d <= reach then self:Swing( self.aim, tonumber( swing ) * k, crit == "1", ( tonumber( sweep ) or 0 ) * k ) end
 		end
 
 		local bx, by, bz, kind, solid, state = line:match( "^mcblock (%S+) (%S+) (%S+) (%S+) ?(%S*) ?(%S*)" )

@@ -44,7 +44,9 @@ public final class Sync {
 		if (applying || p.getY() < -60 || p.getY() > 60) return; // Dota decides what to draw / collide by height
 		// under the ground it's the terrain changing by itself (the superflat's grass under the built ground turns to
 		// dirt): Dota drew those as dirt blocks hanging in the air wherever its ground is lower
-		if (p.getY() < Hybrid.surfaceAt(p.getX(), p.getZ())) return;
+		int surface = Hybrid.surfaceAt(p.getX(), p.getZ());
+		if (p.getY() < surface) return;
+		if (Hybrid.slabAt(p.getX(), p.getZ()) && halfStep(p, s, surface)) return;
 		if (s.isAir() || !Hybrid.drawnByDota(s, p)) out.add(String.format("break %d %d %d", p.getX(), p.getY(), p.getZ()));
 		else {
 			// its state too ("axis=x,facing=north,..."): Dota picks the blockstate variant (MC:Variant) to turn its model
@@ -54,6 +56,32 @@ public final class Sync {
 			out.add(String.format("set %d %d %d %s %d %s", p.getX(), p.getY(), p.getZ(), BuiltInRegistries.BLOCK.getKey(s.getBlock()).getPath(),
 				s.blocksMotion() ? 1 : 0, state.length() > 0 ? state : "-")); // 0: fire, torches, flowers: drawn, units don't bump into them
 		}
+	}
+
+	// On a half step (the terrain's top is a slab) a block placed on it stood half a block above Dota's ground, a gap
+	// under it: Dota drew it floating. It takes the slab's place instead (half sunk into Dota's ground, like any block on
+	// a slope in Minecraft), and the slab comes back when the block there is broken. (Next tick: not inside setBlock.)
+	private static boolean halfStep(BlockPos p, BlockState s, int surface) {
+		var server = Minecraft.getInstance().getSingleplayerServer();
+		if (server == null) return false;
+		var level = server.overworld();
+		BlockPos below = new BlockPos(p.getX(), surface, p.getZ());
+		if (p.getY() == surface + 1 && !s.isAir() && s.isCollisionShapeFullBlock(level, p) && level.getBlockState(below).is(net.minecraft.world.level.block.Blocks.MUD_BRICK_SLAB)) {
+			server.execute(() -> {
+				if (level.getBlockState(p) != s || !level.getBlockState(below).is(net.minecraft.world.level.block.Blocks.MUD_BRICK_SLAB)) return;
+				level.setBlockAndUpdate(below, s);
+				level.setBlockAndUpdate(p, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState());
+			});
+			return true; // (the move sends Dota both changes)
+		}
+		if (p.getY() == surface && s.isAir()) // a block in a slab's place broken: the half step again
+			server.execute(() -> {
+				if (!level.getBlockState(below).isAir()) return;
+				applying = true;
+				try { level.setBlockAndUpdate(below, net.minecraft.world.level.block.Blocks.MUD_BRICK_SLAB.defaultBlockState()); }
+				finally { applying = false; }
+			});
+		return false;
 	}
 
 	// blocks Dota built (the market, the fountain's barriers): explosions leave them alone (ExplosionMixin)
@@ -113,6 +141,7 @@ public final class Sync {
 		low = Math.max(-100, Math.min(hh, low));
 		int full = Math.floorDiv(hh, 2), bottom = Math.floorDiv(low, 2) - 1; // solid up to full - 1; skin from bottom
 		Hybrid.setSurface(Integer.parseInt(x), Integer.parseInt(z), full);
+		Hybrid.setSlab(Integer.parseInt(x), Integer.parseInt(z), hh % 2 != 0);
 		if (full < 0) run(server, String.format("fill %s %d %s %s -1 %s minecraft:air", x, full, z, x, z), false);
 		boolean exposed = low < hh || full > 0; // a side wall shows (raised column or a lower neighbour)
 		run(server, String.format("fill %s %d %s %s %d %s minecraft:%s", x, Math.min(bottom, full - 1), z, x, full - 1, z,
@@ -244,6 +273,7 @@ public final class Sync {
 					case "loot" -> Progress.loot(server, p);
 					case "dead" -> Progress.deadFor(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]));
 					case "respawn" -> Progress.respawn(server);
+					case "time" -> ClockHud.set(Integer.parseInt(p[1]), p[2].equals("1"));
 					case "spawnat" -> Progress.spawnAt(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
 					case "lvl" -> Progress.level(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
 					case "delay" -> Overlay.dotaDelay(Integer.parseInt(p[1]));

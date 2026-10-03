@@ -346,6 +346,7 @@ public final class Progress {
 			buy(1, "oak_log", 8), buy(1, "cobblestone", 32), buy(2, "string", 4), buy(1, "flint", 4), buy(1, "feather", 8),
 			buy(2, "leather", 4), buy(2, "iron_ingot"), buy(1, "tripwire_hook"), buy(2, "gunpowder", 4), buy(1, "paper", 6),
 			buy(1, "arrow", 16), buy(1, "bread", 4), buy(2, "cooked_beef", 4), buy(6, "tnt"), buy(2, "flint_and_steel"),
+			buy(2, "water_bucket"), buy(4, "lava_bucket"), buy(2, "clock"), // the clock shows Dota's game time (ClockHud)
 			// buys back what the jungle drops
 			sell("feather", 16, 1), sell("leather", 4, 1), sell("string", 8, 1), sell("flint", 8, 1), sell("gunpowder", 4, 1),
 			sell("iron_ingot", 1, 1), sell("oak_log", 16, 1), sell("cooked_beef", 8, 1), sell("rotten_flesh", 16, 1))));
@@ -363,7 +364,7 @@ public final class Progress {
 		TRADERS.add(new Trader("Secret shop", "weaponsmith", List.of( // far from the spawn: the rare stuff
 			buy(4, "diamond"), buy(15, "diamond", 4), buy(20, "netherite_ingot"), buy(5, "netherite_upgrade_smithing_template"),
 			buy(60, "elytra"), buy(2, "firework_rocket", 8), buy(8, "golden_apple"), buy(3, "ender_pearl", 2),
-book(25, "mending", 1), book(40, "sharpness", 5), book(30, "protection", 4),
+			book(25, "mending", 1), book(40, "sharpness", 5), book(30, "protection", 4),
 			book(30, "power", 5),
 			sell("diamond", 1, 2), sell("netherite_ingot", 1, 10), sell("golden_apple", 1, 4))));
 	}

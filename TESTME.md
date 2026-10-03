@@ -2,6 +2,14 @@
 
 Things Claude could not check alone (they need a real person playing), newest first. Strike them out or tell Claude.
 
+## 2026-10-03 (19:25)
+- [ ] **Sword damage**: wooden ~55, iron ~147, diamond ~214, netherite ~300, netherite + Sharpness V ~650 per full
+      swing (crits x1.5). Roshan with a maxed netherite sword should take ~10 s. Tell me if it feels off.
+- [ ] **Blocks on slopes** sit on the ground now (half sunk), not floating. Breaking one brings the step back.
+- [ ] **Burning creeps**: flames only at their feet.
+- [ ] **Clock** (fletcher, 2 emeralds): Dota's time + Day/Night top-left while it's in your inventory.
+- [ ] **Water / lava buckets** (fletcher): lava burns creeps.
+
 ## 2026-10-03 (17:45)
 - [ ] **Looking up** works now (Dota's camera tilts up too). Check: crossing the horizon is smooth, hitting flying
       things, ender pearls, elytra climbing.

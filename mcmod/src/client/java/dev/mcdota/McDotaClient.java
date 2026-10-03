@@ -70,6 +70,7 @@ public class McDotaClient implements ClientModInitializer {
 			player.isCreative() || !Hybrid.ground(state, pos));
 		// clicks land on the overlay, never in Minecraft's window, so grab the mouse ourselves once focus arrives
 		ClientTickEvents.END_CLIENT_TICK.register(Sync::tick);
+		ClockHud.register();
 		ClientTickEvents.END_CLIENT_TICK.register(MouseWheel::tick);
 		MouseWheel.start();
 		ClientTickEvents.END_CLIENT_TICK.register(mc -> {

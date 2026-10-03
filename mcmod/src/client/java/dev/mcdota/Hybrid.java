@@ -16,6 +16,13 @@ public final class Hybrid {
 
 	public static int surfaceAt(int x, int z) { return surface.getOrDefault(key(x, z), 0); }
 
+	// columns whose top is a half step (a magenta slab at the surface y)
+	private static final java.util.Set<Long> slabs = ConcurrentHashMap.newKeySet();
+
+	public static void setSlab(int x, int z, boolean slab) { if (slab) slabs.add(key(x, z)); else slabs.remove(key(x, z)); }
+
+	public static boolean slabAt(int x, int z) { return slabs.contains(key(x, z)); }
+
 	private static long key(int x, int z) { return ((long) x << 32) ^ (z & 0xffffffffL); }
 
 	private static boolean terrain(BlockState s) {

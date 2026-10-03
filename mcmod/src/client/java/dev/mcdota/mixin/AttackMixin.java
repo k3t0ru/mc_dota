@@ -39,7 +39,8 @@ public class AttackMixin {
 			dmg += ench * s;
 			// the sweep's splash: 1 + sweeping ratio x attack damage (vanilla), Lua deals it around the target
 			float sweepDmg = sweep ? 1f + (float) sp.getAttributeValue(Attributes.SWEEPING_DAMAGE_RATIO) * base : 0f;
-			dev.mcdota.Sync.out(String.format(java.util.Locale.ROOT, "swing %.2f %d %.2f", dmg, crit ? 1 : 0, sweepDmg));
+			// and the full swing's damage (no cooldown, no crit): Lua's damage curve goes by it (MeleeScale)
+			dev.mcdota.Sync.out(String.format(java.util.Locale.ROOT, "swing %.2f %d %.2f %.2f", dmg, crit ? 1 : 0, sweepDmg, base + ench));
 		});
 	}
 }
