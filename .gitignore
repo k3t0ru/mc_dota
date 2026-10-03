@@ -13,3 +13,8 @@ content/materials/mc/*.png
 materials/
 bridge/bridge.log
 mc_dungeons.bundle
+# every Minecraft block as a Dota model (tools/gen_mcblocks.py): derived from Mojang's files in the local jar, never commit
+content/models/mcb/
+content/materials/mcb/
+models/mcb/
+scripts/vscripts/mc_block_models.lua

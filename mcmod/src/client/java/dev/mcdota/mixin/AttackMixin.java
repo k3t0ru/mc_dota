@@ -24,6 +24,9 @@ public class AttackMixin {
 		float s = p.getAttackStrengthScale(0.5f);
 		if (s < 0.1f) return;
 		boolean crit = s > 0.9f && p.fallDistance > 0 && !p.onGround() && !p.onClimbable() && !p.isInWater() && !p.isPassenger();
+		// a sword's sweep: full swing, on the ground, not sprinting, no crit (as in Player.attack)
+		boolean sweep = s > 0.9f && !crit && p.onGround() && !p.isSprinting()
+			&& p.getMainHandItem().is(net.minecraft.tags.ItemTags.SWORDS);
 		java.util.UUID id = p.getUUID();
 		server.execute(() -> {
 			var sp = server.getPlayerList().getPlayer(id);
@@ -34,7 +37,9 @@ public class AttackMixin {
 			float dmg = base * (0.2f + s * s * 0.8f);
 			if (crit) dmg *= 1.5f;
 			dmg += ench * s;
-			dev.mcdota.Sync.out(String.format(java.util.Locale.ROOT, "swing %.2f", dmg));
+			// the sweep's splash: 1 + sweeping ratio x attack damage (vanilla), Lua deals it around the target
+			float sweepDmg = sweep ? 1f + (float) sp.getAttributeValue(Attributes.SWEEPING_DAMAGE_RATIO) * base : 0f;
+			dev.mcdota.Sync.out(String.format(java.util.Locale.ROOT, "swing %.2f %d %.2f", dmg, crit ? 1 : 0, sweepDmg));
 		});
 	}
 }

@@ -38,6 +38,9 @@ public class McDotaClient implements ClientModInitializer {
 			mc.options.bobView().set(false); // walking bob shakes only Minecraft's layer, so blocks would swim over the map
 			// Minecraft only draws the hand, the HUD and entities here (Dota draws the world): a short view distance leaves
 			// the video card to Dota, which shares it (with 8 chunks Dota lost ~40% of its frames and stuttered more)
+			// no mipmaps: far away they blend the see-through magenta with its neighbours into dark pixels that the overlay
+			// can't key out (flickering black stripes of blocks in the distance)
+			if (mc.options.mipmapLevels().get() != 0) { mc.options.mipmapLevels().set(0); mc.updateMaxMipLevel(0); mc.delayTextureReload(); }
 			mc.options.renderDistance().set(Integer.getInteger("mcdota.view", 5));
 			mc.options.simulationDistance().set(Integer.getInteger("mcdota.view", 5));
 			int[] r = renderSize(); // resizing inside Window's constructor crashes, so do it once the client is up

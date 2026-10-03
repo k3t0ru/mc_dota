@@ -38,7 +38,8 @@ public final class MouseInput {
 	private static final boolean[] menuDown = new boolean[3];
 
 	public static void frame(Minecraft mc) {
-		if (mc.player != null && mc.player.getXRot() < MIN_PITCH) mc.player.setXRot(MIN_PITCH);
+		// (except while gliding on elytra: to climb you have to look up; Dota's camera stays at the horizon meanwhile)
+		if (mc.player != null && mc.player.getXRot() < MIN_PITCH && !mc.player.isFallFlying()) mc.player.setXRot(MIN_PITCH);
 		Overlay ov = McDotaClient.overlay;
 		if (ov != null) ov.showCursor = mc.screen != null;
 		if (ov != null && ov.w > 0 && mc.screen != null) menuMouse(mc, ov);

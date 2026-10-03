@@ -39,11 +39,12 @@ function MCBridge:Tick()
 	end
 	-- trader spots again now and then: a restarted Minecraft client forgets them
 	if GameRules:GetGameTime() - ( self.tradersAt or -100 ) > 5 then self.tradersAt = GameRules:GetGameTime(); MC:SendTraders() end
-	-- Steve's Dota level (he earns hero XP for his kills) is his Minecraft max health
-	if self.steve and not self.steve:IsNull() and self.steve:GetLevel() ~= self.sentLevel then
-		self.sentLevel = self.steve:GetLevel()
+	-- Steve's level (counted by MC:SteveXP from the hero XP Dota hands out) is his Minecraft max health
+	if MC.steveLevel and MC.steveLevel ~= self.sentLevel then
+		self.sentLevel = MC.steveLevel
 		self:Send( "lvl " .. self.sentLevel )
 	end
+	MC:BossBar( self.steve )
 	for _, l in ipairs( self.out ) do table.insert( lines, l ) end
 	local sent = self.out
 	self.out = {}
@@ -74,8 +75,11 @@ function MCBridge:Apply( body, stale )
 	if body:find( "swing " ) and self.aim and not self.aim:IsNull() and self.steve
 		and self.aim:GetTeamNumber() == self.steve:GetTeamNumber() then self.denySwingAt = GameRules:GetGameTime() end
 	for line in body:gmatch( "[^\n]+" ) do
-		local name, x, z, hp, max, yaw = line:match( "^steve (%S+) (%S+) (%S+) (%S+) (%S+) (%S+)" )
-		if name and not stale then self:MoveSteve( name, to_dota( tonumber( x ), tonumber( z ) ), tonumber( hp ) / tonumber( max ), math.rad( tonumber( yaw ) ) ) end
+		local name, x, z, hp, max, yaw, my = line:match( "^steve (%S+) (%S+) (%S+) (%S+) (%S+) (%S+) ?(%S*)" )
+		if name and not stale then
+			self:MoveSteve( name, to_dota( tonumber( x ), tonumber( z ) ), tonumber( hp ) / tonumber( max ), math.rad( tonumber( yaw ) ) )
+			self:HighGround( tonumber( x ), tonumber( z ), tonumber( my ) )
+		end
 
 		local id, amount, direct = line:match( "^hit (%d+) (%S+) ?(%S*)" ) -- arrows, sweeps: through the stand-ins
 		-- (no splash right after a swing at an ally: a deny is a single hit, the sword's sweep must not hit the enemies around)
@@ -93,19 +97,19 @@ function MCBridge:Apply( body, stale )
 				SendToServerConsole( dev )
 			end
 		end
-		local swing = line:match( "^swing (%S+)" ) -- a melee swing: whatever Dota highlights under the crosshair
+		local swing, crit, sweep = line:match( "^swing (%S+) ?(%S*) ?(%S*)" ) -- a melee swing: whatever Dota highlights under the crosshair
 		if swing and self.aim and not self.aim:IsNull() and GameRules:GetGameTime() - ( self.aimAt or 0 ) <= 0.6
 			and self.steve and self.steve:IsAlive() then
 			local reach = MELEE_REACH * GRID + self.aim:GetHullRadius()
 			local d = ( self.aim:GetAbsOrigin() - self.steve:GetAbsOrigin() ):Length2D()
 			if self.aim:GetTeamNumber() == self.steve:GetTeamNumber() then self.denySwingAt = GameRules:GetGameTime() end
-			if d <= reach then self:HitUnit( self.aim, tonumber( swing ), true ) end
+			if d <= reach then self:Swing( self.aim, tonumber( swing ), crit == "1", tonumber( sweep ) or 0 ) end
 		end
 
-		local bx, by, bz, kind = line:match( "^mcblock (%S+) (%S+) (%S+) (%S+)" )
+		local bx, by, bz, kind, solid, state = line:match( "^mcblock (%S+) (%S+) (%S+) (%S+) ?(%S*) ?(%S*)" )
 		if bx then
 			bx, by, bz = tonumber( bx ), tonumber( by ), tonumber( bz )
-			MC:ShowBlock( bx, by, bz, kind ) -- hybrid: Dota draws every Minecraft block, nailed to its world
+			MC:ShowBlock( bx, by, bz, kind, solid ~= "0", state ) -- hybrid: Dota draws every Minecraft block, nailed to its world
 			MC:ColumnChanged( bx, bz )
 		end
 		local rx, ry, rz = line:match( "^mcbreak (%S+) (%S+) (%S+)" )
@@ -143,6 +147,30 @@ end
 -- a Minecraft hit on a Dota unit. Allies can only be denied like in Dota: creeps below half health, towers below 10%,
 -- heroes never, and only with a direct hit (a sword's sweep and other splash never touch allies).
 MELEE_REACH = 3.5 -- blocks from Steve to the target's edge (Minecraft's reach is 3)
+-- a melee swing Dota landed: the hit, Minecraft's crit/sweep effects on it, and the sweep's splash around it (enemies
+-- within a block of the target; never during a deny)
+function MCBridge:Swing( target, amount, crit, sweep )
+	local denying = self.steve and target:GetTeamNumber() == self.steve:GetTeamNumber()
+	self:HitUnit( target, amount, true )
+	self:Send( string.format( "fx %s %d", crit and "crit" or "hit", target:entindex() ) )
+	if sweep > 0 and not denying and self.steve then
+		local around = FindUnitsInRadius( self.steve:GetTeamNumber(), target:GetAbsOrigin(), nil, GRID + target:GetHullRadius(),
+			DOTA_UNIT_TARGET_TEAM_ENEMY, DOTA_UNIT_TARGET_HERO + DOTA_UNIT_TARGET_BASIC, DOTA_UNIT_TARGET_FLAG_NONE, FIND_ANY_ORDER, false )
+		for _, u in ipairs( around ) do if u ~= target then self:HitUnit( u, sweep, false ) end end
+		self:Send( string.format( "fx sweep %d", target:entindex() ) )
+	end
+end
+
+-- standing 3+ blocks above the ground (a tower of blocks, flying on elytra) sees like from a cliff: flying vision
+function MCBridge:HighGround( x, z, y )
+	local u = self.steve
+	if not u or u:IsNull() or not y or not x then return end
+	local g = MC.heights[ math.floor( x ) .. "," .. math.floor( z ) ] or MC_FLOOR
+	local high = y - g >= 3
+	if high and not u:HasModifier( "modifier_mc_highground" ) then u:AddNewModifier( u, nil, "modifier_mc_highground", {} )
+	elseif not high and u:HasModifier( "modifier_mc_highground" ) then u:RemoveModifierByName( "modifier_mc_highground" ) end
+end
+
 function MCBridge:HitUnit( hero, amount, direct )
 	if not hero or hero:IsNull() or not hero:IsAlive() or not hero.GetTeamNumber or hero.mc_player or hero.mc_block then return end
 	local ally = self.steve and hero:GetTeamNumber() == self.steve:GetTeamNumber()
@@ -156,6 +184,7 @@ function MCBridge:HitUnit( hero, amount, direct )
 		self.steve.mc_attack, self.steve.mc_denying = nil, nil
 	else
 		ApplyDamage( { victim = hero, attacker = self.steve or hero, damage = amount * DMG_TO_DOTA, damage_type = DAMAGE_TYPE_PURE } )
+		if hero:IsBuilding() then MC.bossUnit, MC.bossUntil = hero, GameRules:GetGameTime() + 5 end
 	end
 end
 

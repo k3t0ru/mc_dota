@@ -28,8 +28,17 @@ MC_FLOOR = 0 -- Minecraft y where feet stand on flat ground (the world is a supe
 
 require( "mc_bridge" )
 require( "addon_init" ) -- Lua modifiers (the client loads addon_init.lua by itself)
+require( "mc_block_models" ) -- MCB: every Minecraft block's variants -> Dota models (tools/gen_mcblocks.py)
+
+
 
 function Precache( context )
+	local seen = {}
+	for _, vs in pairs( MCB ) do
+		for _, v in ipairs( vs ) do
+			if not seen[ v[2] ] then seen[ v[2] ] = true PrecacheResource( "model", "models/mcb/" .. v[2] .. ".vmdl", context ) end
+		end
+	end
 	for _, m in ipairs({
 		"models/mc/stone.vmdl", "models/mc/cobblestone.vmdl", "models/mc/log.vmdl", "models/mc/coal_ore.vmdl",
 		"models/mc/iron_ore.vmdl", "models/mc/diamond_ore.vmdl", "models/mc/crafting_table.vmdl",
@@ -52,6 +61,35 @@ end
 
 MC = {}
 
+-- Dota's hero XP table (total XP for each level): Steve's level from the XP he would have got
+XP_TABLE = { 0, 240, 640, 1160, 1760, 2440, 3200, 4000, 4900, 5900, 7000, 8200, 9500, 10900, 12400, 14000, 15700, 17500,
+	19400, 21400, 23600, 26000, 28600, 31400, 34400, 37600, 41000, 44600, 48400, 52400 }
+function MC:SteveXP( xp )
+	MC.steveXPTotal = ( MC.steveXPTotal or 0 ) + ( xp or 0 )
+	local lvl = 1
+	while XP_TABLE[ lvl + 1 ] and MC.steveXPTotal >= XP_TABLE[ lvl + 1 ] do lvl = lvl + 1 end
+	MC.steveLevel = lvl
+end
+
+-- the Minecraft boss bar: Roshan while Steve is in his pit, else a building Steve hit in the last 5 s
+function MC:BossBar( steve )
+	if GameRules:GetGameTime() - ( MC.bossAt or 0 ) < 0.2 then return end
+	MC.bossAt = GameRules:GetGameTime()
+	local show
+	if steve and not steve:IsNull() then
+		for _, r in ipairs( Entities:FindAllByClassname( "npc_dota_roshan" ) ) do
+			if r:IsAlive() and ( r:GetAbsOrigin() - steve:GetAbsOrigin() ):Length2D() < 900 then show = { "purple", r, "Roshan" } end
+		end
+	end
+	local b = MC.bossUnit
+	if not show and b and not b:IsNull() and b:IsAlive() and GameRules:GetGameTime() < ( MC.bossUntil or 0 ) then
+		show = { b:GetTeamNumber() == DOTA_TEAM_GOODGUYS and "green" or "red", b,
+			( b:GetUnitName():gsub( "npc_dota_", "" ):gsub( "goodguys_", "Radiant " ):gsub( "badguys_", "Dire " ):gsub( "_", " " ) ) }
+	end
+	local line = show and string.format( "boss %s %d %d %s", show[1], show[2]:GetHealth(), show[2]:GetMaxHealth(), show[3] ) or "boss none"
+	if line ~= MC.bossLine then MC.bossLine = line MCBridge:Send( line ) end
+end
+
 function MC:Init()
 	GameRules:SetCustomGameTeamMaxPlayers( DOTA_TEAM_GOODGUYS, 4 )
 	GameRules:SetCustomGameTeamMaxPlayers( DOTA_TEAM_BADGUYS, 0 )
@@ -72,7 +110,14 @@ function MC:Init()
 	GameRules:SetTimeOfDay( 0.5 )
 	mode:SetDamageFilter( Dynamic_Wrap( MC, "DamageFilter" ), MC )
 	-- a deny gives the denier nothing (Dota hands out XP for the killing attack)
-	mode:SetModifyExperienceFilter( function( _, f ) return not ( MCBridge.steve and MCBridge.steve.mc_denying ) end, MC )
+	-- Steve's hero XP is counted by us (MC:SteveXP), not given: a Dota level-up plays its sound and Steve's level is
+	-- only his Minecraft max health. A deny gives the denier nothing.
+	mode:SetModifyExperienceFilter( function( _, f )
+		local s = MCBridge.steve
+		if not s or f.player_id_const ~= s:GetPlayerOwnerID() then return true end
+		if not s.mc_denying then MC:SteveXP( f.experience ) end
+		return false
+	end, MC )
 	-- Steve has no use for Dota gold (his money is emeralds, MC:LootFor): none, so no yellow "+45" over his kills either
 	mode:SetModifyGoldFilter( function( _, f )
 		return not ( MCBridge.steve and f.player_id_const == MCBridge.steve:GetPlayerOwnerID() )
@@ -129,7 +174,14 @@ function MC:SetupHero( hero )
 
 	if not MC.world_done then
 		MC.world_done = true
-		MC.anchor = hero:GetAbsOrigin() -- Minecraft (0,0) maps here
+		-- Minecraft (0,0) maps here: our fountain, on the grid. (The hero's own spawn spot moves a little from game to game,
+		-- which shifted every terrain column against what an earlier session had built: the ground stopped matching.)
+		local f, best = hero:GetAbsOrigin(), nil
+		for _, e in ipairs( Entities:FindAllByClassname( "ent_dota_fountain" ) ) do
+			local d = ( e:GetAbsOrigin() - hero:GetAbsOrigin() ):Length2D()
+			if e:GetTeamNumber() == hero:GetTeamNumber() and ( not best or d < best ) then f, best = e:GetAbsOrigin(), d end
+		end
+		MC.anchor = GetGroundPosition( Vector( math.floor( f.x / GRID + 0.5 ) * GRID, math.floor( f.y / GRID + 0.5 ) * GRID, 0 ), nil )
 		-- Dota's own camera controls would fight Minecraft's (launch args alone get overridden by the user's config)
 		SendToConsole( "dota_camera_edgemove 0; dota_camera_speed 0; dota_camera_lock 0; dota_camera_fov_min 90; dota_camera_fov_max 90; dota_camera_z_interp_speed 100000; snd_mute_losefocus 0; snd_musicvolume 0" ) -- Dota's sound plays with Minecraft holding focus; music is Minecraft's
 		MC:SendTerrain()
@@ -224,7 +276,8 @@ function MC:SpawnBlock( name, pos, fromMC )
 	local bx, bz = MC:CellOf( pos )
 	local key = bx .. "," .. bz
 	if MC.cells[ key ] and not MC.cells[ key ]:IsNull() then return MC.cells[ key ] end
-	local b = CreateUnitByName( name, MC:CellPos( bx, bz ), false, nil, nil, DOTA_TEAM_NEUTRALS )
+	-- on Steve's side: as neutrals, our fountain and towers shot them
+	local b = CreateUnitByName( name, MC:CellPos( bx, bz ), false, nil, nil, MCBridge.steve and MCBridge.steve:GetTeamNumber() or DOTA_TEAM_GOODGUYS )
 	b.mc_block, b.mc_cell = def, key
 	MC.cells[ key ] = b
 	b:AddNewModifier( b, nil, "modifier_mc_block", {} )
@@ -247,14 +300,40 @@ function MC:BlockPos( bx, by, bz )
 	return MC.anchor + Vector( ( bx + 0.5 ) * GRID, -( bz + 0.5 ) * GRID, ( by - MC_FLOOR ) * GRID )
 end
 
-function MC:ShowBlock( bx, by, bz, kind )
+-- which of a block's variants its state picks (all of the variant's properties must be in the state, as in Minecraft)
+function MC:Variant( kind, state )
+	local vs = MCB[ kind ]
+	if not vs then return nil end
+	state = "," .. ( state or "" ) .. ","
+	for _, v in ipairs( vs ) do
+		local ok = true
+		for kv in v[1]:gmatch( "[^,]+" ) do if not state:find( "," .. kv .. ",", 1, true ) then ok = false break end end
+		if ok then return v end
+	end
+	return vs[1]
+end
+
+-- Dota draws a Minecraft block: its own model from Minecraft's block model (tools/gen_mcblocks.py), turned for the
+-- blockstate variant around the block's centre (Minecraft: x first, then y, both clockwise seen down the axis)
+function MC:ShowBlock( bx, by, bz, kind, solid, state )
 	local key = bx .. "," .. by .. "," .. bz
 	MC:HideBlock( bx, by, bz )
 	local pos = MC:BlockPos( bx, by, bz )
-	local p = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/" .. ( MODELS[ kind ] or "cobblestone" ) .. ".vmdl",
-		origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ) } )
-	p:SetModelScale( GRID / 128 ) -- the cube model is 128 units
+	local v = MC:Variant( kind, state )
+	local p
+	-- something light (fire, a torch, a flower) right on a half-step column stands on the terrain's slab, half a block lower
+	local h = MC.halfh[ bx .. "," .. bz ]
+	local sink = ( solid == false and h and h % 2 == 1 and by == MC_FLOOR + ( h + 1 ) / 2 ) and GRID / 2 or 0
+	if v then
+		p = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mcb/" .. v[2] .. ".vmdl",
+			origin = string.format( "%f %f %f", pos.x, pos.y, pos.z + GRID / 2 - sink ), angles = string.format( "0 %d %d", -v[4], v[3] ) } )
+	else -- not a Minecraft block we know: the old cube
+		p = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/" .. ( MODELS[ kind ] or "cobblestone" ) .. ".vmdl",
+			origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ) } )
+	end
+	p:SetModelScale( GRID / 128 ) -- the models are 128 units a block
 	p.mc_kind = kind
+	p.mc_solid = solid ~= false -- fire, torches, flowers: drawn, but units neither bump into nor stand on them
 	MC.props[ key ] = p
 end
 
@@ -262,7 +341,8 @@ end
 -- (walk on top of it), two stacked blocks are a wall. Returns: block at ground level, block one above.
 function MC:Column( bx, bz )
 	local g = MC.heights[ bx .. "," .. bz ] or MC_FLOOR
-	return MC.props[ bx .. "," .. g .. "," .. bz ], MC.props[ bx .. "," .. ( g + 1 ) .. "," .. bz ], g
+	local function solid( y ) local p = MC.props[ bx .. "," .. y .. "," .. bz ] return p and p.mc_solid and p or nil end
+	return solid( g ), solid( g + 1 ), g
 end
 
 -- a Minecraft block appeared/vanished in this column: keep its Dota block unit (mining target, and a wall when 2 high)
@@ -559,6 +639,7 @@ function MC:DamageFilter( f )
 	end
 	local def = victim.mc_block
 	if not def then return true end
+	if attackerUnit and attackerUnit.IsBuilding and attackerUnit:IsBuilding() then return false end -- fountains/towers don't mine
 
 	local attacker = EntIndexToHScript( f.entindex_attacker_const )
 	local hero = attacker:IsRealHero() and attacker or attacker:GetOwner()
@@ -614,5 +695,5 @@ end
 
 -- each Dota script file has its own environment; share these with abilities and mc_bridge.lua
 _G.CALIBRATE = CALIBRATE
-_G.EMERALD_GOLD, _G.TRADERS = EMERALD_GOLD, TRADERS
+_G.EMERALD_GOLD, _G.TRADERS, _G.XP_TABLE = EMERALD_GOLD, TRADERS, XP_TABLE
 _G.MC, _G.BLOCKS, _G.PICKAXES, _G.GRID, _G.STEVE, _G.FROM_MC, _G.MC_FLOOR = MC, BLOCKS, PICKAXES, GRID, STEVE, FROM_MC, MC_FLOOR

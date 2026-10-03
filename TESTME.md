@@ -2,6 +2,18 @@
 
 Things Claude could not check alone (they need a real person playing), newest first. Strike them out or tell Claude.
 
+## 2026-10-03 (16:50)
+- [ ] **Blocks**: every Minecraft block now has its own look in Dota (anvils, fences, glass, torches, fire, logs on
+      their side, slabs, leaves...). Look for blocks that look wrong or are turned the wrong way.
+- [ ] **Ground** should match Dota's everywhere now (± a quarter block). Tell me where it doesn't.
+- [ ] **Fire** lights everywhere and burns creeps; creeps walk through fire, not over it.
+- [ ] **Crits / sweeps** always show their particles; the sweep hits enemies around the target.
+- [ ] **Roshan's boss bar** in the pit (not tested by me: I didn't go to Roshan), towers' bar while hitting them.
+- [ ] **Elytra**: fireworks at the secret shop; you can look up while gliding (Dota's view stays level).
+- [ ] **Steve**: no Kunkka voice lines, no Dota level-up sound (max health still grows with your level).
+- [ ] **High ground**: stand 3+ blocks up (a pillar) → you should see further (Dota's vision over trees/cliffs).
+- [ ] No black stripes far away, no zombie flashing on creeps.
+
 ## 2026-10-03 (13:25)
 - [ ] **Smoothness.** Turning and walking should feel much calmer than before: in the measurements, camera unevenness
       went from 0.25–0.40 down to 0.04–0.05. Do your eyes still hurt? If so, when exactly: turning, walking, hand/HUD,

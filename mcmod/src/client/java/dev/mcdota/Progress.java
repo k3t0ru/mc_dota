@@ -107,6 +107,44 @@ public final class Progress {
 		if (from == null || !Sync.run(server, cmd + " by @e[tag=dota_" + attacker + ",limit=1]", false)) Sync.run(server, cmd);
 	}
 
+	// --- boss bar and hit effects (Dota decides; see MC:BossBar / MCBridge:HitUnit) ------------------------------
+	private static String bossShown = "";
+
+	// server thread: "boss none" or "boss <color> <hp> <max> <name...>": Roshan while Steve is in his pit, a building
+	// a few seconds after Steve hit it (a Minecraft boss bar, like the Wither's)
+	public static void boss(MinecraftServer server, String[] p) {
+		String state = String.join(" ", java.util.Arrays.copyOfRange(p, 1, p.length));
+		if (state.equals(bossShown)) return;
+		if (bossShown.isEmpty()) Sync.run(server, "bossbar add mcdota:boss \"\"", false);
+		bossShown = state;
+		if (p[1].equals("none")) { Sync.run(server, "bossbar set mcdota:boss visible false", false); return; }
+		String name = String.join(" ", java.util.Arrays.copyOfRange(p, 4, p.length));
+		for (String c : new String[] { "players @a", "color " + p[1], "style notched_10", "max " + Math.max(1, Integer.parseInt(p[3])),
+			"value " + Math.max(0, Integer.parseInt(p[2])), "name {text:\"" + name + "\"}", "visible true" })
+			Sync.run(server, "bossbar set mcdota:boss " + c, false);
+	}
+
+	// server thread: a swing Dota landed: Minecraft's crit / sweep effects on the target's stand-in (Minecraft only
+	// shows them when its own crosshair hit the stand-in, so they were missing now and then)
+	public static void hitFx(MinecraftServer server, String kind, String id) {
+		Entity e = null;
+		for (Entity c : server.overworld().getAllEntities()) if (c.getTags().contains("dota_" + id)) { e = c; break; }
+		if (e == null) return;
+		double x = e.getX(), y = e.getY() + e.getBbHeight() * 0.6, z = e.getZ();
+		String at = String.format(Locale.ROOT, "%.2f %.2f %.2f", x, y, z);
+		switch (kind) {
+			case "crit" -> {
+				Sync.run(server, "particle minecraft:crit " + at + " 0.3 0.4 0.3 0.4 18 force", false);
+				Sync.run(server, "playsound minecraft:entity.player.attack.crit player @a " + at + " 1 1", false);
+			}
+			case "sweep" -> {
+				Sync.run(server, "particle minecraft:sweep_attack " + at + " 0 0 0 0 1 force", false);
+				Sync.run(server, "playsound minecraft:entity.player.attack.sweep player @a " + at + " 1 1", false);
+			}
+			default -> Sync.run(server, "playsound minecraft:entity.player.attack.strong player @a " + at + " 1 1", false);
+		}
+	}
+
 	// --- death ----------------------------------------------------------------------------------------------------
 	// Dota takes gold on death; Steve loses emeralds (2 + level, what he carries at most), his Dota hero dies too (the
 	// killer gets the bounty), and he waits for Dota's respawn timer frozen at the spawn ("respawn" from Dota frees him).
@@ -289,7 +327,7 @@ public final class Progress {
 			buy(1, "sand", 64))));
 		TRADERS.add(new Trader("Secret shop", "weaponsmith", List.of( // far from the spawn: the rare stuff
 			buy(4, "diamond"), buy(15, "diamond", 4), buy(20, "netherite_ingot"), buy(5, "netherite_upgrade_smithing_template"),
-			buy(60, "elytra"), buy(8, "golden_apple"), buy(3, "ender_pearl", 2),
+			buy(60, "elytra"), buy(2, "firework_rocket", 8), buy(8, "golden_apple"), buy(3, "ender_pearl", 2),
 			buy(6, "experience_bottle", 8), book(25, "mending", 1), book(40, "sharpness", 5), book(30, "protection", 4),
 			book(30, "power", 5),
 			sell("diamond", 1, 2), sell("netherite_ingot", 1, 10), sell("golden_apple", 1, 4))));

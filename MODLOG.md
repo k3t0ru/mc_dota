@@ -363,3 +363,29 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Kept: Panorama measures Dota's focal length every probe (2 s) → "mc_fov" → "mcfov" → Minecraft's fov (66 now), so the
   layers stay matched if anything ever changes it (e.g. another resolution).
 - Gotcha: an unattended match ends by itself (~50 min: Dire creeps destroy the base) and Dota returns to the menu.
+
+## 2026-10-03 16:50: user round — all Minecraft blocks in Dota, ground, boss bar, fire, effects
+- Every Minecraft block in Dota: tools/gen_mcblocks.py builds a model per Minecraft block model from the jar (elements,
+  element rotations, per-face UV + rotation, default UVs, alpha-tested textures, tinted grass/leaves, animated → frame 1;
+  no elements → a cube with the particle texture), centred on the block; scripts/vscripts/mc_block_models.lua (MCB)
+  maps blockstate variants to model + x/y. Minecraft sends the full state ("set x y z kind solid props"); MC:Variant
+  picks the variant, the prop turns by angles (0, -y, x). 1816 models / 1081 textures, compile 13 min once
+  (tools/build_mcblocks.sh, in setup.sh); everything gitignored (Mojang-derived). Load time unchanged (~1 min).
+  Variants are ordered default-state first (a block placed without a state — the stalls — used axis=x logs).
+- Ground mismatch: the origin (MC 0,0) moved with the hero's spawn spot and old terrain stayed in the world. Now the
+  origin is our fountain snapped to the grid, and dev_launch wipes the world's region/entities/poi (rebuilt from Dota).
+  Measured at 12 spots: eye 139–171 above Dota's ground (ideal 155: the half-block steps' ±24 limit).
+- Fire: on half-step columns the terrain's top is a bottom slab, where vanilla fire can't stand → FireMixin lets it;
+  Dota draws light non-solid blocks half a block lower there. Non-solid blocks ("set ... solid 0") don't collide/lift.
+  Fire/lava/etc. damage on stand-ins counts (splash): verified 300 → 228 HP in 4 s.
+- Horizon stripes: terrain side faces were shaded darker magenta (directional shading) → own block models for
+  podzol/mud_bricks/slabs with "shade": false. Also mipmaps off. Verified with Minecraft's own F2 frame vs the overlay.
+- Swing: crit/sweep flags; Lua deals the sweep (enemies within a block of the target, never on denies) and asks
+  Minecraft for crit/sweep particles + sounds on the target's stand-in ("fx"). Minecraft's own sweep hits are dropped.
+- Boss bar ("boss"): Roshan while Steve is within 900 of him, else a building Steve hit in the last 5 s. Verified.
+- Steve's XP: the XP filter keeps Dota's hero XP from Steve (no level-up sound) and counts it (XP_TABLE → level → max
+  health). Kunkka's voice: VoiceFile "". Blocks' Dota units are on Steve's team (our fountain shot them as neutrals),
+  buildings never damage blocks. Stand-ins spawn invisible (no zombie flash). Fireworks at the secret shop. Looking up
+  allowed while gliding on elytra. 3+ blocks above the ground: flying vision (modifier_mc_highground).
+- tools/check_lua.py now also dry-runs addon_game_mode.lua's top level (Dota API stubbed, our globals nil until
+  assigned): catches "MC used before MC = {}" — that runtime error had dropped the whole game mode again.

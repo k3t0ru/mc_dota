@@ -8,12 +8,13 @@
 #   reset               (new Dota game: clear MC's arena)
 #   void <x> <z>        (outside the Dota map: bottomless column)   border <size> (MC world border, centred on 0,0)
 #   h <x> <z> <hh> <low> (terrain: column height and its lowest neighbour's, half blocks above the flat floor)
+#   boss none|<color> <hp> <max> <name> (Minecraft boss bar)   fx crit|sweep|hit <unit id> (hit effects)
 #   mcfov <deg> (Minecraft's vertical fov = Dota's measured one)   spawnat <x> <y> <z> (Steve's spawn point)   delay <ms> (Dota camera playback delay: Minecraft's overlay waits as long)   trader <x> <z> <profession>
 #   dead <respawn s> <emeralds lost> / respawn (Steve's Dota hero died / is back)   MC -> Dota: died <emeralds lost>
 #   MC -> Dota: swing <damage> (a melee click: lands on the unit Dota highlights under the crosshair)
 #   loot <emeralds> <gold> [<item> <n>]... (Steve killed a unit; leftover gold carries over in Lua)   lvl <n> (Steve's Dota level = MC max health)   xp <points>
 # hero lines may carry a 7th field: the MC y the unit stands at (any Dota unit, creeps too)
-# Dota gets back: steve <name> <x> <z> <hp> <maxhp> <yaw>, hit .., mcblock <x> <y> <z> <kind>, mcbreak <x> <y> <z>,
+# Dota gets back: steve <name> <x> <z> <hp> <maxhp> <yaw> <y>, hit .., mcblock <x> <y> <z> <kind> <solid>, mcbreak <x> <y> <z>,
 #                 cam <lookX> <lookY> <yaw> <pitch> <dist> <lookZ>   (lookZ absolute; Lua turns it into a height offset)
 # The mod gets back: hero .., dmg <amount>, block .., unblock .., reset, h ..
 # Testing: POST /cmd with Minecraft commands, one per line (runs as the server, e.g. tp/give/time);
@@ -51,7 +52,7 @@ class Relay:
                     self.anchor = tuple(float(v) for v in p[1:])
                 elif p[0] == "hero":
                     heroes[p[1]] = line
-                elif p[0] in ("dmg", "block", "unblock", "reset", "h", "xp", "void", "border", "loot", "lvl", "delay", "trader", "dead", "respawn", "spawnat", "mcfov"):
+                elif p[0] in ("dmg", "block", "unblock", "reset", "h", "xp", "void", "border", "loot", "lvl", "delay", "trader", "dead", "respawn", "spawnat", "mcfov", "boss", "fx"):
                     self.to_mc.append(line)
                     if p[0] in ("reset", "border"):
                         print("to mc:", line, flush=True)
@@ -71,7 +72,7 @@ class Relay:
                     continue
                 if p[0] == "me" and len(p) == 8:
                     name, x, y, z, yaw, hp, mx = p[1:]
-                    self.me = f"steve {name} {x} {z} {hp} {mx} {yaw}"
+                    self.me = f"steve {name} {x} {z} {hp} {mx} {yaw} {y}"
                 elif p[0] in ("hit", "crack", "died", "swing"):
                     self.to_dota.append(line)
                 elif p[0] == "set":

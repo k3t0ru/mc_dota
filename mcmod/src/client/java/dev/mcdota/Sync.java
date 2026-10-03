@@ -43,7 +43,14 @@ public final class Sync {
 	public static void blockChanged(BlockPos p, BlockState s) {
 		if (applying || p.getY() < -60 || p.getY() > 60) return; // Dota decides what to draw / collide by height
 		if (s.isAir()) out.add(String.format("break %d %d %d", p.getX(), p.getY(), p.getZ()));
-		else out.add(String.format("set %d %d %d %s", p.getX(), p.getY(), p.getZ(), BuiltInRegistries.BLOCK.getKey(s.getBlock()).getPath()));
+		else {
+			// its state too ("axis=x,facing=north,..."): Dota picks the blockstate variant (MC:Variant) to turn its model
+			StringBuilder state = new StringBuilder();
+			for (var e : s.getValues().entrySet())
+				state.append(state.length() > 0 ? "," : "").append(e.getKey().getName()).append('=').append(e.getValue().toString().toLowerCase(Locale.ROOT));
+			out.add(String.format("set %d %d %d %s %d %s", p.getX(), p.getY(), p.getZ(), BuiltInRegistries.BLOCK.getKey(s.getBlock()).getPath(),
+				s.blocksMotion() ? 1 : 0, state.length() > 0 ? state : "-")); // 0: fire, torches, flowers: drawn, units don't bump into them
+		}
 	}
 
 	// blocks Dota built (the market, the fountain's barriers): explosions leave them alone (ExplosionMixin)
@@ -186,6 +193,12 @@ public final class Sync {
 		}
 	}
 
+	// fire, lava and the like (no attacker): on Dota's map only the player can have put them there
+	private static boolean burning(net.minecraft.world.damagesource.DamageSource src) {
+		String id = src.type().msgId();
+		return id.equals("inFire") || id.equals("onFire") || id.equals("lava") || id.equals("hotFloor") || id.equals("campfire") || id.equals("cactus") || id.equals("sweetBerryBush");
+	}
+
 	// stand-in size for big Dota units (Minecraft's scale attribute), so swords and arrows can reach a tower
 	private static double scale(String name) {
 		if (name.contains("tower")) return 2.5;
@@ -211,9 +224,11 @@ public final class Sync {
 						boolean fresh = standIns.put(p[1], tag) == null;
 						if (fresh) run(server, String.format(Locale.ROOT, "summon minecraft:husk %s " + y + " %s {NoAI:1b,Silent:1b,"
 							+ "PersistenceRequired:1b,NoGravity:1b,DeathLootTable:\"minecraft:empty\",Tags:[\"dota\",\"%s\"],attributes:[{id:\"minecraft:max_health\",base:%d},"
-							+ "{id:\"minecraft:scale\",base:%.1f}],Health:%df}", p[3], p[4], tag, (int) HERO_HP, scale(p[2]), (int) HERO_HP));
-						// the Dota unit is what you see (magenta silhouettes came out pink and shaky: Minecraft lights mobs its own way)
-						if (fresh) run(server, "effect give @e[tag=" + tag + "] minecraft:invisibility infinite 0 true");
+							+ "{id:\"minecraft:scale\",base:%.1f}],Health:%df,"
+							// invisible from the first tick (an effect given afterwards let a zombie flash for a moment): the Dota unit
+							// is what you see (magenta silhouettes came out pink and shaky: Minecraft lights mobs its own way)
+							+ "active_effects:[{id:\"minecraft:invisibility\",duration:-1,amplifier:0b,show_particles:0b}]}",
+							p[3], p[4], tag, (int) HERO_HP, scale(p[2]), (int) HERO_HP));
 						run(server, String.format("tp @e[tag=%s,limit=1] %s %s %s", tag, p[3], y, p[4]));
 					}
 					// from the attacker's stand-in, so a raised shield facing it blocks the hit (no stand-in: plain damage)
@@ -224,12 +239,18 @@ public final class Sync {
 					case "spawnat" -> Progress.spawnAt(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
 					case "lvl" -> Progress.level(server, Integer.parseInt(p[1]));
 					case "delay" -> Overlay.dotaDelay(Integer.parseInt(p[1]));
+					case "boss" -> Progress.boss(server, p);
+					case "fx" -> Progress.hitFx(server, p[1], p[2]);
 					case "mcfov" -> { // Dota's measured vertical field of view: Minecraft's matches it
 						int fov = (int) Math.round(Double.parseDouble(p[1]));
 						Minecraft mc = Minecraft.getInstance();
 						mc.execute(() -> { if (mc.options.fov().get() != fov) mc.options.fov().set(Math.max(30, Math.min(110, fov))); });
 					}
-					case "cmd" -> run(server, line.trim().substring(4)); // testing (bridge /cmd)
+					case "cmd" -> { // testing (bridge /cmd): like a player's action, so placed blocks reach Dota
+						applying = false;
+						run(server, line.trim().substring(4));
+						applying = true;
+					}
 					case "trader" -> Progress.trader(Double.parseDouble(p[1]), Double.parseDouble(p[2]), p[3], p.length > 4 ? Double.parseDouble(p[4]) : Double.NaN);
 					case "xp" -> run(server, "xp add @p " + p[1] + " points"); // Steve killed a Dota unit
 					case "reset" -> { // new Dota game: flat ground again (dirt under a magenta podzol top) and nothing on it
@@ -267,7 +288,10 @@ public final class Sync {
 						// only a player's hit counts: void, suffocation inside blocks etc. must not hurt the Dota unit.
 						// direct = the swing's own target or a projectile (a sweep's splash isn't: it never touches allies)
 						var src = le.getLastDamageSource();
-						if (src != null && src.getEntity() instanceof net.minecraft.world.entity.player.Player pl) {
+						if (src != null && src.getEntity() == null && burning(src)) // fire/lava a player set: splash damage
+							out.add(String.format(Locale.ROOT, "hit %s %.2f 0", s.getKey(), HERO_HP - le.getHealth()));
+						if (src != null && src.getEntity() instanceof net.minecraft.world.entity.player.Player pl
+							&& !(src.getDirectEntity() == pl && pl.getLastHurtMob() != le)) { // that's Minecraft's own sweep: Lua sweeps (swing)
 							boolean projectile = src.getDirectEntity() instanceof net.minecraft.world.entity.projectile.Projectile; // TNT: splash
 							boolean melee = src.getDirectEntity() == pl && pl.getLastHurtMob() == le;
 							// the swing's own target: AttackMixin's "swing" hits what Dota highlights instead
