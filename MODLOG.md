@@ -449,3 +449,19 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Blocks into half steps also by clicking the slab's top (UseBlockCallback): pillaring up from a step works.
 - Block textures 256 px (UP 16): at 128 Dota's filtering blurred Minecraft's pixels up close.
 - Dev: /dota "client <cmd>" (client console), "dumpedge", "testunit <unit> <dist> free" (not stunned).
+
+## 2026-10-03 22:00: camera bob, invulnerable after respawn, sharper textures, high ground at 4
+- Picture bobbing while walking (most visible on traders/stalls): Dota's camera takes its height from its own camera
+  ground (the target's z is ignored), which stepped with dota_camera_z_interp_speed 100000; our offset shows one frame
+  late (measured exactly: set at n, seen at n+1), so every step jerked a frame. Now z_interp_speed 4 (smooth camera
+  ground) + the 1-frame feedback + the wanted height glides (0.4 a frame); Lua takes the eye height from Dota's ground
+  plus the feet's height over Minecraft's ground (MCBridge:SmoothEye: Minecraft's half steps no longer move it).
+  Measured while strafing at the market: camera jerk max 46-81 -> 7-12, mean 1.4-2.1 -> 0.25-0.4.
+- Creeps/towers ignored Steve after a respawn (and from the start): modifier_fountain_invulnerability stays on a hero
+  moved by SetAbsOrigin (he never "walks out"). Removed when he is 900+ from a fountain. Verified: a tower hits him
+  after a death. (Test creeps made with CreateUnitByName have no AI: use towers.)
+- Textures: the user's Dota texture quality had r_texture_stream_mip_bias 1 (half size): launch arg 0.
+- High-ground vision from 4 blocks up.
+- Tried: an unlit sky box around the map (looked like a box; dropped), fow_darkess 0 (no effect). The striped dark
+  backdrop over the horizon stays (Dota's far map edge, seen only with the long far plane).
+- Dev: /dota "towers", "steveinfo [unit]", "nodraw 0"; fpcam.js logs "[mc] zjitter" every 3 s.

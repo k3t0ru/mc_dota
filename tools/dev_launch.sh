@@ -8,7 +8,7 @@ sleep 3
 [ -z "$(bridge_pids)" ] && (cd "$HERE" && python -u bridge/bridge.py > bridge/bridge.log 2>&1 &)
 
 rm -f "$DOTA_LOG"
-cmd //c start "" "$(cygpath -w "$DOTA_EXE")" -novid -console -condebug -windowed -noborder -w ${DOTA_SIZE%x*} -h ${DOTA_SIZE#*x} +dota_camera_edgemove 0 +dota_camera_speed 0 +dota_camera_lock 0 +dota_camera_fov_min 90 +dota_camera_fov_max 90 +dota_camera_z_interp_speed 100000 +fps_max $DOTA_FPS +engine_no_focus_sleep 0 +fog_enable 0 +r_farz 40000 +dota_camera_zfar_zoomed_in 40000 +dota_camera_zfar_zoomed_out 40000 +snd_mute_losefocus 0 +snd_musicvolume 0 +sv_cheats 1 +dota_launch_custom_game mc_dungeons $DOTA_MAP
+cmd //c start "" "$(cygpath -w "$DOTA_EXE")" -novid -console -condebug -windowed -noborder -w ${DOTA_SIZE%x*} -h ${DOTA_SIZE#*x} +dota_camera_edgemove 0 +dota_camera_speed 0 +dota_camera_lock 0 +dota_camera_fov_min 90 +dota_camera_fov_max 90 +dota_camera_z_interp_speed 4 +fps_max $DOTA_FPS +engine_no_focus_sleep 0 +fog_enable 0 +r_farz 40000 +r_texture_stream_mip_bias 0 +dota_camera_zfar_zoomed_in 40000 +dota_camera_zfar_zoomed_out 40000 +snd_mute_losefocus 0 +snd_musicvolume 0 +sv_cheats 1 +dota_launch_custom_game mc_dungeons $DOTA_MAP
 for i in $(seq 1 120); do grep -q "bridge online" "$DOTA_LOG" 2>/dev/null && break; sleep 2; done
 grep -E "\[mc\] bridge" "$DOTA_LOG" | tail -1
 # a runtime error while loading the game mode leaves Dota running without it (hero pick, no bridge): say so loudly

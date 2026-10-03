@@ -125,6 +125,29 @@ function MCBridge:Apply( body, stale )
 				local u = CreateUnitByName( name, self.steve:GetAbsOrigin() + self.steve:GetForwardVector() * tonumber( dist ), false, nil, nil, team )
 				if free ~= "free" then u:AddNewModifier( u, nil, "modifier_stunned", { duration = 60 } ) end
 				print( string.format( "[mc] test unit %s #%d hp %d at %s (steve %s)", name, u:entindex(), u:GetHealth(), tostring( u:GetAbsOrigin() ), tostring( self.steve:GetAbsOrigin() ) ) )
+			elseif dev:match( "^steveinfo" ) and self.steve then -- why don't enemies attack Steve?
+				local u = self.steve
+				local mods = {}
+				for _, m in ipairs( u:FindAllModifiers() ) do table.insert( mods, m:GetName() ) end
+				print( string.format( "[mc] steve alive %s pos %s team %d invuln %s attackimmune %s nodraw %s untargetable %s mods %s",
+					tostring( u:IsAlive() ), tostring( u:GetAbsOrigin() ), u:GetTeamNumber(), tostring( u:IsInvulnerable() ),
+					tostring( u:IsAttackImmune() ), tostring( u.IsNoDraw and u:IsNoDraw() ), tostring( u.IsUntargetable and u:IsUntargetable() ),
+					table.concat( mods, "," ) ) )
+				local id = tonumber( dev:match( "^steveinfo (%d+)" ) or "" )
+				local n = id and EntIndexToHScript( id )
+				if n and not n:IsNull() then
+					local tgt = n:GetAttackTarget()
+					print( string.format( "[mc] unit %d at %s target %s aggro %s", id, tostring( n:GetAbsOrigin() ), tgt and tgt:GetUnitName() or "none", tostring( n:GetAggroTarget() and n:GetAggroTarget():GetUnitName() ) ) )
+				end
+			elseif dev == "towers" then
+				for _, t in ipairs( Entities:FindAllByClassname( "npc_dota_tower" ) ) do
+					local o = t:GetAbsOrigin()
+					print( string.format( "[mc] tower %s team %d at %d %d (mc %d %d)", t:GetUnitName(), t:GetTeamNumber(), o.x, o.y,
+						math.floor( ( o.x - MC.anchor.x ) / GRID ), math.floor( -( o.y - MC.anchor.y ) / GRID ) ) )
+				end
+			elseif dev:match( "^nodraw " ) and self.steve then -- does Dota's AI ignore a hero it doesn't draw?
+				self.nodrawOff = dev == "nodraw 0"
+				if self.nodrawOff then self.steve:RemoveEffects( EF_NODRAW ) end
 			elseif dev == "dumpedge" then -- entities with models out at the map's edge (what Steve sees on the horizon)
 				local e, n, seen = Entities:First(), 0, {}
 				while e and n < 60 do
@@ -191,10 +214,38 @@ function MCBridge:Apply( body, stale )
 			print( string.format( "[mc] eye %.0f above Dota ground (ground %.0f, anchor %.0f, cell %s)", eyeZ - GetGroundHeight( p, nil ), GetGroundHeight( p, nil ), MC.anchor.z, MC:CellOf( p ) .. "," .. select( 2, MC:CellOf( p ) ) ) )
 		end
 		if lx then -- Panorama wants the look-at height above the ground under it
-			local off = tonumber( lz ) - GetGroundHeight( Vector( tonumber( lx ), tonumber( ly ), 0 ), nil )
+			lz = MCBridge:SmoothEye( tonumber( lx ), tonumber( ly ), tonumber( yawc ), tonumber( pitch ), tonumber( dist ), tonumber( lz ) )
+			local off = lz - GetGroundHeight( Vector( tonumber( lx ), tonumber( ly ), 0 ), nil )
 			CustomGameEventManager:Send_ServerToAllClients( "mc_cam", { v = table.concat( { lx, ly, yawc, pitch, dist, string.format( "%.1f", off ), sent, lz }, " " ) } )
 		end
 	end
+end
+
+-- Minecraft's ground is half-block steps of Dota's slopes: walking across one, Steve's eye jumped half a block at
+-- every step, and with it Dota's whole picture (most visible on tall things nearby: the traders, the stalls). Dota's
+-- camera takes its height from Dota's own smooth ground instead, plus how high Steve's feet are above Minecraft's
+-- ground (jumps, blocks, falling off a cliff stay as they are). Returns the look-at height to use.
+function MCBridge:SmoothEye( lx, ly, yawc, pitch, dist, lz )
+	local a = MC.anchor
+	if not a then return lz end
+	local t, p = math.rad( 180 - yawc ), math.rad( pitch ) -- Minecraft's yaw (the bridge: Dota yaw = 180 - MC yaw)
+	local ex, ey = lx + dist * math.cos( p ) * math.sin( t ), ly + dist * math.cos( p ) * math.cos( t )
+	local ez = lz + dist * math.sin( p )
+	-- Minecraft's ground under the feet: the highest column the player's footprint (0.3 blocks around) stands on
+	local ground
+	for _, o in ipairs( { { -0.3, -0.3 }, { 0.3, -0.3 }, { -0.3, 0.3 }, { 0.3, 0.3 } } ) do
+		local bx, bz = math.floor( ( ex - a.x ) / GRID + o[1] ), math.floor( -( ey - a.y ) / GRID + o[2] )
+		local h = MC.halfh[ bx .. "," .. bz ]
+		if h then ground = math.max( ground or -1e9, MC_FLOOR + h / 2 ) end
+	end
+	if not ground then return lz end
+	local above = ( ez - a.z ) / GRID - 1.62 - ground -- feet over Minecraft's ground (0 when standing on it)
+	if above < -0.6 then return lz end
+	-- Dota's ground averaged around the eye: its little bumps (paving, rocks) shook the camera by up to 17 a frame
+	local g = 0
+	for dx = -48, 48, 48 do for dy = -48, 48, 48 do g = g + GetGroundHeight( Vector( ex + dx, ey + dy, 0 ), nil ) end end
+	local want = g / 9 + ( 1.62 + math.max( 0, above ) ) * GRID
+	return lz + ( want - ez )
 end
 
 -- a Minecraft hit on a Dota unit. Allies can only be denied like in Dota: creeps below half health, towers below 10%,
@@ -218,12 +269,12 @@ function MCBridge:Swing( target, amount, crit, sweep, fire )
 	end
 end
 
--- standing 3+ blocks above the ground (a tower of blocks, flying on elytra) sees like from a cliff: flying vision
+-- standing 4+ blocks above the ground (a tower of blocks, flying on elytra) sees like from a cliff: flying vision
 function MCBridge:HighGround( x, z, y )
 	local u = self.steve
 	if not u or u:IsNull() or not y or not x then return end
 	local g = MC.heights[ math.floor( x ) .. "," .. math.floor( z ) ] or MC_FLOOR
-	local high = y - g >= 3
+	local high = y - g >= 4
 	if high and not u:HasModifier( "modifier_mc_highground" ) then u:AddNewModifier( u, nil, "modifier_mc_highground", {} )
 	elseif not high and u:HasModifier( "modifier_mc_highground" ) then u:RemoveModifierByName( "modifier_mc_highground" ) end
 end
@@ -259,8 +310,13 @@ function MCBridge:MoveSteve( name, pos, frac, yaw )
 		u:AddNoDraw() -- ponytail: the camera sits inside him; for PvP give other players a visible blocky Steve instead
 	end
 	if not u:IsAlive() then return end
-	u:AddNoDraw() -- (again every time: a respawn shows the model)
+	if not self.nodrawOff then u:AddNoDraw() end -- (again every time: a respawn shows the model)
 	u:SetAbsOrigin( pos )
+	-- Dota makes a respawned hero invulnerable until he walks out of the fountain; moved by SetAbsOrigin he never
+	-- "walked out": creeps and towers ignored Steve for minutes after a death
+	if u:HasModifier( "modifier_fountain_invulnerability" ) and not MC:NearFountain( pos, 900 ) then
+		u:RemoveModifierByName( "modifier_fountain_invulnerability" )
+	end
 	u:SetForwardVector( Vector( -math.sin( yaw ), -math.cos( yaw ), 0 ) )
 	u:SetHealth( math.max( 1, frac * u:GetMaxHealth() ) )
 end

@@ -124,6 +124,35 @@ function reportAim() {
 	GameEvents.SendCustomGameEventToServer( "mc_aim", { e: aim } );
 }
 
+// debug: how far Dota's look-at height ends up from what was asked last frame, and how much that error jumps frame
+// to frame (vertical jitter of Dota's picture against Minecraft's: the traders "bobbing")
+var CG_LOG = false; // debug: Dota's camera ground under the look-at point, every frame
+var zHist = [], zJerkSum = 0, zJerkMax = 0, zJerkN = 0, zSmooth = null, zPrevWant = null, zStep = 0, zWant = null, zErr = [], zLog = 0, zGround = 0;
+function zStat( lz ) {
+	if ( zWant !== null ) zErr.push( lz - zWant );
+	zHist.push( lz ); // the camera's own height: its second difference = jerks (0 on a steady glide)
+	if ( zHist.length >= 3 ) {
+		var j = Math.abs( zHist[zHist.length - 1] - 2 * zHist[zHist.length - 2] + zHist[zHist.length - 3] );
+		zJerkSum += j; zJerkMax = Math.max( zJerkMax, j ); zJerkN++;
+	}
+	if ( zHist.length > 3 ) zHist.shift();
+	if ( zWant !== null && zPrevWant !== null ) zStep = Math.max( zStep, Math.abs( zWant - zPrevWant ) );
+	zPrevWant = zWant;
+	if ( Date.now() - zLog > 3000 && zErr.length > 10 ) {
+		var a = 0, d = 0, m = 0;
+		for ( var i = 0; i < zErr.length; i++ ) {
+			a += Math.abs( zErr[i] );
+			m = Math.max( m, Math.abs( zErr[i] ) );
+			if ( i ) d += Math.abs( zErr[i] - zErr[i - 1] );
+		}
+		$.Msg( "[mc] zjitter frames " + zErr.length + " mean|err| " + ( a / zErr.length ).toFixed( 2 ) + " max " + m.toFixed( 1 ) + " mean|d err| " + ( d / ( zErr.length - 1 ) ).toFixed( 2 ) + " max want step " + zStep.toFixed( 1 ) + " | camera jerk mean " + ( zJerkSum / Math.max( 1, zJerkN ) ).toFixed( 2 ) + " max " + zJerkMax.toFixed( 1 ) );
+		zJerkSum = 0; zJerkMax = 0; zJerkN = 0;
+		zStep = 0;
+		zErr = [];
+		zLog = Date.now();
+	}
+}
+
 function frame() {
 	var t = Date.now() - playbackDelay();
 	reportDelay();
@@ -147,16 +176,24 @@ function frame() {
 			if ( k2 > 0 ) v = p1.v.map( function( x, j ) { return j === 6 ? x : x + ( x - p0.v[j] ) * k2; } );
 		}
 		GameUI.SetCameraTarget( -1 );
-		GameUI.SetCameraTargetPosition( [ v[0], v[1], 0 ], 0.001 ); // lerp = transition seconds; called every frame, anything bigger makes the camera trail ("float")
+		GameUI.SetCameraTargetPosition( [ v[0], v[1], 0 ], 0.001 ); // (Dota ignores the z: its camera ground decides) // lerp = transition seconds; called every frame, anything bigger makes the camera trail ("float")
 		GameUI.SetCameraYaw( v[2] );
 		// looking up: Dota's camera takes 360 - x (a negative pitch is a top-down view)
 		var pitch = v[3] < 0 ? v[3] + 360 : v[3];
 		GameUI.SetCameraPitchMin( pitch );
 		GameUI.SetCameraPitchMax( pitch );
 		GameUI.SetCameraDistance( v[4] );
-		var ref = GameUI.GetCameraLookAtPosition()[2] - lastOff; // Dota's own ground under the look-at point
-		lastOff = v[7] - ref;
-		zFix = lastOff - v[5];
+		var lzp = GameUI.GetCameraLookAtPosition();
+		var lz = lzp[2];
+		if ( CG_LOG ) $.Msg( "[mc] cg " + lzp[0].toFixed( 1 ) + " " + lzp[1].toFixed( 1 ) + " " + ( lz - lastOff ).toFixed( 1 ) );
+		zStat( lz );
+		// Dota's camera ground under last frame's look-at point (the offset shows one frame late: measured exactly);
+		// the error left is how much that ground changes in a frame, so Dota smooths it (dota_camera_z_interp_speed)
+		var ref = lz - lastOff;
+		// the wanted height itself glides over a few frames (Minecraft's steps, Dota's ground under the eye)
+		zSmooth = zSmooth === null || Math.abs( v[7] - zSmooth ) > 300 ? v[7] : zSmooth + ( v[7] - zSmooth ) * 0.4;
+		lastOff = zSmooth - ref;
+		zWant = v[7];
 		GameUI.SetCameraLookAtPositionHeightOffset( lastOff );
 		if ( Date.now() - lastProbe > 2000 ) probe( v );
 		smooth( v );

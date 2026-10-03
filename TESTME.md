@@ -2,6 +2,12 @@
 
 Things Claude could not check alone (they need a real person playing), newest first. Strike them out or tell Claude.
 
+## 2026-10-03 (22:00)
+- [ ] **Walking bob** at the market (traders/stalls): should be gone or much smaller.
+- [ ] **Creeps and towers attack you** after a death right away (they also do from the very start now).
+- [ ] **Sharper textures** (Dota's texture quality is forced to high for this mode).
+- [ ] High-ground vision from 4 blocks up.
+
 ## 2026-10-03 (20:30)
 - [ ] **Whole map visible** (fog of war hides units as in Dota). The striped dark wall on the horizon is Dota's map edge.
 - [ ] **No invisible walls** at the Dire T4s / Dire top T1-T2 (I walked through x=128 / z=-128 where it was).
