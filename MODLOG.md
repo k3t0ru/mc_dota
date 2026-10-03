@@ -465,3 +465,6 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Tried: an unlit sky box around the map (looked like a box; dropped), fow_darkess 0 (no effect). The striped dark
   backdrop over the horizon stays (Dota's far map edge, seen only with the long far plane).
 - Dev: /dota "towers", "steveinfo [unit]", "nodraw 0"; fpcam.js logs "[mc] zjitter" every 3 s.
+- Fountain: no invulnerability at all (Dota's modifier_fountain_invulnerability removed every move): it only heals/feeds.
+- Striped horizon: tried far planes 6000/10000/14000/40000 (stripes in all; gone only at Dota's default ~3000, which
+  also hides the far map), fow_unseen 0, ent_fire env_sky/fog Disable: no effect. Kept 40000.

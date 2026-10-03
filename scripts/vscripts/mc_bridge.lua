@@ -312,9 +312,9 @@ function MCBridge:MoveSteve( name, pos, frac, yaw )
 	if not u:IsAlive() then return end
 	if not self.nodrawOff then u:AddNoDraw() end -- (again every time: a respawn shows the model)
 	u:SetAbsOrigin( pos )
-	-- Dota makes a respawned hero invulnerable until he walks out of the fountain; moved by SetAbsOrigin he never
-	-- "walked out": creeps and towers ignored Steve for minutes after a death
-	if u:HasModifier( "modifier_fountain_invulnerability" ) and not MC:NearFountain( pos, 900 ) then
+	-- Dota makes a hero at his fountain invulnerable (and moved by SetAbsOrigin he never "walked out": creeps and
+	-- towers ignored Steve for minutes after a death). Steve's fountain only heals and feeds him: never invulnerable.
+	if u:HasModifier( "modifier_fountain_invulnerability" ) then
 		u:RemoveModifierByName( "modifier_fountain_invulnerability" )
 	end
 	u:SetForwardVector( Vector( -math.sin( yaw ), -math.cos( yaw ), 0 ) )
