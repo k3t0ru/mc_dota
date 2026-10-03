@@ -30,6 +30,6 @@ public final class ClockHud {
 		String time = (seconds < 0 ? "-" : "") + (s / 60) + ":" + String.format("%02d", s % 60);
 		g.renderItem(new ItemStack(Items.CLOCK), 4, 4);
 		g.drawString(mc.font, time, 24, 5, 0xFFFFFFFF, true);
-		g.drawString(mc.font, day ? "Day" : "Night", 24, 14, day ? 0xFFFFD84A : 0xFF7FA6FF, true);
+		g.drawString(mc.font, day ? "День" : "Ночь", 24, 14, day ? 0xFFFFD84A : 0xFF7FA6FF, true);
 	}
 }

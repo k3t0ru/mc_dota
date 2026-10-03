@@ -16,28 +16,36 @@ W, H = 1024, 512  # a board's front texture (power-of-two sizes only in Dota; th
 FONT_PX = 10  # texture pixels per font pixel: 4 lines of 10 fill the board
 
 SIGNS = {  # id -> kind, 4 lines (keep in step with SIGNS in addon_game_mode.lua)
-	"fletcher_name": ("wall", ["", "Fletcher", "", ""]),
-	"fletcher_goods": ("wall", ["Materials", "Food", "TNT, clock", ""]),
-	"mason_name": ("wall", ["", "Mason", "", ""]),
-	"mason_goods": ("wall", ["Building", "blocks", "", ""]),
-	"librarian_name": ("wall", ["", "Librarian", "", ""]),
-	"librarian_goods": ("wall", ["Enchanting", "books, tables", "", ""]),
-	"toolsmith_name": ("wall", ["", "Toolsmith", "", ""]),
-	"toolsmith_goods": ("wall", ["Smithing", "Repair: sneak", "+ right click", ""]),
-	"secret_1": ("stand", ["", "Secret", "shop", ""]),
-	"secret_2": ("stand", ["Diamonds", "Netherite", "Elytra", ""]),
+	"fletcher_name": ("wall", ["", "Лучник", "", ""]),
+	"fletcher_goods": ("wall", ["Материалы", "Еда", "Динамит, часы", ""]),
+	"mason_name": ("wall", ["", "Каменщик", "", ""]),
+	"mason_goods": ("wall", ["Строительные", "блоки", "", ""]),
+	"librarian_name": ("wall", ["", "Библиотекарь", "", ""]),
+	"librarian_goods": ("wall", ["Зачарования", "книги, столы", "", ""]),
+	"toolsmith_name": ("wall", ["", "Инструменты", "", ""]),
+	"toolsmith_goods": ("wall", ["Кузня", "Ремонт:", "присесть + ПКМ", ""]),
+	"secret_1": ("stand", ["", "Тайная", "лавка", ""]),
+	"secret_2": ("stand", ["Алмазы", "Незерит", "Элитры", ""]),
 }
 
 jar = zipfile.ZipFile(sorted(glob.glob(os.path.expanduser("~/.gradle/caches/fabric-loom/*/minecraft-client.jar")))[-1])
 def png(path): return Image.open(io.BytesIO(jar.read(path))).convert("RGBA")
 sign_tex = png("assets/minecraft/textures/entity/signs/spruce.png")
-font = png("assets/minecraft/textures/font/ascii.png")
-cell = font.width // 16
+# Minecraft's default font: ascii, then the other 8 px bitmaps (Cyrillic is in nonlatin_european)
+import json
+GLYPHS = {}
+for prov in reversed(json.loads(jar.read("assets/minecraft/font/include/default.json"))["providers"]):
+	if prov.get("type") != "bitmap" or prov.get("height", 8) != 8: continue
+	sheet = png("assets/minecraft/textures/" + prov["file"].split(":")[-1])
+	cw = sheet.width // len(prov["chars"][0])
+	for row, line in enumerate(prov["chars"]):
+		for col, ch in enumerate(line):
+			if ch != "\x00" and ch not in GLYPHS:
+				GLYPHS[ch] = sheet.crop((col * cw, row * cw, (col + 1) * cw, (row + 1) * cw))
+cell = 8
 
 def glyph(ch):
-	c = ord(ch)
-	if c > 255: c = ord("?")
-	g = font.crop(((c % 16) * cell, (c // 16) * cell, (c % 16 + 1) * cell, (c // 16 + 1) * cell))
+	g = GLYPHS.get(ch) or GLYPHS["?"]
 	cols = [x for x in range(cell) if any(g.getpixel((x, y))[3] > 0 for y in range(cell))]
 	width = (max(cols) + 1) if cols else 3  # a space: 3 + 1 advance, as in Minecraft
 	return g, width

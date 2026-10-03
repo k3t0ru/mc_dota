@@ -78,9 +78,11 @@ public final class Progress {
 			int n = Integer.parseInt(p[i + 1]);
 			if (n <= 0 || p[i].equals("none")) continue;
 			Sync.run(server, "give @p minecraft:" + p[i] + " " + n);
-			got.add("+" + n + " " + p[i].replace('_', ' '));
+			// the item's own name in the game's language
+			String key = BuiltInRegistries.ITEM.getValue(net.minecraft.resources.Identifier.withDefaultNamespace(p[i])).getDescriptionId();
+			got.add((got.isEmpty() ? "" : "{text:\", \"},") + "{text:\"+" + n + " \"},{translate:\"" + key + "\"}");
 		}
-		if (!got.isEmpty()) say(server, String.join(", ", got), "green");
+		if (!got.isEmpty()) Sync.run(server, "title @p actionbar [{text:\"\",color:\"green\"}," + String.join(",", got) + "]");
 	}
 
 	// server thread: Steve's Dota level changed
@@ -218,9 +220,9 @@ public final class Progress {
 		long left = (deadUntil - System.currentTimeMillis() + 999) / 1000;
 		if (!dead || deadUntil == 0) return; // (until Dota's "respawn": "title @p clear")
 		Sync.run(server, "title @p times 0 40 0");
-		Sync.run(server, "title @p subtitle {text:\"-" + deadLost + " emeralds, " + (left > 0 ? "respawn in " + left + " s" : "respawning...")
+		Sync.run(server, "title @p subtitle {text:\"-" + deadLost + " изумр., " + (left > 0 ? "возрождение через " + left + " с" : "возрождение...")
 			+ "\",color:\"gray\"}");
-		Sync.run(server, "title @p title {text:\"You died\",color:\"red\"}");
+		Sync.run(server, "title @p title {text:\"Вы погибли\",color:\"red\"}");
 	}
 
 	// Steve's spawn point (the market square, from Dota; Minecraft 0,0 until it arrives)
@@ -309,18 +311,18 @@ public final class Progress {
 		String id = BuiltInRegistries.ITEM.getKey(held.getItem()).getPath();
 		Integer value = VALUE.get(id);
 		if (value == null || !held.isDamaged()) {
-			say(server, "Hold a damaged weapon, tool or armour piece to repair it", "yellow");
+			say(server, "Возьмите в руку повреждённое оружие, инструмент или броню", "yellow");
 			return InteractionResult.SUCCESS;
 		}
 		int cost = Math.max(1, (int) Math.round(value / 3.0 * held.getDamageValue() / held.getMaxDamage()));
 		int have = player.getInventory().countItem(Items.EMERALD);
 		if (have < cost) {
-			say(server, "Repair costs " + cost + " emeralds (you have " + have + ")", "red");
+			say(server, "Ремонт стоит " + cost + " изумр. (у вас " + have + ")", "red");
 			return InteractionResult.SUCCESS;
 		}
 		Sync.run(server, "clear @p minecraft:emerald " + cost);
 		held.setDamageValue(0);
-		say(server, "Repaired for " + cost + " emeralds", "green");
+		say(server, "Отремонтировано за " + cost + " изумр.", "green");
 		return InteractionResult.SUCCESS;
 	}
 
@@ -416,22 +418,22 @@ public final class Progress {
 	static {
 		// income: a lane creep ~1-2 emeralds, a neutral camp ~4-8 plus materials, a hero 6-17, a tower 10 (EMERALD_GOLD in Lua)
 		// craft costs that follow: iron sword 4, iron armour 46, diamond sword 8, diamond armour 96, netherite +25 a piece
-		TRADERS.add(new Trader("Fletcher", "fletcher", List.of( // basic shop: the everyday materials
+		TRADERS.add(new Trader("Лучник", "fletcher", List.of( // basic shop: the everyday materials
 			buy(1, "oak_log", 8), buy(1, "cobblestone", 32), buy(1, "string", 2), buy(1, "flint", 4), buy(1, "feather", 8),
 			buy(1, "leather", 2), buy(2, "iron_ingot"), buy(1, "tripwire_hook"), buy(1, "gunpowder", 2), buy(1, "paper", 6),
 			buy(1, "arrow", 16), buy(1, "bread", 4), buy(1, "cooked_beef", 2), buy(6, "tnt"), buy(2, "flint_and_steel"),
 			buy(2, "clock")))); // the clock shows Dota's game time (ClockHud)
-		TRADERS.add(new Trader("Librarian", "librarian", List.of( // basic shop: enchanting
+		TRADERS.add(new Trader("Библиотекарь", "librarian", List.of( // basic shop: enchanting
 			buy(12, "enchanting_table"), buy(2, "bookshelf"), buy(1, "lapis_lazuli", 8), buy(1, "book", 3), buy(8, "anvil"),
 			book(15, "sharpness", 3), book(15, "protection", 3), book(12, "power", 3), book(10, "quick_charge", 2),
 			book(10, "multishot", 1), book(8, "piercing", 3), book(12, "fire_aspect", 2), book(12, "flame", 1),
 			book(8, "unbreaking", 3), book(6, "feather_falling", 4))));
-		TRADERS.add(new Trader("Toolsmith (sneak + right click: repair)", "toolsmith", List.of( // basic shop: smithing
+		TRADERS.add(new Trader("Инструментальщик (присесть + ПКМ: ремонт)", "toolsmith", List.of( // basic shop: smithing
 			buy(1, "crafting_table"), buy(3, "smithing_table"), buy(3, "shield"))));
-		TRADERS.add(new Trader("Mason", "mason", List.of( // basic shop: building blocks (nothing to mine on Dota's map)
+		TRADERS.add(new Trader("Каменщик", "mason", List.of( // basic shop: building blocks (nothing to mine on Dota's map)
 			buy(1, "cobblestone", 64), buy(1, "stone", 48), buy(1, "oak_planks", 64), buy(1, "oak_log", 16), buy(1, "dirt", 64),
 			buy(1, "sand", 64))));
-		TRADERS.add(new Trader("Secret shop", "weaponsmith", List.of( // far from the spawn: the rare stuff
+		TRADERS.add(new Trader("Тайная лавка", "weaponsmith", List.of( // far from the spawn: the rare stuff
 			buy(4, "diamond"), buy(20, "netherite_ingot"), buy(5, "netherite_upgrade_smithing_template"),
 			buy(60, "elytra"), buy(1, "firework_rocket", 4), buy(8, "golden_apple"), buy(2, "ender_pearl"),
 			book(25, "mending", 1), book(40, "sharpness", 5), book(30, "protection", 4), book(30, "power", 5))));

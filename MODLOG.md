@@ -479,3 +479,4 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Black stripes far off while chunks load: just-built chunks draw dark magenta before their light is computed; the overlay
   keys out dark magenta too (hole() tolerance). Render distance 13 -> 10 (Dota had dropped to ~60 fps).
 - Minecraft fps cap: framerateLimit = mcdota.fps (MC_FPS 60 in env.sh), Dota fps_max 0.
+- Russian: Minecraft's language ru_ru (run/options.txt), our messages, trader names, boss bar names (MC:BuildingName), clock, signs (Minecraft's Cyrillic glyphs from nonlatin_european); javac encoding UTF-8.

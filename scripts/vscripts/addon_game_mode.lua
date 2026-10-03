@@ -86,6 +86,18 @@ function MC:SteveXP( xp )
 	MC.steveLevel = lvl
 end
 
+-- a building's name for the boss bar: "Башня Тьмы (Т1, мид)"
+function MC:BuildingName( n )
+	local side = n:find( "goodguys" ) and "Света" or "Тьмы"
+	local lane = n:find( "top" ) and "верх" or n:find( "mid" ) and "мид" or n:find( "bot" ) and "низ"
+	local tier = n:match( "tower(%d)" )
+	local kind = n:find( "tower" ) and "Башня" or n:find( "rax" ) and "Казарма" or n:find( "fort" ) and "Трон" or "Здание"
+	local extra = {}
+	if tier then table.insert( extra, "Т" .. tier ) end
+	if lane then table.insert( extra, lane ) end
+	return kind .. " " .. side .. ( #extra > 0 and " (" .. table.concat( extra, ", " ) .. ")" or "" )
+end
+
 -- the Minecraft boss bar: Roshan while Steve is in his pit, else a building Steve hit in the last 5 s
 function MC:BossBar( steve )
 	if GameRules:GetGameTime() - ( MC.bossAt or 0 ) < 0.2 then return end
@@ -93,13 +105,13 @@ function MC:BossBar( steve )
 	local show
 	if steve and not steve:IsNull() then
 		for _, r in ipairs( Entities:FindAllByClassname( "npc_dota_roshan" ) ) do
-			if r:IsAlive() and ( r:GetAbsOrigin() - steve:GetAbsOrigin() ):Length2D() < 900 then show = { "purple", r, "Roshan" } end
+			if r:IsAlive() and ( r:GetAbsOrigin() - steve:GetAbsOrigin() ):Length2D() < 900 then show = { "purple", r, "Рошан" } end
 		end
 	end
 	local b = MC.bossUnit
 	if not show and b and not b:IsNull() and b:IsAlive() and GameRules:GetGameTime() < ( MC.bossUntil or 0 ) then
 		show = { b:GetTeamNumber() == DOTA_TEAM_GOODGUYS and "green" or "red", b,
-			( b:GetUnitName():gsub( "npc_dota_", "" ):gsub( "goodguys_", "Radiant " ):gsub( "badguys_", "Dire " ):gsub( "_", " " ) ) }
+			MC:BuildingName( b:GetUnitName() ) }
 	end
 	local line = show and string.format( "boss %s %d %d %s", show[1], show[2]:GetHealth(), show[2]:GetMaxHealth(), show[3] ) or "boss none"
 	if line ~= MC.bossLine then MC.bossLine = line MCBridge:Send( line ) end
@@ -567,7 +579,7 @@ function MC:SpawnTraders()
 		local rot = math.floor( ( math.deg( math.atan2( -fx, fz ) ) % 360 ) / 22.5 + 0.5 ) % 16
 		for _, side in ipairs( { -1, 1 } ) do
 			-- (the name sign: a block nearer him and turned a quarter, by hand)
-			local w = 0.6 -- (both a block nearer him than first planned, by hand)
+			local w = 1.6
 			local f = side < 0 and 0.6 or 1.6 -- (and a block further back)
 			local x, z = math.floor( tx + f * fx - w * side * fz ), math.floor( tz + f * fz + w * side * fx )
 			MC:Sign( x, MC.heights[ x .. "," .. z ] or MC_FLOOR, z, side < 0 and "secret_1" or "secret_2", -( rot * 22.5 - ( side < 0 and 90 or 0 ) ) + SIGN_TURN )
