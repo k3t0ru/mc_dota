@@ -30,7 +30,7 @@ BOXES = [
 
 def dota(p, offset, rot):
     """Model pixel point -> Dota units. Minecraft draws models flipped (-x, -y); its world maps to Dota as
-    x -> X, z -> -Y, up -> Z. The villager then faces Dota +Y (yaw 90) with its feet (model y 24) at Z 0."""
+    x -> X, z -> -Y, up -> Z. The villager then faces Dota -X (checked in game) with its feet (model y 24) at Z 0."""
     x, y, z = p
     c, s = math.cos(rot), math.sin(rot)
     y, z = y * c - z * s, y * s + z * c

@@ -33,7 +33,8 @@ function Precache( context )
 	for _, m in ipairs({
 		"models/mc/stone.vmdl", "models/mc/cobblestone.vmdl", "models/mc/log.vmdl", "models/mc/coal_ore.vmdl",
 		"models/mc/iron_ore.vmdl", "models/mc/diamond_ore.vmdl", "models/mc/crafting_table.vmdl",
-		"models/mc/dirt.vmdl", "models/mc/sand.vmdl", "models/mc/planks.vmdl",
+		"models/mc/dirt.vmdl", "models/mc/sand.vmdl", "models/mc/planks.vmdl", "models/mc/spruce_planks.vmdl",
+		"models/mc/red_wool.vmdl", "models/mc/white_wool.vmdl", "models/mc/blue_wool.vmdl",
 		"models/mc/crack_0.vmdl", "models/mc/crack_1.vmdl", "models/mc/crack_2.vmdl", "models/mc/crack_3.vmdl", "models/mc/crack_4.vmdl",
 		"models/mc/crack_5.vmdl", "models/mc/crack_6.vmdl", "models/mc/crack_7.vmdl", "models/mc/crack_8.vmdl", "models/mc/crack_9.vmdl",
 		"models/mc/villager_fletcher.vmdl", "models/mc/villager_librarian.vmdl", "models/mc/villager_toolsmith.vmdl", "models/mc/villager_weaponsmith.vmdl", "models/mc/villager_mason.vmdl",
@@ -222,17 +223,15 @@ end
 
 -- Hybrid: Dota draws Minecraft's blocks (any height) as props, so they sit exactly on Dota's map
 MC.props = {} -- "x,y,z" -> prop_dynamic
-MODELS = { oak_log = "log", oak_planks = "planks", stone = "stone", cobblestone = "cobblestone", dirt = "dirt", sand = "sand",
+MODELS = { spruce_planks = "spruce_planks", red_wool = "red_wool", white_wool = "white_wool", blue_wool = "blue_wool",
+	oak_log = "log", oak_planks = "planks", stone = "stone", cobblestone = "cobblestone", dirt = "dirt", sand = "sand",
 	coal_ore = "coal_ore", iron_ore = "iron_ore", diamond_ore = "diamond_ore", crafting_table = "crafting_table" }
 
--- Where Dota draws a Minecraft block: counted in blocks from the first level a block can stand on in that column
--- (on top of its slab, if any), from Dota's REAL ground under the cell. Minecraft's terrain is only half-block steps,
--- so drawing at the absolute Minecraft height left blocks floating (or sunk) by up to half a block.
+-- Where Dota draws a Minecraft block: at its Minecraft height, so walls and roofs stay level and match what the player
+-- walks on. (Drawing each block from Dota's real ground under its cell broke roofs into steps; on a slope a block is
+-- off by at most a quarter block, Minecraft's terrain being half-block steps of Dota's ground.)
 function MC:BlockPos( bx, by, bz )
-	local k = bx .. "," .. bz
-	local first = math.ceil( ( MC.halfh[ k ] or 2 * ( ( MC.heights[ k ] or MC_FLOOR ) - MC_FLOOR ) ) / 2 ) + MC_FLOOR
-	local ground = MC:CellPos( bx, bz )
-	return Vector( ground.x, ground.y, ground.z + ( by - first ) * GRID )
+	return MC.anchor + Vector( ( bx + 0.5 ) * GRID, -( bz + 0.5 ) * GRID, ( by - MC_FLOOR ) * GRID )
 end
 
 function MC:ShowBlock( bx, by, bz, kind )
@@ -263,6 +262,7 @@ function MC:ColumnChanged( bx, bz )
 		b = MC:SpawnBlock( FROM_MC[ top.mc_kind ] or "npc_mc_block_cobble", MC:CellPos( bx, bz ), true )
 	end
 	b.mc_y = low and g or g + 1 -- what a Dota hero mines out of this column
+	b.mc_protected = MC.protected[ bx .. "," .. bz ]
 	local m = b:FindModifierByName( "modifier_mc_block" )
 	if m then m:SetStackCount( ( low and not high ) and 1 or 0 ) end -- 1 = walkable: no collision
 end
@@ -281,30 +281,111 @@ end
 -- Traders (Minecraft cells; they look west). Dota draws them; Minecraft keeps an invisible villager on each spot to trade
 -- with (Progress.java has the offers). The basic shop stands by the spawn, the secret one at Dota's own secret shop.
 BASE_TRADERS = { "fletcher", "librarian", "toolsmith", "mason" }
-TRADERS = {} -- { Minecraft x, z (exact, not cells), profession }
+TRADERS = {} -- { Minecraft x, z (exact), profession, facing x, z }
+
+-- a block Dota decides on: Minecraft gets it (queued behind that column's terrain), Dota draws it and collides with it
+-- (protected: invulnerable in Dota, so the fountain doesn't shoot the market and nobody mines it)
+MC.protected = {} -- "bx,bz" -> true
+function MC:PlaceBlock( x, y, z, kind )
+	MC.protected[ x .. "," .. z ] = true
+	MCBridge:Send( string.format( "block %d %d %d %s", x, y, z, kind ) )
+	MC:ShowBlock( x, y, z, kind )
+	MC:ColumnChanged( x, z )
+end
+
 function MC:SpawnTraders()
-	-- the basic shop: a neat half circle around the spawn, opening toward the map centre (the way out of the base), every
-	-- trader facing the spawn. One radius for all, the smallest (from 9 cells: closer is inside the fountain) where every
-	-- spot is walkable, so the arc stays even.
+	-- the basic shop: a little market ON our fountain, two rows of stalls facing each other across an aisle that runs
+	-- toward the map centre. Laid out on Minecraft's grid (the aisle along whichever axis is closer to that way).
 	local a = MC.anchor
-	local out = ( Vector( 0, 0, a.z ) - a ):Normalized() -- Dota's map centre is the world origin
-	local base = math.atan2( out.y, out.x )
-	local function spot( i, r )
-		local t = base + math.rad( -75 + 150 * ( i - 1 ) / ( #BASE_TRADERS - 1 ) )
-		return a + Vector( math.cos( t ), math.sin( t ), 0 ) * ( r * GRID )
+	local fountain, best = a, nil
+	for _, e in ipairs( Entities:FindAllByClassname( "ent_dota_fountain" ) ) do
+		local d = ( e:GetAbsOrigin() - a ):Length2D()
+		if not best or d < best then fountain, best = e:GetAbsOrigin(), d end
 	end
-	local radius = 9
-	for r = 9, 20, 0.5 do
-		local ok = true
-		for i = 1, #BASE_TRADERS do
-			local p = spot( i, r )
-			if not GridNav:IsTraversable( p ) or GridNav:IsBlocked( p ) then ok = false break end
+	local cx, cz = MC:CellOf( fountain )
+	-- Dota's own fountain shopkeeper stands where our stalls go: hide him (the shop trigger stays, it's unused here)
+	for _, e in ipairs( Entities:FindAllByClassname( "ent_dota_shop" ) ) do
+		if ( e:GetAbsOrigin() - fountain ):Length2D() < 1600 then e:AddEffects( EF_NODRAW ) end
+	end
+	-- Where the market goes: the open, walkable ground closest to the fountain (the fountain sits in a corner of the
+	-- map behind walls and cliffs, so "both sides of it" put a stall on rocks). Tried: both grid orientations, centres
+	-- up to 12 cells from the fountain; both stalls (5 x 3) and the aisle between them must be walkable, off the spawn.
+	local function walkable( x, z )
+		local p = a + Vector( ( x + 0.5 ) * GRID, -( z + 0.5 ) * GRID, 0 )
+		return GridNav:IsTraversable( p ) and not GridNav:IsBlocked( p ) and not GridNav:IsNearbyTree( p, 40, true )
+	end
+	local spawnX, spawnZ = 0, 0 -- Steve respawns at Minecraft 0,0: never wall that in
+	local function free( x, z ) return math.abs( x - spawnX ) > 1 or math.abs( z - spawnZ ) > 1 end
+	local U, V, mx, mz, bestCost
+	for _, o in ipairs( { { { 1, 0 }, { 0, 1 } }, { { 0, 1 }, { 1, 0 } } } ) do
+		for ox = -12, 12 do for oz = -12, 12 do
+			local ok, x0, z0 = true, cx + ox, cz + oz
+			for u = -3, 3 do
+				for v = -5, 5 do
+					local x, z = x0 + u * o[1][1] + v * o[2][1], z0 + u * o[1][2] + v * o[2][2]
+					local stall = math.abs( v ) >= 3 and math.abs( u ) <= 2
+					if ( math.abs( v ) <= 5 and math.abs( u ) <= 2 ) and not walkable( x, z ) then ok = false end
+					if stall and not free( x, z ) then ok = false end
+				end
+				if not ok then break end
+			end
+			local cost = ox * ox + oz * oz
+			if ok and ( not bestCost or cost < bestCost ) then U, V, mx, mz, bestCost = o[1], o[2], x0, z0, cost end
+		end end
+	end
+	if not U then U, V, mx, mz = { 1, 0 }, { 0, 1 }, cx + 6, cz end -- nowhere fits: just east of the fountain
+	print( string.format( "[mc] market centre %d,%d (fountain %d,%d), aisle along %d,%d", mx, mz, cx, cz, U[1], U[2] ) )
+	local function cell( u, v ) return mx + u * U[1] + v * V[1], mz + u * U[2] + v * V[2] end
+	local function ground( x, z ) return MC.heights[ x .. "," .. z ] or MC_FLOOR end
+	-- Two market stalls (after Dio Rods' "Market Stall") facing each other across an aisle, two traders in each,
+	-- told apart by their awnings. Local frame: du along the stall (U), dv across it, +dv = the open front.
+	local STALLS = {
+		{ v = -4, front = 1, awning = "red_wool", traders = { "fletcher", "mason" } },
+		{ v = 4, front = -1, awning = "blue_wool", traders = { "librarian", "toolsmith" } },
+	}
+	-- the fountain itself between them: Minecraft has nothing there, so the player walked into its basin; invisible
+	-- barriers (not drawn by Dota: only Minecraft gets them) keep him out
+	for du = -3, 3 do for dv = -3, 3 do
+		if du * du + dv * dv <= 10 then
+			local x, z = cx + du, cz + dv
+			if free( x, z ) then
+				local g = ground( x, z )
+				for y = g, g + 2 do MCBridge:Send( string.format( "block %d %d %d barrier", x, y, z ) ) end
+			end
 		end
-		if ok then radius = r break end
-	end
-	for i, prof in ipairs( BASE_TRADERS ) do
-		local p = spot( i, radius )
-		table.insert( TRADERS, { ( p.x - a.x ) / GRID, -( p.y - a.y ) / GRID, prof } )
+	end end
+	for _, st in ipairs( STALLS ) do
+		local function at( du, dv ) return cell( du, st.v + st.front * dv ) end
+		local base = -1000 -- the stall stands level on its highest ground; lower columns get a spruce footing
+		for du = -2, 2 do for dv = -1, 2 do base = math.max( base, ground( at( du, dv ) ) ) end end
+		local function put( du, dv, dy, kind )
+			local x, z = at( du, dv )
+			if free( x, z ) then MC:PlaceBlock( x, base + dy, z, kind ) end
+		end
+		for du = -2, 2 do for dv = -1, 1 do
+			local x, z = at( du, dv )
+			for y = ground( x, z ), base - 1 do if free( x, z ) then MC:PlaceBlock( x, y, z, "spruce_planks" ) end end
+		end end
+		for _, du in ipairs( { -2, 2 } ) do for _, dv in ipairs( { -1, 1 } ) do -- corner posts
+			for dy = 0, 2 do put( du, dv, dy, "oak_log" ) end
+		end end
+		for du = -1, 1 do
+			put( du, 1, 0, "oak_planks" ) -- counter, open front above it
+			put( du, -1, 0, "spruce_planks" ) -- back bench
+		end
+		for du = -2, 2 do for dv = -1, 1 do -- spruce frame under the awning, then the striped awning
+			if du == -2 or du == 2 or dv ~= 0 then put( du, dv, 3, "spruce_planks" ) end
+			put( du, dv, 4, ( du % 2 == 0 ) and st.awning or "white_wool" )
+		end end
+		for du = -2, 2 do put( du, 2, 3, ( du % 2 == 0 ) and st.awning or "white_wool" ) end -- awning lip over the front
+		for _, du in ipairs( { -3, 3 } ) do for dv = -1, 1 do -- hanging side flaps
+			put( du, dv, 3, st.awning )
+			if dv == 1 then put( du, dv, 2, st.awning ) end
+		end end
+		for i, prof in ipairs( st.traders ) do
+			local x, z = at( i == 1 and -1 or 1, 0 )
+			table.insert( TRADERS, { x + 0.5, z + 0.5, prof, st.front * V[1], st.front * V[2], base } )
+		end
 	end
 	-- Dota's shops are trigger_shop volumes (no API tells their type): the secret shop is taken as the nearest one that
 	-- is well away from the spawn (the fountain shop is at the spawn); a map with a single shop uses that one
@@ -319,17 +400,39 @@ function MC:SpawnTraders()
 	table.insert( TRADERS, { secret[1] + 2.5, secret[2] + 0.5, "weaponsmith" } )
 	for _, t in ipairs( TRADERS ) do
 		print( string.format( "[mc] trader %s at %.1f, %.1f", t[3], t[1], t[2] ) )
-		local pos = GetGroundPosition( a + Vector( t[1] * GRID, -t[2] * GRID, 0 ), nil )
-		local face = ( a - pos ):Normalized() -- toward the spawn; the model looks +Y at yaw 0
-		SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/villager_" .. t[3] .. ".vmdl",
+		local pos = t[6] and ( a + Vector( t[1] * GRID, -t[2] * GRID, ( t[6] - MC_FLOOR ) * GRID ) )
+			or GetGroundPosition( a + Vector( t[1] * GRID, -t[2] * GRID, 0 ), nil )
+		-- facing: given in Minecraft x, z (across the aisle), else toward the spawn
+		local face = t[4] and Vector( t[4], -t[5], 0 ) or ( a - pos ):Normalized()
+		t.yaw = math.deg( math.atan2( face.y, face.x ) ) -- where the counter faces
+		t.prop = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/villager_" .. t[3] .. ".vmdl",
 			origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ),
-			angles = string.format( "0 %f 0", math.deg( math.atan2( face.y, face.x ) ) - 90 ) } )
+			angles = string.format( "0 %f 0", t.yaw + 180 ) } ) -- the model looks -X at yaw 0 (checked on screen)
 	end
 	MC:SendTraders()
 end
 
+-- traders look at Steve when he's close, like Minecraft villagers do (at most 80 degrees off their counter)
+function MC:TradersLook( steve )
+	for _, t in ipairs( TRADERS ) do
+		if t.prop and not t.prop:IsNull() then
+			local d = steve and steve:GetAbsOrigin() - t.prop:GetAbsOrigin()
+			local yaw = t.yaw
+			if d and d:Length2D() < 10 * GRID and d:Length2D() > 1 then
+				local off = ( math.deg( math.atan2( d.y, d.x ) ) - t.yaw + 540 ) % 360 - 180
+				yaw = t.yaw + math.max( -80, math.min( 80, off ) )
+			end
+			t.prop:SetAngles( 0, yaw + 180, 0 )
+		end
+	end
+end
+
 function MC:SendTraders()
-	for _, t in ipairs( TRADERS ) do MCBridge:Send( string.format( "trader %.2f %.2f %s", t[1], t[2], t[3] ) ) end
+	-- (with the ground's Minecraft y: under a stall roof the top block is the roof)
+	for _, t in ipairs( TRADERS ) do
+		local y = t[6] or MC.heights[ math.floor( t[1] ) .. "," .. math.floor( t[2] ) ] or MC_FLOOR
+		MCBridge:Send( string.format( "trader %.2f %.2f %s %d", t[1], t[2], t[3], y ) )
+	end
 end
 
 -- Steve's kills drop Minecraft loot: emeralds (the shop currency) by the unit's gold bounty, food, and from neutrals the

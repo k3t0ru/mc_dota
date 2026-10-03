@@ -74,8 +74,15 @@ def sand(r):
     return [[jitter((219, 207, 163), r, 12) for _ in range(S)] for _ in range(S)]
 
 
+def flat(color):  # plain jittered colour (wool without the Minecraft jar)
+    return lambda r: [[jitter(color, r, 10) for _ in range(S)] for _ in range(S)]
+
+
 BLOCKS = {
     "dirt": dirt, "sand": sand,
+    # the fountain market's stalls (MC:SpawnTraders)
+    "spruce_planks": lambda r: [[jitter((114, 84, 48), r, 8) for _ in range(S)] for _ in range(S)],
+    "red_wool": flat((160, 39, 34)), "white_wool": flat((233, 236, 236)), "blue_wool": flat((53, 57, 157)),
     "stone": stone, "cobblestone": cobble, "log": log, "planks": planks, "crafting_table": crafting_table,
     "coal_ore": ore((30, 30, 30)), "iron_ore": ore((216, 175, 147)), "diamond_ore": ore((95, 230, 225)),
 }
@@ -87,6 +94,8 @@ FACES_MC = {
     "log": ("oak_log_top", "oak_log", "oak_log_top"), "planks": ("oak_planks",) * 3,
     "crafting_table": ("crafting_table_top", "crafting_table_front", "oak_planks"),
     "coal_ore": ("coal_ore",) * 3, "iron_ore": ("iron_ore",) * 3, "diamond_ore": ("diamond_ore",) * 3,
+    "spruce_planks": ("spruce_planks",) * 3, "red_wool": ("red_wool",) * 3, "white_wool": ("white_wool",) * 3,
+    "blue_wool": ("blue_wool",) * 3,
 }
 
 

@@ -211,10 +211,10 @@ public final class Progress {
 	// --- traders --------------------------------------------------------------------------------------------------
 
 	private record Trader(String name, String profession, List<String> offers) { }
-	private static final Map<String, double[]> spots = new java.util.concurrent.ConcurrentHashMap<>(); // profession -> x, z (exact)
+	private static final Map<String, double[]> spots = new java.util.concurrent.ConcurrentHashMap<>(); // profession -> x, z (exact), feet y
 
 	// sync thread: Dota placed a trader
-	public static void trader(double x, double z, String profession) { spots.put(profession, new double[] { x, z }); }
+	public static void trader(double x, double z, String profession, int y) { spots.put(profession, new double[] { x, z, y }); }
 
 	private static final List<Trader> TRADERS = new ArrayList<>();
 
@@ -262,10 +262,10 @@ public final class Progress {
 			buy(1, "sand", 64))));
 		TRADERS.add(new Trader("Secret shop", "weaponsmith", List.of( // far from the spawn: the rare stuff
 			buy(4, "diamond"), buy(15, "diamond", 4), buy(20, "netherite_ingot"), buy(5, "netherite_upgrade_smithing_template"),
-			buy(60, "elytra"), buy(8, "golden_apple"), buy(3, "ender_pearl", 2), buy(30, "totem_of_undying"),
+			buy(60, "elytra"), buy(8, "golden_apple"), buy(3, "ender_pearl", 2),
 			buy(6, "experience_bottle", 8), book(25, "mending", 1), book(40, "sharpness", 5), book(30, "protection", 4),
 			book(30, "power", 5),
-			sell("diamond", 1, 2), sell("netherite_ingot", 1, 10), sell("totem_of_undying", 1, 15), sell("golden_apple", 1, 4))));
+			sell("diamond", 1, 2), sell("netherite_ingot", 1, 10), sell("golden_apple", 1, 4))));
 	}
 
 	private static int ticks;
@@ -286,7 +286,8 @@ public final class Progress {
 			double tx = at[0], tz = at[1];
 			int bx = (int) Math.floor(tx), bz = (int) Math.floor(tz);
 			if (!level.hasChunk(bx >> 4, bz >> 4)) continue;
-			int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING, bx, bz);
+			// Dota's ground height (a stall's roof is the column's top block); without it, the top of the column
+			int y = at[2] != Integer.MIN_VALUE ? (int) at[2] : level.getHeight(Heightmap.Types.MOTION_BLOCKING, bx, bz);
 			String tag = "mcdota_trader_" + t.profession;
 			Entity e = null;
 			for (Entity c : level.getAllEntities()) if (c.getTags().contains(tag)) { e = c; break; }

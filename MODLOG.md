@@ -279,3 +279,20 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
   from Dota's real ground under the cell, counted from the first standable level (ceil(halfh/2)).
 - Strip on the horizon: columns next to the void had real dirt/stone sides; void neighbours count as bottomless for the skin.
 - Footsteps: podzol = SoundType.GRAVEL, skin = MUD_BRICKS → sounds.json maps their step events to grass steps.
+
+## 2026-10-03 11:55: fountain market, Aegis totem, dev command channel, Lua syntax check
+- Market: two stalls (after Dio Rods' "Market Stall": log posts, plank counter, spruce frame, striped wool awning with
+  side flaps), red (fletcher + mason) and blue (librarian + toolsmith), facing each other across an aisle. Placed by a
+  search: nearest centre (<= 12 cells from our fountain, both grid orientations) where both stalls and the aisle are
+  GridNav-walkable, no trees, off the spawn. Real map, Radiant: centre -4,-3, aisle along MC x (the fountain is in a
+  walled corner: "both sides of it" put a stall on cliffs). Dota's fountain shopkeeper (ent_dota_shop) hidden (EF_NODRAW).
+- Dota-built blocks (MC:PlaceBlock): Minecraft gets them queued behind the column's terrain build, Dota draws them and
+  their collision units are invulnerable (the fountain shot them: neutral team). Barriers around the fountain basin
+  (MC only) keep the player out of the Dota model.
+- Block props drawn at the absolute Minecraft height again (ground-relative broke roofs into steps).
+- Villager model looks -X at yaw 0 (checked on screen); traders turn toward Steve within 10 cells (max 80° off counter).
+- Totem of undying: only from Roshan (not sold); TotemMixin: full health + food + saturation when it saves you (Aegis).
+- Dev channel: POST /cmd to the bridge = Minecraft commands (tp/gamemode/give) for testing; screenshots + tp views.
+- tools/check_lua.py (lupa): dev_launch/build_assets refuse to run with a Lua syntax error. A broken addon_game_mode.lua
+  loads NOTHING (silently): hero pick 90 s, strategy, showcase came back, no bridge. Not the real map's fault.
+- Gotcha: never pipe dev_launch.sh (| tail): Dota inherits the pipe, the command waits until Dota exits.

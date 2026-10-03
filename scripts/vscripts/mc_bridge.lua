@@ -37,6 +37,7 @@ function MCBridge:Tick()
 				( h:GetUnitName():gsub( "npc_dota_hero_", "" ):gsub( "npc_dota_", "" ) ), x, z, h:GetHealth(), h:GetMaxHealth(), MC:HeightAt( p.z ) + lift, ally ) )
 		end
 	end
+	MC:TradersLook( self.steve )
 	-- trader spots again now and then: a restarted Minecraft client forgets them
 	if GameRules:GetGameTime() - ( self.tradersAt or -100 ) > 5 then self.tradersAt = GameRules:GetGameTime(); MC:SendTraders() end
 	-- Steve's Dota level (he earns hero XP for his kills) is his Minecraft max health

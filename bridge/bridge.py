@@ -15,6 +15,7 @@
 # Dota gets back: steve <name> <x> <z> <hp> <maxhp> <yaw>, hit .., mcblock <x> <y> <z> <kind>, mcbreak <x> <y> <z>,
 #                 cam <lookX> <lookY> <yaw> <pitch> <dist> <lookZ>   (lookZ absolute; Lua turns it into a height offset)
 # The mod gets back: hero .., dmg <amount>, block .., unblock .., reset, h ..
+# Testing: POST /cmd with Minecraft commands, one per line (runs as the server, e.g. tp/give/time).
 # The mod also sends its camera over UDP :27101 every frame: "<x> <y> <z> <yaw> <pitch>" (MC eye).
 # Run: python bridge/bridge.py
 import math, os, socket, threading
@@ -107,7 +108,12 @@ def main():
     class H(BaseHTTPRequestHandler):
         def do_POST(self):
             body = self.rfile.read(int(self.headers.get("Content-Length", 0))).decode()
-            reply = (relay.mc(body) if self.path == "/mc" else relay.dota(body)).encode()
+            if self.path == "/cmd":  # dev/testing: each line is a Minecraft command (e.g. "tp @p 3 2 5 90 10")
+                with relay.lock:
+                    relay.to_mc += ["cmd " + l for l in body.splitlines() if l.strip()]
+                reply = b"ok"
+            else:
+                reply = (relay.mc(body) if self.path == "/mc" else relay.dota(body)).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/plain")
             self.send_header("Content-Length", str(len(reply)))

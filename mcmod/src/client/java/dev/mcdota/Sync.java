@@ -207,7 +207,8 @@ public final class Sync {
 					case "respawn" -> Progress.respawn(server);
 					case "lvl" -> Progress.level(server, Integer.parseInt(p[1]));
 					case "delay" -> Overlay.dotaDelay(Integer.parseInt(p[1]));
-					case "trader" -> Progress.trader(Double.parseDouble(p[1]), Double.parseDouble(p[2]), p[3]);
+					case "cmd" -> run(server, line.trim().substring(4)); // testing (bridge /cmd)
+					case "trader" -> Progress.trader(Double.parseDouble(p[1]), Double.parseDouble(p[2]), p[3], p.length > 4 ? Integer.parseInt(p[4]) : Integer.MIN_VALUE);
 					case "xp" -> run(server, "xp add @p " + p[1] + " points"); // Steve killed a Dota unit
 					case "reset" -> { // new Dota game: flat ground again (dirt under a magenta podzol top) and nothing on it
 						int r = 112; // only chunks within view distance are loaded; fill fails on anything else
@@ -224,7 +225,9 @@ public final class Sync {
 						readyCount = 0;
 						pending.clear();
 					}
-					case "block" -> run(server, String.format("setblock %s %s %s minecraft:%s", p[1], p[2], p[3], p[4]));
+					// queued behind its column's terrain build (which would otherwise clear or overwrite it later)
+					case "block" -> column(server, Integer.parseInt(p[1]), Integer.parseInt(p[3]), () ->
+						run(server, String.format("setblock %s %s %s minecraft:%s", p[1], p[2], p[3], p[4])));
 					case "unblock" -> run(server, String.format("setblock %s %s %s minecraft:air", p[1], p[2], p[3]));
 					case "void" -> column(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), () ->
 						run(server, String.format("fill %s -64 %s %s 30 %s minecraft:air", p[1], p[2], p[1], p[2]), false)); // fall and die

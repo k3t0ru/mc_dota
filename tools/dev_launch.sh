@@ -2,6 +2,7 @@
 # Start everything: the bridge (if not running), the Dota custom game (cheats, Steve auto-picked), the Minecraft client.
 # Closes an old Dota / Minecraft first.
 . "$(dirname "$0")/env.sh"
+python "$HERE/tools/check_lua.py" || exit 1 # a Lua syntax error drops the whole game mode silently
 kill_pids $(mc_pids) $(dota_pids)
 sleep 3
 [ -z "$(bridge_pids)" ] && (cd "$HERE" && python -u bridge/bridge.py > bridge/bridge.log 2>&1 &)
