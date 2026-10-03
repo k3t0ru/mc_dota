@@ -91,9 +91,33 @@ function smooth( v ) {
 	}
 }
 
+// the unit under the crosshair (screen centre), as Dota itself sees it: Minecraft's melee swings land on it (the
+// invisible stand-ins Minecraft's own crosshair touches lag behind and are shaped differently)
+var aimSent = -2, aimAt = 0;
+function reportAim() {
+	var now = Date.now();
+	if ( now - aimAt < 30 ) return;
+	var me = Players.GetPlayerHeroEntityIndex( Players.GetLocalPlayer() ), aim = -1;
+	// the crosshair and a few points around it (one pixel flickered between the unit and nothing)
+	var cx = Game.GetScreenWidth() / 2, cy = Game.GetScreenHeight() / 2, r = Game.GetScreenHeight() * 0.015;
+	var pts = [ [ 0, 0 ], [ r, 0 ], [ -r, 0 ], [ 0, r ], [ 0, -r ] ];
+	for ( var k = 0; k < pts.length && aim < 0; k++ ) {
+		var hits = GameUI.FindScreenEntities( [ cx + pts[k][0], cy + pts[k][1] ] ) || [];
+		for ( var i = 0; i < hits.length; i++ ) {
+			var e = hits[i].entityIndex;
+			if ( e !== me && Entities.IsAlive( e ) && !Entities.IsInvulnerable( e ) ) { aim = e; break; }
+		}
+	}
+	if ( aim === aimSent && now - aimAt < 500 ) return;
+	aimAt = now;
+	aimSent = aim;
+	GameEvents.SendCustomGameEventToServer( "mc_aim", { e: aim } );
+}
+
 function frame() {
 	var t = Date.now() - playbackDelay();
 	reportDelay();
+	reportAim();
 	var a = null, b = null;
 	for ( var i = 0; i < poses.length; i++ ) {
 		if ( poses[i].t <= t ) a = poses[i];

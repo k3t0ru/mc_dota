@@ -75,22 +75,26 @@ function MCBridge:Apply( body, stale )
 		local name, x, z, hp, max, yaw = line:match( "^steve (%S+) (%S+) (%S+) (%S+) (%S+) (%S+)" )
 		if name and not stale then self:MoveSteve( name, to_dota( tonumber( x ), tonumber( z ) ), tonumber( hp ) / tonumber( max ), math.rad( tonumber( yaw ) ) ) end
 
-		local id, amount, direct = line:match( "^hit (%d+) (%S+) ?(%S*)" )
-		local hero = id and EntIndexToHScript( tonumber( id ) )
-		-- allies can only be denied like in Dota: creeps below half health, towers below 10%, heroes never
-		local ally = hero and self.steve and hero:GetTeamNumber() == self.steve:GetTeamNumber()
-		-- (only a direct hit: a sword's sweep and other splash never touch allies)
-		local deniable = ally and direct ~= "0" and hero:IsAlive() and not hero:IsHero() and hero:GetHealthPercent() < ( hero:IsTower() and 10 or 50 )
-		if hero and hero:IsAlive() and ( not ally or deniable ) then
-			if ally and self.steve then
-				-- a deny must be an ATTACK, or Dota doesn't count it (no "!", the enemy keeps full XP); DamageFilter swaps in the hit
-				self.steve.mc_attack = tonumber( amount ) * DMG_TO_DOTA
-				self.steve.mc_denying = true -- XP/gold filters: a deny gives the denier nothing
-				self.steve:PerformAttack( hero, true, false, true, true, false, false, true )
-				self.steve.mc_attack, self.steve.mc_denying = nil, nil
+		local id, amount, direct = line:match( "^hit (%d+) (%S+) ?(%S*)" ) -- arrows, sweeps: through the stand-ins
+		if id then self:HitUnit( EntIndexToHScript( tonumber( id ) ), tonumber( amount ), direct ~= "0" ) end
+		local dev = line:match( "^dev (.+)" ) -- testing (bridge /dota): a console command, only with cheats on
+		if dev and ( GameRules:IsCheatMode() or IsInToolsMode() ) then
+			local name, dist = dev:match( "^testunit (%S+) (%S+)" ) -- a stunned unit in front of Steve, to aim at
+			if name and self.steve then
+				local team = name:find( "goodguys" ) and DOTA_TEAM_GOODGUYS or DOTA_TEAM_BADGUYS
+				local u = CreateUnitByName( name, self.steve:GetAbsOrigin() + self.steve:GetForwardVector() * tonumber( dist ), false, nil, nil, team )
+				u:AddNewModifier( u, nil, "modifier_stunned", { duration = 60 } )
+				print( string.format( "[mc] test unit %s #%d hp %d at %s (steve %s)", name, u:entindex(), u:GetHealth(), tostring( u:GetAbsOrigin() ), tostring( self.steve:GetAbsOrigin() ) ) )
 			else
-				ApplyDamage( { victim = hero, attacker = self.steve or hero, damage = tonumber( amount ) * DMG_TO_DOTA, damage_type = DAMAGE_TYPE_PURE } )
+				SendToServerConsole( dev )
 			end
+		end
+		local swing = line:match( "^swing (%S+)" ) -- a melee swing: whatever Dota highlights under the crosshair
+		if swing and self.aim and not self.aim:IsNull() and GameRules:GetGameTime() - ( self.aimAt or 0 ) <= 0.6
+			and self.steve and self.steve:IsAlive() then
+			local reach = MELEE_REACH * GRID + self.aim:GetHullRadius()
+			local d = ( self.aim:GetAbsOrigin() - self.steve:GetAbsOrigin() ):Length2D()
+			if d <= reach then self:HitUnit( self.aim, tonumber( swing ), true ) end
 		end
 
 		local bx, by, bz, kind = line:match( "^mcblock (%S+) (%S+) (%S+) (%S+)" )
@@ -128,6 +132,25 @@ function MCBridge:Apply( body, stale )
 			local off = tonumber( lz ) - GetGroundHeight( Vector( tonumber( lx ), tonumber( ly ), 0 ), nil )
 			CustomGameEventManager:Send_ServerToAllClients( "mc_cam", { v = table.concat( { lx, ly, yawc, pitch, dist, string.format( "%.1f", off ), sent, lz }, " " ) } )
 		end
+	end
+end
+
+-- a Minecraft hit on a Dota unit. Allies can only be denied like in Dota: creeps below half health, towers below 10%,
+-- heroes never, and only with a direct hit (a sword's sweep and other splash never touch allies).
+MELEE_REACH = 3.5 -- blocks from Steve to the target's edge (Minecraft's reach is 3)
+function MCBridge:HitUnit( hero, amount, direct )
+	if not hero or hero:IsNull() or not hero:IsAlive() or not hero.GetTeamNumber or hero.mc_player or hero.mc_block then return end
+	local ally = self.steve and hero:GetTeamNumber() == self.steve:GetTeamNumber()
+	local deniable = ally and direct and not hero:IsHero() and hero:GetHealthPercent() < ( hero:IsTower() and 10 or 50 )
+	if hero:IsInvulnerable() or ( ally and not deniable ) then return end
+	if ally and self.steve then
+		-- a deny must be an ATTACK, or Dota doesn't count it (no "!", the enemy keeps full XP); DamageFilter swaps in the hit
+		self.steve.mc_attack = amount * DMG_TO_DOTA
+		self.steve.mc_denying = true -- XP/gold filters: a deny gives the denier nothing
+		self.steve:PerformAttack( hero, true, false, true, true, false, false, true )
+		self.steve.mc_attack, self.steve.mc_denying = nil, nil
+	else
+		ApplyDamage( { victim = hero, attacker = self.steve or hero, damage = amount * DMG_TO_DOTA, damage_type = DAMAGE_TYPE_PURE } )
 	end
 end
 

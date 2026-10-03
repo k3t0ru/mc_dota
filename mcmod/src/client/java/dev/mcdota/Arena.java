@@ -16,11 +16,10 @@ public final class Arena {
 		"gamerule doMobSpawning false", "gamerule spawn_mobs false",
 		"time set noon", "gamerule doDaylightCycle false", "gamerule advance_time false", // night would darken the magenta
 		"effect give @p minecraft:instant_health 1 10 true", "effect give @p minecraft:saturation 1 20 true", // fresh start
-		"tp @p 0.5 0 0.5",
-		"kill @e[tag=dota]", // stand-ins saved in the world by an earlier session (they come back invisible)
+		"bossbar remove mcdota:target", // the old target bar (gone)
 		// death screens need the mouse, which only works in-game here: respawn at the start right away
 		"gamerule keepInventory true", "gamerule keep_inventory true",
-		"gamerule doImmediateRespawn true", "gamerule immediate_respawn true", "setworldspawn 0 0 0", "spawnpoint @p 0 0 0", // start where the Dota hero spawns (MC 0,0), not wherever the last session ended
+		"gamerule doImmediateRespawn true", "gamerule immediate_respawn true", // spawn point and the start position: Progress.joined/spawnAt
 		// the starting kit comes with every new Dota match (Progress.newMatch)
 	};
 
@@ -29,7 +28,9 @@ public final class Arena {
 		if (server == null) return;
 		server.execute(() -> {
 			for (String c : RULES) server.getCommands().performPrefixedCommand(server.createCommandSourceStack().withSuppressedOutput(), c);
+			Sync.discard(server, "dota"); // stand-ins saved in the world by an earlier session
 			Progress.attributes(server); // health by Dota level, sweep, knockback resistance
+			Progress.joined(server); // to the spawn point (the market square once Dota sent it)
 		});
 	}
 }

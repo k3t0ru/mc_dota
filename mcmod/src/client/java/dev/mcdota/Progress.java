@@ -50,13 +50,14 @@ public final class Progress {
 	public static void newMatch(MinecraftServer server) {
 		level = 1;
 		dead = false;
+		placed = false;
 		for (String c : new String[] {
 			"gamemode survival @p", "clear @p", "xp set @p 0 levels", "xp set @p 0 points",
 			"effect clear @p", "effect give @p minecraft:instant_health 1 10 true", "effect give @p minecraft:saturation 1 20 true",
 			"give @p minecraft:wooden_sword", "give @p minecraft:wooden_pickaxe", "give @p minecraft:crafting_table",
 			"give @p minecraft:bread 8", "give @p minecraft:oak_planks 16",
-			"kill @e[tag=mcdota_trader]", // re-summoned with fresh trades by tick()
 		}) Sync.run(server, c);
+		Sync.discard(server, "mcdota_trader"); // re-summoned with fresh trades by tick()
 		attributes(server);
 	}
 
@@ -135,12 +136,37 @@ public final class Progress {
 		Sync.run(server, "title @p title {text:\"You died\",color:\"red\"}");
 	}
 
+	// Steve's spawn point (the market square, from Dota; Minecraft 0,0 until it arrives)
+	private static int[] spawn = { 0, 0, 0 };
+	private static boolean placed;
+
+	// server thread: the player joined: to the spawn point (not wherever the last session ended)
+	public static void joined(MinecraftServer server) {
+		placed = false;
+		spawnAt(server, spawn[0], spawn[1], spawn[2]);
+	}
+
+	// server thread: Dota's spawn point (sent again every few seconds; the first one also puts Steve there)
+	public static void spawnAt(MinecraftServer server, int x, int y, int z) {
+		boolean moved = !placed || spawn[0] != x || spawn[1] != y || spawn[2] != z;
+		spawn = new int[] { x, y, z };
+		if (moved) {
+			Sync.run(server, String.format("setworldspawn %d %d %d", x, y, z));
+			Sync.run(server, String.format("spawnpoint @p %d %d %d", x, y, z));
+		}
+		if (!placed) {
+			placed = true;
+			Sync.run(server, String.format(Locale.ROOT, "tp @p %.1f %d %.1f", x + 0.5, y, z + 0.5));
+		}
+	}
+
 	// server thread: Dota respawned Steve's hero
 	public static void respawn(MinecraftServer server) {
 		dead = false;
 		for (String c : new String[] { "gamemode survival @p", "attribute @p minecraft:movement_speed base set 0.1",
 			"attribute @p minecraft:jump_strength base set 0.42", "effect clear @p minecraft:resistance", "title @p clear",
-			"tp @p 0.5 0 0.5", "effect give @p minecraft:instant_health 1 10 true" })
+			String.format(Locale.ROOT, "tp @p %.1f %d %.1f", spawn[0] + 0.5, spawn[1], spawn[2] + 0.5),
+			"effect give @p minecraft:instant_health 1 10 true" })
 			Sync.run(server, c);
 	}
 
@@ -214,7 +240,7 @@ public final class Progress {
 	private static final Map<String, double[]> spots = new java.util.concurrent.ConcurrentHashMap<>(); // profession -> x, z (exact), feet y
 
 	// sync thread: Dota placed a trader
-	public static void trader(double x, double z, String profession, int y) { spots.put(profession, new double[] { x, z, y }); }
+	public static void trader(double x, double z, String profession, double y) { spots.put(profession, new double[] { x, z, y }); }
 
 	private static final List<Trader> TRADERS = new ArrayList<>();
 
@@ -287,18 +313,24 @@ public final class Progress {
 			int bx = (int) Math.floor(tx), bz = (int) Math.floor(tz);
 			if (!level.hasChunk(bx >> 4, bz >> 4)) continue;
 			// Dota's ground height (a stall's roof is the column's top block); without it, the top of the column
-			int y = at[2] != Integer.MIN_VALUE ? (int) at[2] : level.getHeight(Heightmap.Types.MOTION_BLOCKING, bx, bz);
+			double y = !Double.isNaN(at[2]) ? at[2] : level.getHeight(Heightmap.Types.MOTION_BLOCKING, bx, bz);
 			String tag = "mcdota_trader_" + t.profession;
 			Entity e = null;
 			for (Entity c : level.getAllEntities()) if (c.getTags().contains(tag)) { e = c; break; }
 			if (e == null) {
-				Sync.run(server, String.format(Locale.ROOT, "summon minecraft:villager %.2f %d %.2f {NoAI:1b,Invulnerable:1b,"
+				Sync.run(server, String.format(Locale.ROOT, "summon minecraft:villager %.2f %.1f %.2f {NoAI:1b,Invulnerable:1b,"
 					+ "PersistenceRequired:1b,Silent:1b,Rotation:[90f,0f],Tags:[\"mcdota_trader\",\"%s\"],CustomName:\"%s\","
 					+ "VillagerData:{profession:\"minecraft:%s\",level:5,type:\"minecraft:plains\"},Offers:{Recipes:[%s]},"
 					+ "active_effects:[{id:\"minecraft:invisibility\",duration:-1,amplifier:0b,show_particles:0b}]}",
 					tx, y, tz, tag, t.name, t.profession, String.join(",", t.offers)));
-			} else if ((int) Math.floor(e.getY()) != y || Math.abs(e.getX() - tx) > 0.1 || Math.abs(e.getZ() - tz) > 0.1) {
+			} else if (Math.abs(e.getY() - y) > 0.1 || Math.abs(e.getX() - tx) > 0.1 || Math.abs(e.getZ() - tz) > 0.1) {
 				e.teleportTo(tx, y, tz);
+			}
+			// a block in the trader's own space (a barrier, a stall part) swallows the clicks meant for him
+			for (int dy = 0; dy < 2; dy++) { // his body (0.6 and 1.6 above the feet: a slab under them is fine)
+				var st = level.getBlockState(net.minecraft.core.BlockPos.containing(tx, y + 0.6 + dy, tz));
+				if (!st.isAir() && ticks % 400 == 0)
+					org.slf4j.LoggerFactory.getLogger("mcdota").warn("trader {} is inside {} at {} {} {}", t.profession, st, bx, (int) Math.floor(y + 0.6) + dy, bz);
 			}
 		}
 	}

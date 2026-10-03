@@ -296,3 +296,20 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - tools/check_lua.py (lupa): dev_launch/build_assets refuse to run with a Lua syntax error. A broken addon_game_mode.lua
   loads NOTHING (silently): hero pick 90 s, strategy, showcase came back, no bridge. Not the real map's fault.
 - Gotcha: never pipe dev_launch.sh (| tail): Dota inherits the pipe, the command waits until Dota exits.
+
+## 2026-10-03 12:20: market by hand, aim-based melee, horizon strip, tick budget
+- Market (real map, Radiant): red stall where Dota's shopkeeper stood, nudged (rel 1,2), counter toward the map centre;
+  blue stall perpendicular (rel 8,8), counter toward -V; Steve spawns/respawns on the square between (rel 5,4) —
+  "spawnat" from Lua, Progress.spawnAt/joined (no more fixed MC 0,0). Secret trader replaces Dota's secret
+  shopkeeper (hidden), at his exact spot and facing. Barriers around the fountain skip stall cells (a trader inside a
+  barrier could not be clicked). Traders stand on top of slabs (half-block y).
+- Melee: AttackMixin sends "swing <dmg>" (attack cooldown, sharpness, crit) on every left click; it lands on the unit
+  Panorama finds under the crosshair (GameUI.FindScreenEntities at the centre and 4 points around it, "mc_aim"),
+  kept 0.3 s, within MELEE_REACH 3.5 blocks + hull. Melee hits on stand-ins are ignored; arrows/sweeps still use them.
+  The target boss bar is gone. Verified: swing 6 on a test creep at 170 units.
+- Stand-ins removed with discard() (no death puff, no dropped loot), after 1 s unlisted.
+- Horizon strip: underground air in chunks the client doesn't have counts as stone when meshing (SectionCompilerMixin).
+- Twitching while walking: terrain builds were 400 columns/tick (100+ ms stalls in new chunks) → 6 ms per tick budget;
+  "server tick" in the terrain log line (1.5 ms with an 85k backlog). Traders turn smoothly (eased).
+- Testing: bridge POST /dota "testunit <unit> <dist>" (stunned unit in front of Steve) or any console command.
+  Don't test enemies near our fountain or towers: they kill it in seconds.

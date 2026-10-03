@@ -28,6 +28,15 @@ public final class Sync {
 	private static final float HERO_HP = 1024; // stand-in health; a hit shows up as the drop below this
 	private static final ConcurrentLinkedQueue<String> out = new ConcurrentLinkedQueue<>();
 	private static final Map<String, String> standIns = new HashMap<>(); // Dota hero id -> stand-in tag
+	private static final Map<String, Long> lastSeen = new HashMap<>(); // Dota hero id -> last time Dota listed it
+
+	// server thread: remove tagged entities without a death (/kill played the death puff and the husks dropped what
+	// they had picked up, right in front of the player)
+	public static void discard(MinecraftServer server, String tag) {
+		java.util.List<Entity> gone = new java.util.ArrayList<>();
+		for (Entity e : server.overworld().getAllEntities()) if (e.getTags().contains(tag)) gone.add(e);
+		gone.forEach(Entity::discard);
+	}
 	private static boolean busy, applying;
 
 	// server thread: a block changed somewhere
@@ -51,7 +60,6 @@ public final class Sync {
 
 	// client thread, every tick
 	public static void tick(Minecraft mc) {
-		Target.tick(mc);
 		MinecraftServer server = mc.getSingleplayerServer();
 		if (busy || mc.player == null || server == null) return;
 		StringBuilder body = new StringBuilder(String.format(Locale.ROOT, "me %s %.2f %.2f %.2f %.1f %.1f %.1f\n",
@@ -113,6 +121,9 @@ public final class Sync {
 	private static final Map<Long, java.util.ArrayDeque<Build>> ready = new HashMap<>();
 	private static int readyCount;
 	private static final int BUDGET = 400;
+	// and at most this long per server tick: each column is several commands, and 400 of them stalled the server for
+	// 100+ ms whenever the player walked into new chunks on the big map (the picture twitched while walking)
+	private static final long BUDGET_NANOS = 6_000_000;
 	private static long lastReport;
 
 	private static void column(MinecraftServer server, int x, int z, Runnable build) {
@@ -138,9 +149,10 @@ public final class Sync {
 
 	// server thread, every tick
 	public static void buildSome(MinecraftServer server) {
-		if (System.currentTimeMillis() - lastReport > 10000 && (readyCount > 0 || !pending.isEmpty())) {
+		if (System.currentTimeMillis() - lastReport > 10000) {
 			lastReport = System.currentTimeMillis();
-			org.slf4j.LoggerFactory.getLogger("mcdota").info("terrain: {} columns ready, {} chunks waiting to load", readyCount, pending.size());
+			org.slf4j.LoggerFactory.getLogger("mcdota").info("terrain: {} columns ready, {} chunks waiting to load; server tick {} ms",
+				readyCount, pending.size(), String.format(Locale.ROOT, "%.1f", server.getCurrentSmoothedTickTime()));
 		}
 		if (readyCount == 0) return;
 		var players = server.getPlayerList().getPlayers();
@@ -153,9 +165,10 @@ public final class Sync {
 		applying = true;
 		try {
 			int done = 0;
+			long until = System.nanoTime() + BUDGET_NANOS;
 			for (Long k : order) {
 				java.util.ArrayDeque<Build> q = ready.get(k);
-				while (done < BUDGET && !q.isEmpty()) {
+				while (done < BUDGET && !q.isEmpty() && System.nanoTime() < until) {
 					Build b = q.poll();
 					readyCount--;
 					done++;
@@ -163,7 +176,7 @@ public final class Sync {
 					else wait(b);
 				}
 				if (q.isEmpty()) ready.remove(k);
-				if (done >= BUDGET) break;
+				if (done >= BUDGET || System.nanoTime() >= until) break;
 			}
 		} finally {
 			applying = false;
@@ -191,7 +204,7 @@ public final class Sync {
 						String tag = "dota_" + p[1];
 						String y = p.length > 7 ? p[7] : "0";
 						seen.add(tag);
-						Target.unit(tag, p[2], Integer.parseInt(p[5]), Integer.parseInt(p[6]), p.length > 8 && p[8].equals("1"));
+						lastSeen.put(p[1], System.currentTimeMillis());
 						boolean fresh = standIns.put(p[1], tag) == null;
 						if (fresh) run(server, String.format(Locale.ROOT, "summon minecraft:husk %s " + y + " %s {NoAI:1b,Silent:1b,"
 							+ "PersistenceRequired:1b,NoGravity:1b,DeathLootTable:\"minecraft:empty\",Tags:[\"dota\",\"%s\"],attributes:[{id:\"minecraft:max_health\",base:%d},"
@@ -205,10 +218,11 @@ public final class Sync {
 					case "loot" -> Progress.loot(server, p);
 					case "dead" -> Progress.deadFor(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]));
 					case "respawn" -> Progress.respawn(server);
+					case "spawnat" -> Progress.spawnAt(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
 					case "lvl" -> Progress.level(server, Integer.parseInt(p[1]));
 					case "delay" -> Overlay.dotaDelay(Integer.parseInt(p[1]));
 					case "cmd" -> run(server, line.trim().substring(4)); // testing (bridge /cmd)
-					case "trader" -> Progress.trader(Double.parseDouble(p[1]), Double.parseDouble(p[2]), p[3], p.length > 4 ? Integer.parseInt(p[4]) : Integer.MIN_VALUE);
+					case "trader" -> Progress.trader(Double.parseDouble(p[1]), Double.parseDouble(p[2]), p[3], p.length > 4 ? Double.parseDouble(p[4]) : Double.NaN);
 					case "xp" -> run(server, "xp add @p " + p[1] + " points"); // Steve killed a Dota unit
 					case "reset" -> { // new Dota game: flat ground again (dirt under a magenta podzol top) and nothing on it
 						int r = 112; // only chunks within view distance are loaded; fill fails on anything else
@@ -219,7 +233,7 @@ public final class Sync {
 						}
 						run(server, "kill @e[type=minecraft:item]");
 						Progress.newMatch(server);
-						run(server, "kill @e[tag=dota]"); // stand-ins of the previous Dota game
+						discard(server, "dota"); // stand-ins of the previous Dota game
 						standIns.clear();
 						ready.clear(); // terrain of the previous Dota game
 						readyCount = 0;
@@ -245,17 +259,23 @@ public final class Sync {
 						// direct = the swing's own target or a projectile (a sweep's splash isn't: it never touches allies)
 						var src = le.getLastDamageSource();
 						if (src != null && src.getEntity() instanceof net.minecraft.world.entity.player.Player pl) {
-							boolean direct = src.getDirectEntity() != pl || pl.getLastHurtMob() == le;
-							out.add(String.format(Locale.ROOT, "hit %s %.2f %d", s.getKey(), HERO_HP - le.getHealth(), direct ? 1 : 0));
+							boolean projectile = src.getDirectEntity() != pl;
+							boolean melee = !projectile && pl.getLastHurtMob() == le;
+							// the swing's own target: AttackMixin's "swing" hits what Dota highlights instead
+							if (!melee)
+								out.add(String.format(Locale.ROOT, "hit %s %.2f %d", s.getKey(), HERO_HP - le.getHealth(), projectile ? 1 : 0));
 						}
 						le.setHealth(HERO_HP);
 					}
 				}
 			}
 			// heroes Dota no longer reports (dead, left) lose their stand-in
+			// (after a second unlisted: answers can arrive out of order, and a stand-in removed and summoned again flickered)
+			long now = System.currentTimeMillis();
 			standIns.entrySet().removeIf(s -> {
-				if (seen.contains(s.getValue())) return false;
-				run(server, "kill @e[tag=" + s.getValue() + "]");
+				if (seen.contains(s.getValue()) || now - lastSeen.getOrDefault(s.getKey(), 0L) < 1000) return false;
+				lastSeen.remove(s.getKey());
+				discard(server, s.getValue());
 				return true;
 			});
 		} finally {

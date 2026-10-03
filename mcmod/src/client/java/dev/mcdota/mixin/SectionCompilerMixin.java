@@ -16,6 +16,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class SectionCompilerMixin {
 	@Inject(method = "getBlockState", at = @At("RETURN"), cancellable = true)
 	private void mcdota$dotaBlocksAreAir(BlockPos pos, CallbackInfoReturnable<BlockState> cir) {
-		if (Hybrid.drawnByDota(cir.getReturnValue(), pos)) cir.setReturnValue(Blocks.AIR.defaultBlockState());
+		BlockState s = cir.getReturnValue();
+		if (Hybrid.drawnByDota(s, pos)) cir.setReturnValue(Blocks.AIR.defaultBlockState());
+		// Underground in a chunk the client doesn't have yet (past the view distance) counts as solid: otherwise the
+		// last loaded chunks show the side faces of their dirt and stone layers, a brown strip along the horizon.
+		else if (s.isAir() && pos.getY() < -1) {
+			var level = net.minecraft.client.Minecraft.getInstance().level;
+			if (level != null && !level.hasChunk(pos.getX() >> 4, pos.getZ() >> 4)) cir.setReturnValue(Blocks.STONE.defaultBlockState());
+		}
 	}
 }
