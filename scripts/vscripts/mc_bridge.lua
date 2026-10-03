@@ -71,12 +71,17 @@ function MCBridge:Tick()
 end
 
 function MCBridge:Apply( body, stale )
+	-- a swing at an ally (a deny) first: its sweep's hit lines may come earlier in the same batch
+	if body:find( "swing " ) and self.aim and not self.aim:IsNull() and self.steve
+		and self.aim:GetTeamNumber() == self.steve:GetTeamNumber() then self.denySwingAt = GameRules:GetGameTime() end
 	for line in body:gmatch( "[^\n]+" ) do
 		local name, x, z, hp, max, yaw = line:match( "^steve (%S+) (%S+) (%S+) (%S+) (%S+) (%S+)" )
 		if name and not stale then self:MoveSteve( name, to_dota( tonumber( x ), tonumber( z ) ), tonumber( hp ) / tonumber( max ), math.rad( tonumber( yaw ) ) ) end
 
 		local id, amount, direct = line:match( "^hit (%d+) (%S+) ?(%S*)" ) -- arrows, sweeps: through the stand-ins
-		if id then self:HitUnit( EntIndexToHScript( tonumber( id ) ), tonumber( amount ), direct ~= "0" ) end
+		-- (no splash right after a swing at an ally: a deny is a single hit, the sword's sweep must not hit the enemies around)
+		local denying = GameRules:GetGameTime() - ( self.denySwingAt or -1 ) < 0.4
+		if id and not ( denying and direct == "0" ) then self:HitUnit( EntIndexToHScript( tonumber( id ) ), tonumber( amount ), direct ~= "0" ) end
 		local dev = line:match( "^dev (.+)" ) -- testing (bridge /dota): a console command, only with cheats on
 		if dev and ( GameRules:IsCheatMode() or IsInToolsMode() ) then
 			local name, dist = dev:match( "^testunit (%S+) (%S+)" ) -- a stunned unit in front of Steve, to aim at
@@ -94,6 +99,7 @@ function MCBridge:Apply( body, stale )
 			and self.steve and self.steve:IsAlive() then
 			local reach = MELEE_REACH * GRID + self.aim:GetHullRadius()
 			local d = ( self.aim:GetAbsOrigin() - self.steve:GetAbsOrigin() ):Length2D()
+			if self.aim:GetTeamNumber() == self.steve:GetTeamNumber() then self.denySwingAt = GameRules:GetGameTime() end
 			if d <= reach then self:HitUnit( self.aim, tonumber( swing ), true ) end
 		end
 

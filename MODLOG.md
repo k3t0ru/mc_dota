@@ -313,3 +313,11 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
   "server tick" in the terrain log line (1.5 ms with an 85k backlog). Traders turn smoothly (eased).
 - Testing: bridge POST /dota "testunit <unit> <dist>" (stunned unit in front of Steve) or any console command.
   Don't test enemies near our fountain or towers: they kill it in seconds.
+
+## 2026-10-03 12:35: swing damage, no sweep on denies
+- BUG: the swing's damage came from the CLIENT's ATTACK_DAMAGE, which is a bare fist (1.0): equipment attribute
+  modifiers live on the server only. Now the client sends cooldown + crit, the integrated server computes like
+  Player.attack: weapon attribute * (0.2 + 0.8 s^2) (* 1.5 crit) + enchantments (EnchantmentHelper.modifyDamage) * s.
+  Verified with a synthesized click: iron sword = 6.0. (Sweeps came out stronger than the main hit because of this.)
+- Denies: a swing at an ally suppresses splash ("hit ... 0") for 0.4 s; Lua scans the batch for the swing first.
+- Testing: tools for clicks — SendInput/mouse_event left clicks over Dota's window reach MouseInput (first one focuses).
