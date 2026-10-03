@@ -14,13 +14,13 @@ public final class CameraSender {
 	private static final InetSocketAddress BRIDGE = new InetSocketAddress("127.0.0.1", 27101);
 	private static DatagramSocket socket;
 
-	public static void send(Minecraft mc, long stamp) {
+	public static void send(Minecraft mc, double stamp) {
 		if (mc.level == null) return;
 		try {
 			if (socket == null) socket = new DatagramSocket();
 			Camera cam = mc.gameRenderer.getMainCamera();
 			Vec3 p = cam.position();
-			byte[] msg = String.format(java.util.Locale.ROOT, "%.3f %.3f %.3f %.2f %.2f %d", p.x, p.y, p.z, cam.yRot(), cam.xRot(), stamp)
+			byte[] msg = String.format(java.util.Locale.ROOT, "%.3f %.3f %.3f %.2f %.2f %.2f", p.x, p.y, p.z, cam.yRot(), cam.xRot(), stamp)
 				.getBytes(StandardCharsets.US_ASCII);
 			socket.send(new DatagramPacket(msg, msg.length, BRIDGE));
 		} catch (Exception ignored) { // bridge not running: Minecraft just plays on

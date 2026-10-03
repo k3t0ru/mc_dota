@@ -330,3 +330,26 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Kill popup: Steve gets no Dota gold at all (gold filter; he pays in emeralds), so no yellow "+45"; MC:Popup shows
   the emeralds as msg_gold particle tinted Minecraft green (55FF55) at the corpse, 40 units up (160 rose out of a
   first-person view). Other loot only on the actionbar. Verified on screen.
+
+## 2026-10-03 13:25: smoothness (measured), TNT, no digging, test kit
+- Smoothness, measured with synthetic input (scratchpad tools: motion.py = precise mouse/W input, measure.sh = Panorama
+  "[mc] smooth" lines, bridge MCDOTA_POSELOG=<file> = raw pose stream, poses.py = its evenness):
+  1. Cursor was read at the END of a frame but applied by Minecraft in the NEXT one, stamped with that frame → turn per
+     stamped ms varied 32% for a steady mouse. Now read right before MouseHandler.handleAccumulatedMovement, stamp there.
+  2. Read+SetCursorPos each frame raced with moves in between → some frames got double turns. Now the low-level hook
+     (MouseWheel) adds up WM_MOUSEMOVE and swallows it (cursor stays at Dota's centre); MouseInput takes the sum per
+     frame. Safety: capture only while MC renews it every frame (<250 ms) and MC's window is in front.
+  3. Pose stamps in fractional ms (nanoTime aligned to wall clock), end to end.
+  4. Panorama: a late pose no longer freezes then jumps: extrapolate from the last two up to 60 ms; delay = 95th pct.
+  Result (steady motion): raw stream spread 32% → 12%; Panorama camera unevenness 0.25–0.40 → 0.04–0.05.
+  Also: MC render/simulation distance 5 (MC only draws hand/HUD/entities; 8 chunks cost Dota ~40% of its frames),
+  overlay readback through two PBOs (no GPU wait). MC at 120 fps: overlay stuck at 59, Dota lost frames → keep 60.
+  Dota fps cap 144 vs uncapped: no better. Lua tick costs 0.5 ms avg (not the frame spikes); Dota frame-time p95 ~12 ms
+  with MC running vs ~9 without (the overlay window + MC share the GPU).
+- Villagers don't turn toward Steve any more (prop angles go out at 30 Hz unsmoothed: they shook).
+- TNT (6) + flint and steel (2) at the fletcher. Explosions are splash (no denies); ExplosionMixin spares the ground and
+  Dota-built blocks (Sync.protectedBlocks from "block" lines). Verified: owned primed TNT → 22–25 HP to stand-ins.
+- No digging the ground: Hybrid.ground (terrain skin or below the column surface) → AttackBlockCallback FAIL,
+  PlayerBlockBreakEvents.BEFORE false; explosions skip it too.
+- Coin sound on Steve's kills with emeralds (General.Coins). Test kit: TEST_EMERALDS = 192 at every match start.
+- TESTME.md: what the user still has to check by hand.

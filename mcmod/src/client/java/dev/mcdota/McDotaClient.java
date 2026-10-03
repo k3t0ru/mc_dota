@@ -34,6 +34,10 @@ public class McDotaClient implements ClientModInitializer {
 			mc.options.ambientOcclusion().set(false); // shaded corners turn the magenta ground into dark triangles
 			mc.options.autoJump().set(true); // the floor follows Dota's terrain in whole-block steps
 			mc.options.bobView().set(false); // walking bob shakes only Minecraft's layer, so blocks would swim over the map
+			// Minecraft only draws the hand, the HUD and entities here (Dota draws the world): a short view distance leaves
+			// the video card to Dota, which shares it (with 8 chunks Dota lost ~40% of its frames and stuttered more)
+			mc.options.renderDistance().set(Integer.getInteger("mcdota.view", 5));
+			mc.options.simulationDistance().set(Integer.getInteger("mcdota.view", 5));
 			int[] r = renderSize(); // resizing inside Window's constructor crashes, so do it once the client is up
 			GLFW.glfwSetWindowSize(mc.getWindow().handle(), r[0], r[1]);
 			GLFW.glfwSetWindowPos(mc.getWindow().handle(), OFFSCREEN_X, 0);
@@ -54,6 +58,11 @@ public class McDotaClient implements ClientModInitializer {
 		});
 		net.fabricmc.fabric.api.event.lifecycle.v1.ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> Progress.entityLoaded(entity));
 		net.fabricmc.fabric.api.event.player.UseEntityCallback.EVENT.register((player, level, hand, entity, hit) -> Progress.interact(player, entity));
+		// no digging into the ground (Hybrid.ground): not even the mining cracks start
+		net.fabricmc.fabric.api.event.player.AttackBlockCallback.EVENT.register((player, level, hand, pos, dir) ->
+			Hybrid.ground(level.getBlockState(pos), pos) && !player.isCreative() ? net.minecraft.world.InteractionResult.FAIL : net.minecraft.world.InteractionResult.PASS);
+		net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, be) ->
+			player.isCreative() || !Hybrid.ground(state, pos));
 		// clicks land on the overlay, never in Minecraft's window, so grab the mouse ourselves once focus arrives
 		ClientTickEvents.END_CLIENT_TICK.register(Sync::tick);
 		ClientTickEvents.END_CLIENT_TICK.register(MouseWheel::tick);

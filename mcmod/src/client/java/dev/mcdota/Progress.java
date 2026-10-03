@@ -29,6 +29,7 @@ import java.util.Map;
 // The traders are DRAWN by Dota (blocky villager models, tools/gen_villager.py) at spots Dota picks ("trader x z prof");
 // Minecraft only keeps an invisible villager there to open the trading screen (anything Minecraft draws lags Dota's world).
 public final class Progress {
+	private static final int TEST_EMERALDS = 192; // testing: 3 stacks at the start of every match (0 for real games)
 	private static final int HP_PER_LEVEL = 1; // half a heart per Dota level: level 30 = 49 hp (Dota's DOTA_TO_MC: 1 hp = 50 Dota damage)
 	private static final double SWEEP = 0.8; // sweep hits deal this share of the main hit (vanilla: 1 damage flat)
 	private static final int ARROW_TICKS = 80; // Steve's arrows fly straight (Dota's camera can't look up to lob them) for 4 s
@@ -56,6 +57,7 @@ public final class Progress {
 			"effect clear @p", "effect give @p minecraft:instant_health 1 10 true", "effect give @p minecraft:saturation 1 20 true",
 			"give @p minecraft:wooden_sword", "give @p minecraft:wooden_pickaxe", "give @p minecraft:crafting_table",
 			"give @p minecraft:bread 8", "give @p minecraft:oak_planks 16",
+			"give @p minecraft:emerald " + TEST_EMERALDS,
 		}) Sync.run(server, c);
 		Sync.discard(server, "mcdota_trader"); // re-summoned with fresh trades by tick()
 		attributes(server);
@@ -270,7 +272,7 @@ public final class Progress {
 		TRADERS.add(new Trader("Fletcher", "fletcher", List.of( // basic shop: the everyday materials
 			buy(1, "oak_log", 8), buy(1, "cobblestone", 32), buy(2, "string", 4), buy(1, "flint", 4), buy(1, "feather", 8),
 			buy(2, "leather", 4), buy(2, "iron_ingot"), buy(1, "tripwire_hook"), buy(2, "gunpowder", 4), buy(1, "paper", 6),
-			buy(1, "arrow", 16), buy(1, "bread", 4), buy(2, "cooked_beef", 4),
+			buy(1, "arrow", 16), buy(1, "bread", 4), buy(2, "cooked_beef", 4), buy(6, "tnt"), buy(2, "flint_and_steel"),
 			// buys back what the jungle drops
 			sell("feather", 16, 1), sell("leather", 4, 1), sell("string", 8, 1), sell("flint", 8, 1), sell("gunpowder", 4, 1),
 			sell("iron_ingot", 1, 1), sell("oak_log", 16, 1), sell("cooked_beef", 8, 1), sell("rotten_flesh", 16, 1))));

@@ -32,7 +32,6 @@ public final class MouseInput {
 	private static final int[] VK = { 0x01, 0x02, 0x04 }; // left, right, middle -> GLFW mouse buttons 0, 1, 2
 	private static final boolean[] down = new boolean[3];
 	private static boolean wasPlaying; // first frame after (re)gaining control only re-centres
-	private static final POINT anchor = new POINT(); // where the cursor really landed after re-centring (DPI-proof)
 
 	// Dota's camera can't look above the horizon, so Steve can't either (else the layers no longer match)
 	public static final float MIN_PITCH = 3; // same as MIN_PITCH in bridge.py
@@ -46,17 +45,19 @@ public final class MouseInput {
 		Overlay o = McDotaClient.overlay;
 		boolean playing = o != null && o.cx != 0 && mc.isWindowActive() && mc.screen == null && mc.mouseHandler.isMouseGrabbed();
 		User32 u = User32.INSTANCE;
-		if (playing) {
-			POINT p = new POINT();
-			u.GetCursorPos(p);
-			if (wasPlaying) {
+		if (playing) MouseWheel.captureAt = System.nanoTime();
+		if (playing) { // the mouse hook (MouseWheel) adds up the moves and keeps the cursor still
+			if (!wasPlaying) { // (re)gaining control: cursor to Dota's centre, moves from now on are ours
+				u.SetCursorPos(o.cx, o.cy);
+				MouseWheel.takeMove();
+				MouseWheel.capture = true;
+			} else {
+				int[] d = MouseWheel.takeMove();
 				MouseHandlerAccessor m = (MouseHandlerAccessor) mc.mouseHandler;
-				m.mcdota$setDX(m.mcdota$getDX() + p.x - anchor.x);
-				m.mcdota$setDY(m.mcdota$getDY() + p.y - anchor.y);
+				m.mcdota$setDX(m.mcdota$getDX() + d[0]);
+				m.mcdota$setDY(m.mcdota$getDY() + d[1]);
 			}
-			u.SetCursorPos(o.cx, o.cy);
-			u.GetCursorPos(anchor);
-		}
+		} else MouseWheel.capture = false;
 		wasPlaying = playing;
 		for (int b = 0; b < 3; b++) {
 			boolean now = playing && (u.GetAsyncKeyState(VK[b]) & 0x8000) != 0;

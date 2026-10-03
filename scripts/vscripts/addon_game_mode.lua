@@ -429,26 +429,7 @@ function MC:SpawnTraders()
 	MC:SendTraders()
 end
 
--- traders look at Steve when he's close, like Minecraft villagers do (at most 80 degrees off their counter). Eased:
--- Steve's position arrives 30 times a second, unevenly, and following it directly made them twitch while he walked.
-function MC:TradersLook( steve )
-	for _, t in ipairs( TRADERS ) do
-		if t.prop and not t.prop:IsNull() then
-			local d = steve and steve:GetAbsOrigin() - t.prop:GetAbsOrigin()
-			local want = t.yaw
-			if d and d:Length2D() < 10 * GRID and d:Length2D() > 1 then
-				local off = ( math.deg( math.atan2( d.y, d.x ) ) - t.yaw + 540 ) % 360 - 180
-				want = t.yaw + math.max( -80, math.min( 80, off ) )
-			end
-			t.cur = t.cur or t.yaw
-			local step = ( want - t.cur ) * 0.15
-			if math.abs( step ) > 0.05 then
-				t.cur = t.cur + step
-				t.prop:SetAngles( 0, t.cur + 180, 0 )
-			end
-		end
-	end
-end
+-- (traders don't turn toward Steve: Dota sends a prop's angles at 30 Hz without smoothing, so they shook while he walked)
 
 function MC:SendTraders()
 	-- (with the ground's Minecraft y: under a stall roof the top block is the roof)
@@ -608,7 +589,10 @@ function MC:OnKilled( e )
 			print( "[mc] Steve killed " .. dead:GetUnitName() .. ": " .. loot )
 			MCBridge:Send( loot )
 			local emeralds = tonumber( loot:match( "^loot (%d+)" ) ) or 0
-			if emeralds > 0 then MC:Popup( dead:GetAbsOrigin(), emeralds ) end
+			if emeralds > 0 then
+				MC:Popup( dead:GetAbsOrigin(), emeralds )
+				EmitSoundOnLocationWithCaster( dead:GetAbsOrigin(), "General.Coins", killer ) -- Dota's gold sound
+			end
 		end
 		return
 	end

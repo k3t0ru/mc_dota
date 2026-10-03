@@ -21,6 +21,12 @@ public final class Hybrid {
 		return s.is(Blocks.PODZOL) || s.is(Blocks.MUD_BRICKS) || s.is(Blocks.MUD_BRICK_SLAB) || s.is(Blocks.BARRIER);
 	}
 
+	// The ground can't be dug (not yet: holes in Dota's ground are more trouble than they're worth): only blocks a player
+	// put above the surface can be broken or blown up, never the terrain skin or anything below the surface.
+	public static boolean ground(BlockState s, BlockPos p) {
+		return terrain(s) || p.getY() < surface.getOrDefault(key(p.getX(), p.getZ()), 0);
+	}
+
 	// render thread (chunk compile): Dota draws this one
 	public static boolean drawnByDota(BlockState s, BlockPos p) {
 		return !s.isAir() && s.getFluidState().isEmpty() && !terrain(s) && p.getY() >= surface.getOrDefault(key(p.getX(), p.getZ()), 0);

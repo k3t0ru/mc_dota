@@ -10,8 +10,24 @@ import net.minecraft.client.Minecraft;
 // screen) and Dota ignores input while it isn't in front, so the wheel did nothing at all. A low-level mouse hook
 // catches it for the whole system: while Minecraft is in front and in the game (no menu), it switches the hotbar slot
 // like Minecraft's own scrolling, and Dota never sees it.
+// The same hook takes the mouse's movement while in the game (MouseInput.capture): every move is added up exactly and
+// swallowed, so the cursor stays put at Dota's centre and each frame takes what moved since the last one. (Reading
+// the cursor every frame and putting it back raced with moves arriving in between: some frames got two frames' worth
+// of turning, the next one little, and Dota's camera showed it as jerks.)
 public final class MouseWheel {
 	private static volatile int pending; // notches waiting for the client thread (+ = wheel up)
+	static volatile boolean capture; // in the game: moves are ours
+	static volatile long captureAt; // the client thread renews it every frame: a hung Minecraft must not freeze the mouse
+	private static long moveX, moveY; // added up since the last take (guarded by MouseWheel.class)
+
+	// client thread: what the mouse moved since the last call
+	static synchronized int[] takeMove() {
+		int[] d = { (int) moveX, (int) moveY };
+		moveX = moveY = 0;
+		return d;
+	}
+
+	private static synchronized void addMove(int dx, int dy) { moveX += dx; moveY += dy; }
 
 	public static void start() {
 		Thread t = new Thread(() -> {
@@ -20,6 +36,13 @@ public final class MouseWheel {
 				if (code >= 0 && wParam.intValue() == 0x020A && playing()) { // WM_MOUSEWHEEL
 					pending += (short) (info.mouseData >> 16) / 120;
 					return new WinDef.LRESULT(1); // swallowed
+				}
+				if (code >= 0 && wParam.intValue() == 0x0200 && capture && System.nanoTime() - captureAt < 250_000_000L
+					&& McDotaClient.mcHwnd != null && McDotaClient.mcHwnd.equals(u.GetForegroundWindow())) { // WM_MOUSEMOVE, cursor not moved yet
+					WinDef.POINT at = new WinDef.POINT();
+					u.GetCursorPos(at);
+					addMove(info.pt.x - at.x, info.pt.y - at.y);
+					return new WinDef.LRESULT(1); // swallowed: the cursor stays where it is
 				}
 				return u.CallNextHookEx(null, code, wParam, new WinDef.LPARAM(com.sun.jna.Pointer.nativeValue(info.getPointer())));
 			};

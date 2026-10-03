@@ -20,9 +20,10 @@
 #          POST /dota with Dota console commands (e.g. dota_create_unit npc_dota_creep_badguys_melee enemy).
 # The mod also sends its camera over UDP :27101 every frame: "<x> <y> <z> <yaw> <pitch>" (MC eye).
 # Run: python bridge/bridge.py
-import math, os, socket, threading
+import math, os, socket, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+POSELOG = open(os.environ["MCDOTA_POSELOG"], "w", buffering=1) if os.environ.get("MCDOTA_POSELOG") else None
 GROUND_Y = 0  # MC feet level on flat ground (MC_FLOOR in addon_game_mode.lua)
 SCALE = 96  # Dota units per MC block (GRID in addon_game_mode.lua): Steve stands as tall as a Dota hero
 CAM_DIST = 40  # Dota camera sits this far behind its look-at point; small = first person
@@ -92,7 +93,7 @@ class Relay:
         hx, hy = -math.sin(t), -math.cos(t)  # MC facing in Dota's x/y
         lx, ly = ex + CAM_DIST * math.cos(p) * hx, ey + CAM_DIST * math.cos(p) * hy
         lz = ez - CAM_DIST * math.sin(p)
-        return f"{lx:.1f} {ly:.1f} {YAW_OFFSET + YAW_SIGN * yaw:.2f} {max(pitch, MIN_PITCH):.2f} {CAM_DIST} {lz:.1f} {sent:.0f}"
+        return f"{lx:.1f} {ly:.1f} {YAW_OFFSET + YAW_SIGN * yaw:.2f} {max(pitch, MIN_PITCH):.2f} {CAM_DIST} {lz:.1f} {sent:.2f}"
 
 
 def main():
@@ -105,6 +106,8 @@ def main():
             data = sock.recv(256).decode().split()
             if len(data) == 6:  # x y z yaw pitch millis (wall clock, so Panorama can measure the camera's lag)
                 relay.cam = tuple(float(v) for v in data)
+                if POSELOG:  # testing: every pose as it arrives (MCDOTA_POSELOG=<file>)
+                    POSELOG.write("%.2f %s%s" % (time.perf_counter() * 1000, " ".join(data), os.linesep))
     threading.Thread(target=udp, daemon=True).start()
 
     class H(BaseHTTPRequestHandler):

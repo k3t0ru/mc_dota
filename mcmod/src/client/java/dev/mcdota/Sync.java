@@ -46,6 +46,9 @@ public final class Sync {
 		else out.add(String.format("set %d %d %d %s", p.getX(), p.getY(), p.getZ(), BuiltInRegistries.BLOCK.getKey(s.getBlock()).getPath()));
 	}
 
+	// blocks Dota built (the market, the fountain's barriers): explosions leave them alone (ExplosionMixin)
+	public static final Set<BlockPos> protectedBlocks = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
 	// any thread: a line for Dota
 	public static void out(String line) { out.add(line); }
 
@@ -240,8 +243,9 @@ public final class Sync {
 						pending.clear();
 					}
 					// queued behind its column's terrain build (which would otherwise clear or overwrite it later)
-					case "block" -> column(server, Integer.parseInt(p[1]), Integer.parseInt(p[3]), () ->
-						run(server, String.format("setblock %s %s %s minecraft:%s", p[1], p[2], p[3], p[4])));
+					case "block" -> { protectedBlocks.add(new BlockPos(Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3])));
+						column(server, Integer.parseInt(p[1]), Integer.parseInt(p[3]), () ->
+						run(server, String.format("setblock %s %s %s minecraft:%s", p[1], p[2], p[3], p[4]))); }
 					case "unblock" -> run(server, String.format("setblock %s %s %s minecraft:air", p[1], p[2], p[3]));
 					case "void" -> column(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), () ->
 						run(server, String.format("fill %s -64 %s %s 30 %s minecraft:air", p[1], p[2], p[1], p[2]), false)); // fall and die
@@ -259,8 +263,8 @@ public final class Sync {
 						// direct = the swing's own target or a projectile (a sweep's splash isn't: it never touches allies)
 						var src = le.getLastDamageSource();
 						if (src != null && src.getEntity() instanceof net.minecraft.world.entity.player.Player pl) {
-							boolean projectile = src.getDirectEntity() != pl;
-							boolean melee = !projectile && pl.getLastHurtMob() == le;
+							boolean projectile = src.getDirectEntity() instanceof net.minecraft.world.entity.projectile.Projectile; // TNT: splash
+							boolean melee = src.getDirectEntity() == pl && pl.getLastHurtMob() == le;
 							// the swing's own target: AttackMixin's "swing" hits what Dota highlights instead
 							if (!melee)
 								out.add(String.format(Locale.ROOT, "hit %s %.2f %d", s.getKey(), HERO_HP - le.getHealth(), projectile ? 1 : 0));
