@@ -331,7 +331,7 @@ function MC:SetupHero( hero )
 		end
 		MC.anchor = GetGroundPosition( Vector( math.floor( f.x / GRID + 0.5 ) * GRID, math.floor( f.y / GRID + 0.5 ) * GRID, 0 ), nil )
 		-- Dota's own camera controls would fight Minecraft's (launch args alone get overridden by the user's config)
-		SendToConsole( "dota_camera_edgemove 0; dota_camera_speed 0; dota_camera_lock 0; dota_camera_fov_min 90; dota_camera_fov_max 90; snd_mute_losefocus 0; snd_musicvolume 0" ) -- Dota's sound plays with Minecraft holding focus; music is Minecraft's
+		SendToConsole( "dota_camera_edgemove 0; dota_camera_speed 0; dota_camera_lock 0; dota_camera_fov_min 90; dota_camera_fov_max 90; dota_hud_disable_damage_numbers 1; snd_mute_losefocus 0; snd_musicvolume 0" ) -- Dota's sound plays with Minecraft holding focus; music is Minecraft's
 		MC:SendTerrain()
 		MCWorld:SendTrees()
 		MC:StructureWalls()

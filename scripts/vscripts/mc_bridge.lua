@@ -218,8 +218,10 @@ function MCBridge:Apply( body, stale )
 		local swing, crit, sweep, full, fire, wbase, sharp = line:match( "^swing (%S+) ?(%S*) ?(%S*) ?(%S*) ?(%S*) ?(%S*) ?(%S*)" ) -- a melee swing: whatever Dota highlights under the crosshair
 		if swing and MCWorld:SwingRune() then swing = nil end -- (a rune in front: the swing breaks it)
 		if swing and self.steve and self.steve:IsAlive() then
-			local aimed = self.aim and not self.aim:IsNull() and GameRules:GetGameTime() - ( self.aimAt or 0 ) <= 0.6
-				and ( self.aim:GetAbsOrigin() - self.steve:GetAbsOrigin() ):Length2D() <= MELEE_REACH * GRID + self.aim:GetHullRadius()
+			local a = self.aim
+			local aimed = a and not a:IsNull() and a:IsAlive() and GameRules:GetGameTime() - ( self.aimAt or 0 ) <= 0.6
+				and ( a:GetAbsOrigin() - self.steve:GetAbsOrigin() ):Length2D() <= MELEE_REACH * GRID + a:GetHullRadius()
+				and self:Hittable( a )
 			if not aimed then self.aim = self:InFront() end
 		end
 		if swing and self.aim and not self.aim:IsNull() and self.steve and self.steve:IsAlive() then
@@ -410,13 +412,20 @@ function MCBridge:FarBars()
 	end
 end
 
+-- a unit Steve's swing does something to: an enemy, or an ally he may deny
+function MCBridge:Hittable( u )
+	if u.mc_player or u.mc_block or u:IsInvulnerable() then return false end
+	if u:GetTeamNumber() ~= self.steve:GetTeamNumber() then return true end
+	return not u:IsHero() and u:GetHealthPercent() < ( u:IsTower() and 10 or 50 )
+end
+
 -- the unit nearest the line Steve looks along, within reach (Dota's aim misses models without a skeleton: the mobs)
 function MCBridge:InFront()
 	local s = self.steve
 	local best, bd
 	for _, u in ipairs( FindUnitsInRadius( s:GetTeamNumber(), s:GetAbsOrigin(), nil, MELEE_REACH * GRID + 80, DOTA_UNIT_TARGET_TEAM_BOTH,
 		DOTA_UNIT_TARGET_HERO + DOTA_UNIT_TARGET_BASIC, DOTA_UNIT_TARGET_FLAG_NONE, FIND_CLOSEST, false ) ) do
-		if u ~= s and not u.mc_block then
+		if u ~= s and self:Hittable( u ) then
 			local d = u:GetAbsOrigin() - s:GetAbsOrigin()
 			d.z = 0
 			local len = d:Length2D()

@@ -233,7 +233,7 @@ public final class Progress {
 
 	// --- damage numbers ---------------------------------------------------------------------------------------------
 	// Steve's hits on Dota units: the damage in Minecraft's font over the unit (its stand-in), rising and gone in
-	// ~0.9 s; white, a crit yellow, a deny grey
+	// ~0.9 s; white, a crit red, a deny grey
 	private static final List<Object[]> numbers = new ArrayList<>(); // { tag, ticks left }
 	private static int numberCount;
 
@@ -244,7 +244,7 @@ public final class Progress {
 		var r = server.overworld().getRandom();
 		double x = e.getX() + (r.nextDouble() - 0.5) * 0.6, y = e.getY() + e.getBbHeight() + 0.2, z = e.getZ() + (r.nextDouble() - 0.5) * 0.6;
 		String tag = "dmgnum_" + (++numberCount);
-		String color = kind.equals("crit") ? "yellow" : kind.equals("deny") ? "gray" : "white";
+		String color = kind.equals("crit") ? "red" : kind.equals("deny") ? "gray" : "white";
 		Sync.run(server, String.format(Locale.ROOT, "summon minecraft:text_display %.2f %.2f %.2f {billboard:\"center\",background:0,shadow:1b,"
 			+ "Tags:[\"mcdota_dmg\",\"%s\"],text:{text:\"%d\",color:\"%s\",bold:%s},transformation:{left_rotation:[0f,0f,0f,1f],"
 			+ "right_rotation:[0f,0f,0f,1f],translation:[0f,0f,0f],scale:[1.2f,1.2f,1.2f]}}", x, y, z, tag, amount, color,
