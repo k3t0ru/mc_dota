@@ -184,10 +184,12 @@ def mc_pids(): return ps("Get-CimInstance Win32_Process -Filter \"name='java.exe
 def bridge_pids(): return ps("Get-CimInstance Win32_Process -Filter \"name like 'python%.exe'\" | Where-Object { $_.CommandLine -like '*bridge.py*' } | ForEach-Object { $_.ProcessId }")
 
 
-def wait_for(path, words, seconds):
+def wait_for(path, words, seconds, start=0):
     for _ in range(seconds):
         try:
-            text = open(path, encoding="utf-8", errors="ignore").read()
+            with open(path, encoding="utf-8", errors="ignore") as f:
+                f.seek(start)
+                text = f.read()
             for w in words:
                 if w in text: return w
         except OSError:
@@ -214,12 +216,19 @@ def host(cfg, dota):
     if subprocess.run([sys.executable, os.path.join(TOOLS, "check_lua.py")], cwd=ROOT).returncode:
         fail("ошибка в Lua-скриптах (см. выше)")
     kill(mc_pids() + dota_pids() + bridge_pids())
-    time.sleep(2)
+    for i in range(60): # a Dota that hung can take a while to go
+        if not dota_pids(): break
+        if i == 5: say("жду, пока закроется старая Dota...")
+        time.sleep(1)
+    else:
+        fail("старая Dota не закрывается: закрой её в диспетчере задач (или перезагрузи ПК) и запусти снова")
     say("мост Minecraft <-> Dota")
     log = open(os.path.join(ROOT, "bridge", "bridge.log"), "w")
     spawn([sys.executable, "-u", os.path.join(ROOT, "bridge", "bridge.py")], cwd=ROOT, stdout=log, stderr=log)
     dlog = os.path.join(dota, "game", "dota", "console.log")
-    if os.path.exists(dlog): os.remove(dlog)
+    try: os.remove(dlog)
+    except OSError: pass
+    dstart = os.path.getsize(dlog) if os.path.exists(dlog) else 0 # (a log still held open: read past its old end)
     say("запускаю Dota: когда все подключатся, нажми в лобби кнопку старта")
     subprocess.Popen([os.path.join(dota, "game", "bin", "win64", "dota2.exe"), "-novid", "-console", "-condebug", "-windowed",
                       "-noborder", "-w", w, "-h", h, "+dota_camera_edgemove", "0", "+dota_camera_speed", "0", "+dota_camera_lock", "0",
@@ -240,7 +249,7 @@ def host(cfg, dota):
     mlog = open(os.path.join(run, "gradle_run.log"), "w")
     spawn(["cmd", "/c", os.path.join(ROOT, "mcmod", "gradlew.bat"), "--no-daemon", "runClient"], cwd=os.path.join(ROOT, "mcmod"), env=env,
           stdout=mlog, stderr=mlog)
-    r = wait_for(dlog, ["bridge online", "Script Runtime Error", "Error running script"], 900)
+    r = wait_for(dlog, ["bridge online", "Script Runtime Error", "Error running script"], 900, dstart)
     if r and r != "bridge online": say("!!! ошибка Lua в Dota: см. " + dlog)
     r = wait_for(os.path.join(run, "logs", "latest.log"), ["joined the game", "has crashed"], 1200)
     say("Minecraft: " + (r or "не дождался (см. mcmod/run/gradle_run.log)"))
