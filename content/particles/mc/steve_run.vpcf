@@ -27,7 +27,7 @@
 		{
 			_class = "C_OP_RemapCPOrientationToYaw"
 			m_nCP = 0
-			m_flRotOffset = 0.0
+			m_flRotOffset = 90.0
 		},
 		{
 			_class = "C_OP_SetToCP"
