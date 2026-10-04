@@ -132,7 +132,9 @@ def mesh(boxes, sizes):
     for tex, fs in faces.items():
         obj.append(f"usemtl mob_{tex.replace('item:', '')}")
         obj += ["f " + " ".join(f"{i}/{i}" for i in f) for f in fs]
-    xs, ys, zs = [v[0] for v in verts], [v[1] for v in verts], [v[2] for v in verts]
+    # the hitbox in the model's final space: Dota's import turns the mesh a quarter (x, y) -> (-y, x) (the villagers face
+    # -X, the signs' boards run along y): unturned, the box only met the model down its middle (aim found the head only)
+    xs, ys, zs = [-v[1] for v in verts], [v[0] for v in verts], [v[2] for v in verts]
     return "\n".join(obj) + "\n", list(faces), ((min(xs), min(ys), min(zs)), (max(xs), max(ys), max(zs)))
 
 
