@@ -37,11 +37,13 @@ def bow(pivot, turn):
 
 
 def skeleton(leg=0.0, arm=0.0, dy=0, legs_pose=None):
+    # arm: the bow's draw, 0 = held, 1 = the string pulled (the left hand comes up to the bow, then back to the chin)
+    left = (FWD + 0.5 - 0.5 * min(1, arm * 2), -0.6 * arm, 0)
     b = [("skeleton", (0, 0), (-4, -8, -4), (8, 8, 8), 0, (0, dy, 0), 0),
          ("skeleton", (16, 16), (-4, 0, -2), (8, 12, 4), 0, (0, dy, 0), 0),
-         ("skeleton", (40, 16), (-1, -2, -1), (2, 12, 2), 0, (-5, 2 + dy, 0), FWD + arm),
-         ("skeleton", (40, 16), (-1, -2, -1), (2, 12, 2), 0, (5, 2 + dy, 0), FWD + 0.5 + arm)]
-    b += bow((-5, 2 + dy, 0), arm)
+         ("skeleton", (40, 16), (-1, -2, -1), (2, 12, 2), 0, (-5, 2 + dy, 0), FWD),
+         ("skeleton", (40, 16), (-1, -2, -1), (2, 12, 2), 0, (5, 2 + dy, 0), left)]
+    b += bow((-5, 2 + dy, 0), 0)
     if legs_pose: b += legs_pose
     else:
         b += [("skeleton", (0, 16), (-1, 0, -1), (2, 12, 2), 0, (-2, 12 + dy, 0), leg),
@@ -59,20 +61,23 @@ def spider_jockey(leg=0.0, arm=0.0):
             b.append(("spider", (18, 0), (-15, -1, -1) if side < 0 else (-1, -1, -1), (16, 2, 2), 0, (4 * side, 15, z),
                       (0, (ry + swing) * -side, rz * side)))
     # the rider: sitting on the spider's back, legs forward
-    b += skeleton(arm=arm, dy=-1, legs_pose=[("skeleton", (0, 16), (-1, 0, -1), (2, 12, 2), 0, (-2, 11, 2), (-1.4, 0.3, 0)),
+    b += skeleton(arm=arm / 0.8, dy=-1, legs_pose=[("skeleton", (0, 16), (-1, 0, -1), (2, 12, 2), 0, (-2, 11, 2), (-1.4, 0.3, 0)),
                                              ("skeleton", (0, 16), (-1, 0, -1), (2, 12, 2), 0, (2, 11, 2), (-1.4, -0.3, 0))])
     return b
 
 
 MOB_BUILD = {
     "zombie": lambda leg, arm: humanoid("zombie", leg=leg, arm=arm) + [("zombie", (32, 0), (-4, -8, -4), (8, 8, 8), 0.5, (0, 0, 0), 0)],
-    "skeleton": lambda leg, arm: skeleton(leg, arm),
+    "skeleton": lambda leg, arm: skeleton(leg, arm / 0.8),
     "spider_jockey": spider_jockey,
     "zombie_gold": lambda leg, arm: humanoid("zombie", leg=leg, arm=arm) + humanoid("gold", inflate=1.0, legs=False, arm=arm) +
         [("gold", (0, 16), (-2, 0, -2), (4, 12, 4), 0.6, (-1.9, 12, 0), leg), ("gold", (0, 16), (-2, 0, -2), (4, 12, 4), 0.6, (1.9, 12, 0), -leg)],
 }
 # frames: the model itself (standing), walk w0..w3, attack a0..a1 (MC:AnimateMobs plays them)
-POSES = {"": (0, 0), "_w0": (0.6, 0), "_w1": (0, 0), "_w2": (-0.6, 0), "_w3": (0, 0), "_a0": (0, 0.7), "_a1": (0, -0.2)}
+# walk: 8 frames of a sine; attack: 3 frames (zombies: arms swung down and back; skeletons: the bow drawn)
+POSES = {"": (0, 0)}
+POSES.update({f"_w{k}": (0.6 * math.sin(k * math.pi / 4), 0) for k in range(8)})
+POSES.update({"_a0": (0, 0.4), "_a1": (0, 0.8), "_a2": (0, 0.3)})
 MOBS = {name + suffix: build(leg, arm) for name, build in MOB_BUILD.items() for suffix, (leg, arm) in POSES.items()}
 TEXTURES = {"zombie": "zombie/zombie.png", "skeleton": "skeleton/skeleton.png", "spider": "spider/spider.png",
             "gold": "equipment/humanoid/gold.png", "item:bow": "../item/bow.png"}
@@ -126,7 +131,8 @@ def mesh(boxes, sizes):
     for tex, fs in faces.items():
         obj.append(f"usemtl mob_{tex.replace('item:', '')}")
         obj += ["f " + " ".join(f"{i}/{i}" for i in f) for f in fs]
-    return "\n".join(obj) + "\n", list(faces)
+    xs, ys, zs = [v[0] for v in verts], [v[1] for v in verts], [v[2] for v in verts]
+    return "\n".join(obj) + "\n", list(faces), ((min(xs), min(ys), min(zs)), (max(xs), max(ys), max(zs)))
 
 
 VMDL = """<!-- kv3 encoding:text:version{{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d}} format:modeldoc32:version{{c5dcef98-b629-46ab-88e3-a17c005c935e}} -->
@@ -145,6 +151,29 @@ VMDL = """<!-- kv3 encoding:text:version{{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d}}
 						remaps = [ {remaps} ]
 						use_global_default = false
 						global_default_material = ""
+					}},
+				]
+			}},
+			{{
+				_class = "HitboxSetList"
+				children =
+				[
+					{{
+						_class = "HitboxSet"
+						name = "default"
+						children =
+						[
+							{{
+								_class = "Hitbox"
+								name = "body"
+								parent_bone = ""
+								surface_property = ""
+								translation_only = false
+								group_id = 0
+								hitbox_mins = [ {mins} ]
+								hitbox_maxs = [ {maxs} ]
+							}},
+						]
 					}},
 				]
 			}},
@@ -174,11 +203,11 @@ for tex, path in TEXTURES.items():
                 f'\tg_flAlphaTestReference "0.500"\n\tTextureColor "materials/mc/mob_{tex}.png"\n'
                 f'\tTextureTranslucency "materials/mc/mob_{tex}_alpha.png"\n}}\n')
 for name, boxes in MOBS.items():
-    obj, used = mesh(boxes, sizes)
+    obj, used, (lo, hi) = mesh(boxes, sizes)
     with open(os.path.join(MDL, f"mob_{name}.obj"), "w") as f:
         f.write(obj)
     used = [t.replace("item:", "") for t in used]
     remaps = " ".join(f'{{ from = "mob_{t}.vmat" to = "materials/mc/mob_{t}.vmat" }},' for t in used)
     with open(os.path.join(MDL, f"mob_{name}.vmdl"), "w") as f:
-        f.write(VMDL.format(remaps=remaps, name=name))
+        f.write(VMDL.format(remaps=remaps, name=name, mins=", ".join(f"{v:.1f}" for v in lo), maxs=", ".join(f"{v:.1f}" for v in hi)))
 print("mobs:", ", ".join(MOBS))

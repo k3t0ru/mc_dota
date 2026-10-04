@@ -216,6 +216,7 @@ function MCBridge:Apply( body, stale )
 			self.aim.mc_burnUntil = GameRules:GetGameTime() + 8
 		end
 		local swing, crit, sweep, full, fire, wbase, sharp = line:match( "^swing (%S+) ?(%S*) ?(%S*) ?(%S*) ?(%S*) ?(%S*) ?(%S*)" ) -- a melee swing: whatever Dota highlights under the crosshair
+		if swing and MCWorld:SwingRune() then swing = nil end -- (a rune in front: the swing breaks it)
 		if swing and self.aim and not self.aim:IsNull() and GameRules:GetGameTime() - ( self.aimAt or 0 ) <= 0.6
 			and self.steve and self.steve:IsAlive() then
 			local reach = MELEE_REACH * GRID + self.aim:GetHullRadius()
@@ -224,8 +225,8 @@ function MCBridge:Apply( body, stale )
 			local k = MeleeScale( tonumber( full ), tonumber( wbase ), tonumber( sharp ) )
 			if self.steve:HasModifier( "modifier_rune_doubledamage" ) then k = k * 2 end -- the double damage rune
 			if d <= reach then self:Swing( self.aim, tonumber( swing ) * k, crit == "1", ( tonumber( sweep ) or 0 ) * k, tonumber( fire ) or 0 )
-			else MCWorld:SwingRune() end
-		elseif swing then MCWorld:SwingRune() end
+			end
+		end
 		if swing and self.steve and self.steve:HasModifier( "modifier_rune_invis" ) then -- attacking breaks invisibility
 			self.steve:RemoveModifierByName( "modifier_rune_invis" )
 		end

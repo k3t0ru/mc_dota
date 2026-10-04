@@ -35,7 +35,9 @@ require( "mc_block_models" ) -- MCB: every Minecraft block's variants -> Dota mo
 
 function Precache( context )
 	for _, m in ipairs( { "zombie", "skeleton", "spider_jockey", "zombie_gold" } ) do
-		for _, f in ipairs( { "", "_w0", "_w1", "_w2", "_w3", "_a0", "_a1" } ) do PrecacheResource( "model", "models/mc/mob_" .. m .. f .. ".vmdl", context ) end
+		for _, f in ipairs( { "", "_w0", "_w1", "_w2", "_w3", "_w4", "_w5", "_w6", "_w7", "_a0", "_a1", "_a2" } ) do
+			PrecacheResource( "model", "models/mc/mob_" .. m .. f .. ".vmdl", context )
+		end
 	end
 	PrecacheResource( "particle", "particles/mc/steve_model.vpcf", context )
 	PrecacheResource( "model", "models/mc/steve.vmdl", context )
@@ -157,6 +159,7 @@ function MC:Init()
 	mode:SetDaynightCycleDisabled( true )
 	GameRules:SetTimeOfDay( 0.5 )
 	mode:SetDamageFilter( Dynamic_Wrap( MC, "DamageFilter" ), MC )
+	mode:SetBotThinkingEnabled( true ) -- (Dire bots, for testing without a second player, walk and fight)
 	-- a deny gives the denier nothing (Dota hands out XP for the killing attack)
 	-- Steve's hero XP is counted by us (MC:SteveXP), not given: a Dota level-up plays its sound and Steve's level is
 	-- only his Minecraft max health. A deny gives the denier nothing.
@@ -232,6 +235,7 @@ end
 
 -- walking (4 frames, 8 a second) or attacking (2 frames) or standing: tools/gen_mobs.py's poses
 function MC:MobSound( u, kind )
+	if kind == "attack" and ( RandomFloat( 0, 1 ) > 0.35 or GameRules:GetGameTime() - ( u.mc_soundAt or 0 ) < 3 ) then return end
 	if GameRules:GetGameTime() - ( u.mc_soundAt or 0 ) < 0.4 then return end
 	u.mc_soundAt = GameRules:GetGameTime()
 	MCBridge:Send( string.format( "mobsound %d %s %s", u:entindex(), u.mc_mob, kind ) )
@@ -239,11 +243,12 @@ end
 
 function MC:AnimateMobs()
 	local t = GameRules:GetGameTime()
-	local walk, hit = math.floor( t * 8 ) % 4, math.floor( t * 6 ) % 2
+	local walk = math.floor( t * 12 ) % 8
 	for u in pairs( MC.mobs ) do
 		if u:IsNull() or not u:IsAlive() then MC.mobs[ u ] = nil
 		else
-			local frame = u:IsAttacking() and ( "_a" .. hit ) or u:IsMoving() and ( "_w" .. walk ) or ""
+			local since = t - ( u.mc_hitAt or -10 )
+			local frame = since < 0.36 and ( "_a" .. math.floor( since / 0.12 ) ) or u:IsMoving() and ( "_w" .. walk ) or ""
 			if frame ~= u.mc_frame then
 				u.mc_frame = frame
 				u:SetModel( "models/mc/mob_" .. u.mc_mob .. frame .. ".vmdl" )
@@ -648,11 +653,18 @@ function MC:SpawnTraders()
 	-- Two market stalls (after Dio Rods' "Market Stall"), two traders in each, told apart by their awnings.
 	-- Each stall: centre, F = toward its open front, D = along it.
 	local rx, rz = rel( 1, 2 ) -- (moved by hand: a block toward its front, two to the player's left)
+	-- the grid axis from one cell nearest the way to another
+	local function toward( x0, z0, x1, z1 )
+		local dx, dz = x1 - x0, z1 - z0
+		if math.abs( dx ) >= math.abs( dz ) then return { dx > 0 and 1 or -1, 0 } end
+		return { 0, dz > 0 and 1 or -1 }
+	end
 	local bx, bz = rel( 8, 8 )
 	local STALLS = {
-		{ x = rx, z = rz, F = U, D = V, awning = "red_wool", traders = { "fletcher", "mason" } },
+		{ x = rx, z = rz, F = toward( rx, rz, bx, bz ), D = nil, awning = "red_wool", traders = { "fletcher", "mason" } },
 		{ x = bx, z = bz, F = { -V[1], -V[2] }, D = U, awning = "blue_wool", traders = { "librarian", "toolsmith" } },
 	}
+	for _, st in ipairs( STALLS ) do st.D = st.D or { -st.F[2], st.F[1] } end -- (along the counter: F turned a quarter)
 	local taken = {} -- stall cells: the fountain's barriers must not fill them (a trader inside a barrier can't be clicked)
 	for _, st in ipairs( STALLS ) do
 		for du = -3, 3 do for dv = -1, 2 do
@@ -740,7 +752,7 @@ function MC:SpawnTraders()
 			local f = side < 0 and 0.6 or 1.6 -- (and a block further back)
 			local x, z = math.floor( tx + f * fx - w * side * fz ), math.floor( tz + f * fz + w * side * fx )
 			-- the goods sign looks where he looks; the name sign a quarter turned, outward
-			local d = side < 0 and MC:DirToDota( fz, -fx ) or MC:DirToDota( fx, fz )
+			local d = MC:DirToDota( fx, fz ) -- (both look where he looks)
 			MC:SignFacing( x, MC.heights[ x .. "," .. z ] or MC_FLOOR, z, side < 0 and "secret_1" or "secret_2", d )
 			print( string.format( "[mc] secret sign at %d %d rot %d (trader %.1f %.1f facing %.2f %.2f)", x, z, rot, tx, tz, fx, fz ) )
 		end
@@ -938,7 +950,10 @@ function MC:DamageFilter( f )
 		return true
 	end
 	-- a mob creep's attack lands: its Minecraft sound (MC:MobSound)
-	if attackerUnit and attackerUnit.mc_mob and not f.entindex_inflictor_const then MC:MobSound( attackerUnit, "attack" ) end
+	if attackerUnit and attackerUnit.mc_mob and not f.entindex_inflictor_const then
+		attackerUnit.mc_hitAt = GameRules:GetGameTime() -- its attack frames (MC:AnimateMobs)
+		MC:MobSound( attackerUnit, "attack" )
+	end
 	if victim.mc_mob and attackerUnit and attackerUnit.mc_player then MC:MobSound( victim, "hurt" ) end
 	local def = victim.mc_block
 	if not def then return true end
