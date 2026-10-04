@@ -217,9 +217,15 @@ function MCBridge:Apply( body, stale )
 			local d = ( self.aim:GetAbsOrigin() - self.steve:GetAbsOrigin() ):Length2D()
 			if self.aim:GetTeamNumber() == self.steve:GetTeamNumber() then self.denySwingAt = GameRules:GetGameTime() end
 			local k = MeleeScale( tonumber( full ), tonumber( wbase ), tonumber( sharp ) )
+			if self.steve:HasModifier( "modifier_rune_doubledamage" ) then k = k * 2 end -- the double damage rune
 			if d <= reach then self:Swing( self.aim, tonumber( swing ) * k, crit == "1", ( tonumber( sweep ) or 0 ) * k, tonumber( fire ) or 0 )
-			else MCWorld:Chop() end
-		elseif swing then MCWorld:Chop() end
+			else MCWorld:SwingRune() end
+		elseif swing then MCWorld:SwingRune() end
+		if swing and self.steve and self.steve:HasModifier( "modifier_rune_invis" ) then -- attacking breaks invisibility
+			self.steve:RemoveModifierByName( "modifier_rune_invis" )
+		end
+		local cbx, cbz = line:match( "^chop (%S+) (%S+)" )
+		if cbx then MCWorld:Chop( tonumber( cbx ), tonumber( cbz ) ) end
 
 		local bx, by, bz, kind, solid, state = line:match( "^mcblock (%S+) (%S+) (%S+) (%S+) ?(%S*) ?(%S*)" )
 		if bx then
@@ -383,9 +389,18 @@ function MCBridge:MoveSteve( name, pos, frac, yaw )
 		u:SetIdleAcquire( false )
 		u:SetAcquisitionRange( 0 )
 	end
-	if not u:IsAlive() then return end
+	if not u:IsAlive() then self.lastSet = nil return end -- (a respawn moves him: no teleport for Minecraft)
 	if not self.nodrawOff then u:AddNoDraw() end -- (again every time: a respawn shows the model)
+	if self.lastSet and ( u:GetAbsOrigin() - self.lastSet ):Length2D() > 1000 then
+		local bx, bz = MC:CellOf( u:GetAbsOrigin() )
+		self:Send( string.format( "tp %d %d %d", bx, MC.heights[ bx .. "," .. bz ] or MC_FLOOR, bz ) )
+		self.lastSet = u:GetAbsOrigin()
+		MCWorld.capture = nil
+		MCWorld:GateFxEnd( u )
+		return
+	end
 	u:SetAbsOrigin( pos )
+	self.lastSet = pos
 	-- Dota makes a hero at his fountain invulnerable (and moved by SetAbsOrigin he never "walked out": creeps and
 	-- towers ignored Steve for minutes after a death). Steve's fountain only heals and feeds him: never invulnerable.
 	if u:HasModifier( "modifier_fountain_invulnerability" ) then

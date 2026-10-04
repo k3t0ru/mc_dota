@@ -215,6 +215,7 @@ function MC:SetupHero( hero )
 		-- Dota's own camera controls would fight Minecraft's (launch args alone get overridden by the user's config)
 		SendToConsole( "dota_camera_edgemove 0; dota_camera_speed 0; dota_camera_lock 0; dota_camera_fov_min 90; dota_camera_fov_max 90; snd_mute_losefocus 0; snd_musicvolume 0" ) -- Dota's sound plays with Minecraft holding focus; music is Minecraft's
 		MC:SendTerrain()
+		MCWorld:SendTrees()
 		MC:SpawnTraders()
 		MC:Sky()
 		-- Panorama's camera playback delay: Minecraft's overlay waits as long (see fpcam.js)
@@ -373,7 +374,8 @@ function MC:ShowBlock( bx, by, bz, kind, solid, state )
 	local p
 	-- something light (fire, a torch, a flower) right on a half-step column stands on the terrain's slab, half a block lower
 	local h = MC.halfh[ bx .. "," .. bz ]
-	local sink = ( solid == false and h and h % 2 == 1 and by == MC_FLOOR + ( h + 1 ) / 2 ) and GRID / 2 or 0
+	local under = MC.props[ bx .. "," .. ( by - 1 ) .. "," .. bz ]
+	local sink = ( solid == false and h and h % 2 == 1 and by == MC_FLOOR + ( h + 1 ) / 2 and not ( under and not under:IsNull() ) ) and GRID / 2 or 0
 	if v then
 		p = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mcb/" .. v[2] .. ".vmdl",
 			origin = string.format( "%f %f %f", pos.x, pos.y, pos.z + GRID / 2 - sink ), angles = string.format( "0 %d %d", -v[4], v[3] ) } )

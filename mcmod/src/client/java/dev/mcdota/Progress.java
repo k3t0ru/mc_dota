@@ -42,7 +42,8 @@ public final class Progress {
 
 	// the player's own attributes: also after a respawn, which resets them
 	public static void attributes(MinecraftServer server) {
-		Sync.run(server, "attribute @p minecraft:max_health base set " + (20 + (level - 1) * HP_PER_LEVEL + 4 * shards));
+		// (a heart every two levels: whole hearts only, an odd max showed as a half heart that never filled)
+		Sync.run(server, "attribute @p minecraft:max_health base set " + (20 + (level - 1) / 2 * 2 * HP_PER_LEVEL + 4 * shards));
 		Sync.run(server, "attribute @p minecraft:sweeping_damage_ratio base set " + SWEEP);
 		Sync.run(server, "attribute @p minecraft:knockback_resistance base set 1"); // Dota hits hurt but don't shove the camera
 	}

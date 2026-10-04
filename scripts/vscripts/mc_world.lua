@@ -5,16 +5,16 @@
 MCWorld = MCWorld or {}
 
 USE_RANGE = 220 -- Dota units in front of Steve an object must be within
-CAPTURE_TIME = { outpost = 3, lantern = 1.5, gate = 3 } -- seconds standing by it
-GATE_COOLDOWN = 30
-LOTUS_EVERY, LOTUS_MAX = 180, 6 -- a pool grows a lotus every 3 minutes, up to 6 (Dota's)
-TREE_HITS = 3 -- swings to chop a tree
+CAPTURE_TIME = { outpost = 3, lantern = 1.5, gate = 3.5 } -- seconds standing by it (gate: Dota's channel)
+CAPTURE_VISION = { outpost = 900, lantern = 1100 } -- what a captured one shows around it
 
 -- Dota's rune effects as Minecraft effects: effect, amplifier (the duration is the Dota modifier's)
+-- (double damage is Lua's: MCBridge's swing x2; illusions become Minecraft's resistance: Kunkka's illusions served no one)
 RUNE_EFFECTS = {
-	modifier_rune_haste = { "speed", 2 }, modifier_rune_doubledamage = { "strength", 1 },
-	modifier_rune_regen = { "regeneration", 2 }, modifier_rune_invis = { "invisibility", 0 },
-	modifier_rune_arcane = { "haste", 1 }, modifier_rune_shield = { "absorption", 2 },
+	modifier_rune_haste = { "speed", 3 }, -- Dota's max speed: ~1.8x
+	modifier_rune_regen = { "regeneration", 3 }, modifier_rune_invis = { "invisibility", 0 },
+	modifier_rune_arcane = { "haste", 1 }, modifier_rune_shield = { "absorption", 2 }, -- ~half his health as a shield
+	modifier_rune_doubledamage = { "glowing", 0 }, -- (just a sign it's on; the damage is Lua's)
 }
 
 local function steve() local s = MCBridge.steve return s and not s:IsNull() and s:IsAlive() and s or nil end
@@ -52,8 +52,6 @@ function MCWorld:Use()
 	self.usedAt = GameRules:GetGameTime()
 	local rune = inFront( Entities:FindAllByClassname( "dota_item_rune" ) )
 	if rune then return self:Rune( s, rune ) end
-	local pool = inFront( byName( "lotus_pool" ) )
-	if pool then return self:Lotus( pool ) end
 	local gate = inFront( byName( "twin_gate" ) )
 	if gate then return self:StartCapture( gate, "gate" ) end
 	local outpost = inFront( byName( "watch_tower" ) )
@@ -62,45 +60,49 @@ function MCWorld:Use()
 	if lantern then return self:StartCapture( lantern, "lantern" ) end
 end
 
--- runes: Dota's pickup (its effect on the hero), then the same effect for Minecraft's player
+-- runes: Dota's pickup (its effect on the hero; RuneEffects mirrors it into Minecraft)
 function MCWorld:Rune( s, rune )
-	local before = {}
-	for _, m in ipairs( s:FindAllModifiers() ) do before[ m ] = true end
+	local ok, kind = pcall( function() return rune:GetRuneType() end )
 	if s.PickupRune then s:PickupRune( rune )
 	else -- (no API call in this Dota: the order, let through Steve's order filter)
 		MC.allowOrder = true
 		ExecuteOrderFromTable( { UnitIndex = s:entindex(), OrderType = DOTA_UNIT_ORDER_PICKUP_RUNE, TargetIndex = rune:entindex() } )
 		MC.allowOrder = false
 	end
-	s:SetContextThink( "mc_rune", function()
-		for _, m in ipairs( s:FindAllModifiers() ) do
-			local e = not before[ m ] and RUNE_EFFECTS[ m:GetName() ]
-			if e then
-				local sec = math.max( 1, math.floor( m:GetRemainingTime() > 0 and m:GetRemainingTime() or 30 ) )
-				MCBridge:Send( string.format( "buff %s %d %d", e[1], sec, e[2] ) )
-			end
+	if ok and kind == DOTA_RUNE_WATER then MCBridge:Send( "buff instant_health 1 1" ) end
+	-- the illusion rune's Kunkkas (nobody could lead them): gone; Steve gets Minecraft's resistance for as long instead
+	s:SetContextThink( "mc_illusions", function()
+		local any = false
+		for _, u in ipairs( FindUnitsInRadius( s:GetTeamNumber(), s:GetAbsOrigin(), nil, 2000, DOTA_UNIT_TARGET_TEAM_FRIENDLY,
+			DOTA_UNIT_TARGET_HERO, DOTA_UNIT_TARGET_FLAG_NONE, FIND_ANY_ORDER, false ) ) do
+			if u:IsIllusion() and u:GetPlayerOwnerID() == s:GetPlayerOwnerID() then u:RemoveSelf() any = true end
 		end
-	end, 0.1 )
+		if any then MCBridge:Send( "buff resistance 75 1" ) end
+	end, 0.2 )
 end
 
--- a lotus pool: every lotus it grew since it was last picked becomes a golden carrot
-function MCWorld:Lotus( pool )
-	local t = GameRules:GetDOTATime( false, false )
-	pool.mc_lotusAt = pool.mc_lotusAt or 0
-	local n = math.min( LOTUS_MAX, math.floor( ( t - pool.mc_lotusAt ) / LOTUS_EVERY ) )
-	if n <= 0 then say( "Лотусов пока нет" ) return end
-	pool.mc_lotusAt = t
-	MCBridge:Send( string.format( "loot 0 0 golden_carrot %d", n ) )
+-- lotuses: Kunkka picks them up standing in a pool (Dota's own); each one becomes a golden carrot
+LOTUS_ITEMS = { item_famango = 1, item_great_famango = 2, item_greater_famango = 3 }
+function MCWorld:Lotuses( s )
+	for slot = 0, 16 do
+		local it = s:GetItemInSlot( slot )
+		local n = it and LOTUS_ITEMS[ it:GetAbilityName() ]
+		if n then
+			n = n * math.max( 1, it:GetCurrentCharges() )
+			s:RemoveItem( it )
+			MCBridge:Send( string.format( "loot 0 0 golden_carrot %d", n ) )
+		end
+	end
 end
 
 -- outposts, watchers, twin gates: Steve stands next to it for a moment ("use" starts it, walking off cancels)
 function MCWorld:StartCapture( u, kind )
 	local s = steve()
-	if kind == "gate" and GameRules:GetGameTime() < ( self.gateReady or 0 ) then
-		say( string.format( "Портал перезаряжается: %d с", math.ceil( self.gateReady - GameRules:GetGameTime() ) ) )
-		return
-	end
 	if kind ~= "gate" and u:GetTeamNumber() == s:GetTeamNumber() then return end
+	if kind == "gate" then -- Dota's sound and look of a portal channel
+		EmitSoundOn( "Portal.Loop_Appear", s )
+		self.gateFx = ParticleManager:CreateParticle( "particles/items2_fx/teleport_start.vpcf", PATTACH_ABSORIGIN, s )
+	end
 	self.capture = { unit = u, kind = kind, done = GameRules:GetGameTime() + CAPTURE_TIME[ kind ] }
 	say( kind == "gate" and "Портал..." or "Захват..." )
 end
@@ -111,6 +113,7 @@ function MCWorld:Think()
 	if c then
 		if not s or c.unit:IsNull() or ( c.unit:GetAbsOrigin() - s:GetAbsOrigin() ):Length2D() > USE_RANGE + 200 then
 			self.capture = nil
+			self:GateFxEnd( s )
 			say( "Прервано" )
 		elseif GameRules:GetGameTime() >= c.done then
 			self.capture = nil
@@ -118,10 +121,13 @@ function MCWorld:Think()
 			else
 				c.unit:SetTeam( s:GetTeamNumber() )
 				c.unit:SetOwner( s )
+				AddFOWViewer( s:GetTeamNumber(), c.unit:GetAbsOrigin(), CAPTURE_VISION[ c.kind ], 99999, false ) -- it sees for us
 				say( c.kind == "outpost" and "Аванпост захвачен" or "Смотритель захвачен" )
 			end
 		end
 	end
+	if s then self:Lotuses( s ) self:RuneEffects( s ) end
+	self:TreesBack()
 	-- wards whose Dota unit died (an enemy killed it): their torch goes too
 	for key, w in pairs( MC.wards or {} ) do
 		if w.unit:IsNull() or not w.unit:IsAlive() then
@@ -135,33 +141,107 @@ end
 function MCWorld:Gate( s, from )
 	local to
 	for _, g in ipairs( byName( "twin_gate" ) ) do if g ~= from then to = g end end
+	self:GateFxEnd( s )
 	if not to then return end
-	self.gateReady = GameRules:GetGameTime() + GATE_COOLDOWN
 	local p = to:GetAbsOrigin()
 	p = p + ( Vector( 0, 0, 0 ) - p ):Normalized() * 250
 	local bx, bz = MC:CellOf( p )
 	local y = MC.heights[ bx .. "," .. bz ] or MC_FLOOR
 	MCBridge:Send( string.format( "tp %d %d %d", bx, y, bz ) )
+	EmitSoundOnLocationWithCaster( p, "Portal.Hero_Appear", s )
+	local fx = ParticleManager:CreateParticle( "particles/items2_fx/teleport_end.vpcf", PATTACH_WORLDORIGIN, nil )
+	ParticleManager:SetParticleControl( fx, 0, p )
+	ParticleManager:SetParticleControl( fx, 1, p )
+	ParticleManager:ReleaseParticleIndex( fx )
 end
 
--- a swing with nothing in reach: a tree in front gets chopped (TREE_HITS swings), giving logs
-function MCWorld:Chop()
-	local s = steve()
-	if not s then return end
-	local front = s:GetAbsOrigin() + s:GetForwardVector() * 100
-	local best, bd
-	for _, t in ipairs( GridNav:GetAllTreesAroundPoint( front, 120, true ) ) do
+function MCWorld:GateFxEnd( s )
+	if s then StopSoundOn( "Portal.Loop_Appear", s ) end
+	if self.gateFx then
+		ParticleManager:DestroyParticle( self.gateFx, false )
+		ParticleManager:ReleaseParticleIndex( self.gateFx )
+		self.gateFx = nil
+	end
+end
+
+-- Dota's trees in Minecraft: magenta log columns (Sync "tree"), chopped like Minecraft wood ("chop" from Minecraft)
+function MCWorld:SendTrees()
+	self.cut = {}
+	local n = 0
+	for _, t in ipairs( GridNav:GetAllTreesAroundPoint( Vector( 0, 0, 0 ), 30000, true ) ) do
 		if t:IsStanding() then
-			local d = ( t:GetAbsOrigin() - front ):Length2D()
+			local bx, bz = MC:CellOf( t:GetAbsOrigin() )
+			MCBridge:Send( string.format( "tree %d %d", bx, bz ) )
+			n = n + 1
+		end
+	end
+	print( "[mc] trees sent: " .. n )
+	ListenToGameEvent( "tree_cut", function( e ) -- cut in Dota (a tango, a quelling blade...): its logs go too
+		local p = Vector( e.tree_x, e.tree_y, 0 )
+		local bx, bz = MC:CellOf( p )
+		MCBridge:Send( string.format( "untree %d %d", bx, bz ) )
+		for _, t in ipairs( GridNav:GetAllTreesAroundPoint( p, 40, true ) ) do self.cut[ t ] = true end
+	end, nil )
+end
+
+-- Minecraft chopped the column at x, z: Dota cuts its tree
+function MCWorld:Chop( bx, bz )
+	local s = steve()
+	local p = MC:CellPos( bx, bz )
+	local best, bd
+	for _, t in ipairs( GridNav:GetAllTreesAroundPoint( p, GRID, true ) ) do
+		if t:IsStanding() then
+			local d = ( t:GetAbsOrigin() - p ):Length2D()
 			if not bd or d < bd then best, bd = t, d end
 		end
 	end
-	if not best then return end
-	best.mc_hits = ( best.mc_hits or 0 ) + 1
-	if best.mc_hits < TREE_HITS then return end
-	best.mc_hits = 0
-	best:CutDown( s:GetTeamNumber() )
-	MCBridge:Send( "loot 0 0 oak_log 2" )
+	if best then
+		best:CutDown( s and s:GetTeamNumber() or DOTA_TEAM_GOODGUYS )
+		self.cut[ best ] = true
+	end
+end
+
+-- Dota grows its trees back after a while: so does Minecraft
+function MCWorld:TreesBack()
+	if GameRules:GetGameTime() - ( self.treesAt or 0 ) < 3 then return end
+	self.treesAt = GameRules:GetGameTime()
+	for t in pairs( self.cut or {} ) do
+		if t:IsNull() then self.cut[ t ] = nil
+		elseif t:IsStanding() then
+			self.cut[ t ] = nil
+			local bx, bz = MC:CellOf( t:GetAbsOrigin() )
+			MCBridge:Send( string.format( "tree %d %d", bx, bz ) )
+		end
+	end
+end
+
+-- a swing at a rune in front breaks it: picked up, like a click
+function MCWorld:SwingRune()
+	local s = steve()
+	local rune = s and inFront( Entities:FindAllByClassname( "dota_item_rune" ) )
+	if rune then self:Rune( s, rune ) return true end
+	return false
+end
+
+-- runes' effects follow Dota's: a Minecraft effect while the Dota modifier lasts (and cleared when it ends early:
+-- the regeneration rune stops when he's hit, invisibility when he attacks)
+function MCWorld:RuneEffects( s )
+	self.buffs = self.buffs or {}
+	local now = {}
+	for _, m in ipairs( s:FindAllModifiers() ) do
+		local e = RUNE_EFFECTS[ m:GetName() ]
+		if e then
+			now[ m:GetName() ] = true
+			if not self.buffs[ m:GetName() ] then
+				local sec = math.max( 1, math.floor( m:GetRemainingTime() > 0 and m:GetRemainingTime() or 30 ) )
+				MCBridge:Send( string.format( "buff %s %d %d", e[1], sec, e[2] ) )
+			end
+		end
+	end
+	for name in pairs( self.buffs ) do
+		if not now[ name ] then MCBridge:Send( "unbuff " .. RUNE_EFFECTS[ name ][1] ) end
+	end
+	self.buffs = now
 end
 
 -- torches: wards. kind = "observer" or "sentry" (MC.wards: "x,y,z" -> { unit, x, y, z })
@@ -177,6 +257,8 @@ function MCWorld:Ward( bx, by, bz, kind )
 	u:AddNoDraw() -- the torch is what you see
 	u:AddNewModifier( u, nil, "modifier_kill", { duration = kind == "sentry" and 420 or 360 } )
 	if kind == "sentry" then u:AddNewModifier( u, nil, "modifier_mc_truesight", {} ) end
+	-- on a tower of 4+ blocks it sees like a ward on a cliff
+	if by - ( MC.heights[ bx .. "," .. bz ] or MC_FLOOR ) >= 4 then u:AddNewModifier( u, nil, "modifier_mc_highground", {} ) end
 	MC.wards[ key ] = { unit = u, x = bx, y = by, z = bz }
 end
 
