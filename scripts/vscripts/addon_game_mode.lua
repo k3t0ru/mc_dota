@@ -154,8 +154,11 @@ function MC:Init()
 	GameRules:SetPreGameTime( 5 )
 
 	local mode = GameRules:GetGameModeEntity()
-	GameRules:SetCustomGameSetupAutoLaunchDelay( 0 ) -- the host goes to Radiant (Steve), whoever joins to Dire
-	if GameRules:IsCheatMode() or IsInToolsMode() then GameRules:SetPreGameTime( 0 ) end -- dev runs: no pre-game wait
+	-- the host goes to Radiant (Steve), whoever joins to Dire. A real game waits in the lobby until the host starts it
+	-- (everyone has time to connect); dev runs (sv_cheats) start at once, with no pre-game wait
+	GameRules:SetCustomGameSetupAutoLaunchDelay( 0 )
+	if GameRules:IsCheatMode() or IsInToolsMode() then GameRules:SetPreGameTime( 0 )
+	else GameRules:SetCustomGameSetupTimeout( -1 ) end
 	-- always noon, like Minecraft's side (time locked there too): Dota's night lighting turns the blocks blue
 	mode:SetDaynightCycleDisabled( true )
 	GameRules:SetTimeOfDay( 0.5 )
@@ -202,6 +205,11 @@ function MC:OnChat( e )
 end
 
 -- whoever didn't pick a hero in time plays Steve
+-- Steve: Radiant's hero (a Dire player may well pick the same hero)
+function MC:IsSteve( h )
+	return h:GetUnitName() == STEVE and h:GetTeamNumber() == DOTA_TEAM_GOODGUYS
+end
+
 function MC:AssignTeam( pid )
 	if not PlayerResource:IsValidPlayerID( pid ) then return end
 	PlayerResource:SetCustomTeamAssignment( pid, pid == 0 and DOTA_TEAM_GOODGUYS or DOTA_TEAM_BADGUYS )
@@ -210,7 +218,7 @@ end
 function MC:OnState()
 	if GameRules:State_Get() == DOTA_GAMERULES_STATE_CUSTOM_GAME_SETUP then
 		for pid = 0, DOTA_MAX_TEAM_PLAYERS - 1 do MC:AssignTeam( pid ) end
-		GameRules:FinishCustomGameSetup() -- (no team screen: who plays what is fixed)
+		if GameRules:IsCheatMode() or IsInToolsMode() then GameRules:FinishCustomGameSetup() end -- (dev: no lobby)
 	end
 	if GameRules:State_Get() >= DOTA_GAMERULES_STATE_PRE_GAME then GameRules:SetTimeOfDay( 0.5 ) end -- the clock starts at dawn
 	local st = GameRules:State_Get()
@@ -315,7 +323,7 @@ function MC:OnSpawned( e )
 end
 
 function MC:SetupHero( hero )
-	if hero:GetUnitName() == STEVE then hero:SetIdleAcquire( false ) end -- no auto-attack in Minecraft
+	if MC:IsSteve( hero ) then hero:SetIdleAcquire( false ) end -- no auto-attack in Minecraft
 
 	local place = hero:FindAbilityByName( "mc_place_block" )
 	if place then place:SetLevel( 1 ) end
@@ -993,7 +1001,7 @@ function MC:ToolOf( hero )
 		local p = item and PICKAXES[ item:GetAbilityName() ]
 		if p and p[1] > tier then tier, power = p[1], p[2] end
 	end
-	if hero:GetUnitName() == STEVE then power = power * 2 end
+	if MC:IsSteve( hero ) then power = power * 2 end
 	return tier, power
 end
 

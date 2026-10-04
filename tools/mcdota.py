@@ -1,0 +1,265 @@
+# One launcher for everything: checks and fetches what's needed, prepares the assets, starts the game.
+#   python tools/mcdota.py host     the Minecraft player (Steve, Radiant): Dota + the bridge + Minecraft
+#   python tools/mcdota.py player   a Dota player (Dire): Dota, joining the host
+# (play_host.bat / play_dota.bat do the same by double click.) Settings: settings.ini next to this folder (made on the
+# first run, with comments). Windows only (Dota's tools are).
+import configparser, glob, hashlib, json, os, shutil, subprocess, sys, time, urllib.request, zipfile
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TOOLS = os.path.join(ROOT, "tools")
+CACHE = os.path.join(TOOLS, ".cache")
+SETTINGS = os.path.join(ROOT, "settings.ini")
+ADDON = "mc_dungeons"
+
+DEFAULT_SETTINGS = """; Minecraft x Dota settings. "auto" = found by itself.
+[common]
+; Dota 2 folder (with game\\bin\\win64\\dota2.exe), e.g. D:\\SteamLibrary\\steamapps\\common\\dota 2 beta
+dota_dir = auto
+; where to get updates from (a git address); empty = don't update
+repo_url =
+
+[host]
+; the Minecraft player's screen: Dota's window and Minecraft's picture have this size
+resolution = 1920x1080
+; Minecraft frames a second = how often Dota's camera moves (30 on weak computers)
+minecraft_fps = 60
+; Dota's frame limit (0 = none)
+dota_fps = 0
+; dota = the real Dota map
+map = dota
+; JDK 21 folder; auto = found, or downloaded (Eclipse Temurin)
+java_home = auto
+
+[player]
+; the host's address (same network, or a VPN like ZeroTier/Radmin; the host's UDP port 27015 must be reachable)
+host_ip = 192.168.0.10
+"""
+
+
+def say(msg): print(f"[mcdota] {msg}", flush=True)
+
+
+def fail(msg):
+    say("ОШИБКА: " + msg)
+    input("Enter - закрыть")
+    sys.exit(1)
+
+
+def settings():
+    if not os.path.exists(SETTINGS):
+        open(SETTINGS, "w", encoding="utf-8").write(DEFAULT_SETTINGS)
+        say(f"создан {SETTINGS}: проверь настройки")
+    c = configparser.ConfigParser(inline_comment_prefixes=(";",))
+    c.read_string(DEFAULT_SETTINGS)
+    c.read(SETTINGS, encoding="utf-8")
+    return c
+
+
+# ---------------------------------------------------------------- checks ------------------------------------------
+def pip_needs(mods):
+    missing = []
+    for mod, pkg in mods:
+        try: __import__(mod)
+        except ImportError: missing.append(pkg)
+    if missing:
+        say("ставлю Python-пакеты: " + ", ".join(missing))
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", "-q"] + missing)
+
+
+def git_update(cfg):
+    url = cfg["common"]["repo_url"].strip()
+    if not url or not shutil.which("git") or not os.path.isdir(os.path.join(ROOT, ".git")):
+        return
+    remotes = subprocess.run(["git", "remote"], cwd=ROOT, capture_output=True, text=True).stdout.split()
+    if "origin" not in remotes: subprocess.run(["git", "remote", "add", "origin", url], cwd=ROOT)
+    say("обновляюсь из " + url)
+    r = subprocess.run(["git", "pull", "--ff-only", "origin", "HEAD"], cwd=ROOT)
+    if r.returncode: say("обновиться не вышло (локальные изменения?), играю с тем, что есть")
+
+
+def find_dota(cfg):
+    d = cfg["common"]["dota_dir"].strip()
+    cands = [d] if d and d != "auto" else []
+    try:
+        import winreg
+        k = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam")
+        steam = winreg.QueryValueEx(k, "SteamPath")[0]
+        vdf = os.path.join(steam, "steamapps", "libraryfolders.vdf")
+        libs = [steam] + [l.split('"')[3] for l in open(vdf, encoding="utf-8") if '"path"' in l]
+        cands += [os.path.join(l.replace("\\\\", "\\"), "steamapps", "common", "dota 2 beta") for l in libs]
+    except Exception:
+        pass
+    cands += [r"C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta"]
+    for c in cands:
+        if os.path.exists(os.path.join(c, "game", "bin", "win64", "dota2.exe")):
+            return c
+    fail("не нашёл Dota 2: впиши dota_dir в settings.ini")
+
+
+def check_tools(dota):
+    if not os.path.exists(os.path.join(dota, "game", "bin", "win64", "resourcecompiler.exe")) or not os.path.isdir(os.path.join(dota, "content")):
+        fail("нужен DLC «Dota 2 Workshop Tools»: Steam > Dota 2 > Свойства > Дополнительный контент, поставь и запусти снова")
+
+
+def find_java(cfg):
+    j = cfg["host"]["java_home"].strip()
+    cands = [j] if j and j != "auto" else []
+    cands += [os.environ.get("JAVA_HOME", "")]
+    for base in (r"C:\Program Files\Java", r"C:\Program Files\Eclipse Adoptium", r"C:\Program Files\Microsoft"):
+        cands += sorted(glob.glob(os.path.join(base, "jdk-21*")), reverse=True)
+    cands += sorted(glob.glob(os.path.join(CACHE, "jdk21", "*")), reverse=True)
+    for c in cands:
+        if c and os.path.exists(os.path.join(c, "bin", "java.exe")) and "21" in os.path.basename(c.rstrip("\\/")):
+            return c
+    say("скачиваю JDK 21 (Eclipse Temurin)...")
+    os.makedirs(os.path.join(CACHE, "jdk21"), exist_ok=True)
+    z = os.path.join(CACHE, "jdk21.zip")
+    urllib.request.urlretrieve("https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jdk/hotspot/normal/eclipse", z)
+    zipfile.ZipFile(z).extractall(os.path.join(CACHE, "jdk21"))
+    os.remove(z)
+    return find_java(cfg)
+
+
+def link_addon(dota):
+    # the addon inside Dota: game side = this folder, content side = its content folder (junctions)
+    for side, target in (("game", ROOT), ("content", os.path.join(ROOT, "content"))):
+        p = os.path.join(dota, side, "dota_addons", ADDON)
+        if not os.path.exists(p):
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            subprocess.check_call(["cmd", "/c", "mklink", "/J", p, target], stdout=subprocess.DEVNULL)
+    # the real Dota map, copied from this Dota (never shipped)
+    os.makedirs(os.path.join(ROOT, "maps"), exist_ok=True)
+    m = os.path.join(ROOT, "maps", "dota.vpk")
+    if not os.path.exists(m):
+        shutil.copy(os.path.join(dota, "game", "dota", "maps", "dota.vpk"), m)
+
+
+# ---------------------------------------------------------------- assets ------------------------------------------
+GENERATORS = ["gen_blocks.py", "gen_mcblocks.py", "gen_villager.py", "gen_signs.py", "gen_mobs.py", "gen_steve.py",
+              "gen_sky.py", "gen_tree_crack.py"]
+
+
+def assets(dota):
+    # made from Minecraft's own textures (a jar from Mojang) and compiled by Dota's tools; again only when they changed
+    sys.path.insert(0, TOOLS)
+    import mcjar
+    jar = mcjar.path()
+    h = hashlib.sha1(os.path.basename(jar).encode())
+    for g in GENERATORS + ["mcjar.py"]:
+        h.update(open(os.path.join(TOOLS, g), "rb").read())
+    for d in ("particles", "panorama"):
+        for f in sorted(glob.glob(os.path.join(ROOT, "content", d, "**", "*.*"), recursive=True)):
+            h.update(open(f, "rb").read())
+    stamp = os.path.join(CACHE, "assets.stamp")
+    if os.path.exists(stamp) and open(stamp).read() == h.hexdigest():
+        say("ресурсы готовы")
+        return
+    env = dict(os.environ, MC_JAR=jar)
+    for g in GENERATORS:
+        say("готовлю " + g)
+        subprocess.check_call([sys.executable, os.path.join(TOOLS, g)], cwd=ROOT, env=env, stdout=subprocess.DEVNULL)
+    rc = os.path.join(dota, "game", "bin", "win64", "resourcecompiler.exe")
+    content = os.path.join(dota, "content", "dota_addons", ADDON)
+    say("компилирую ресурсы для Dota (первый раз ~15-20 минут)...")
+    for pat in ("models\\mcb\\*.vmdl", "models\\*.vmdl", "particles\\*.vpcf", "panorama\\*.xml", "panorama\\*.js"):
+        r = subprocess.run([rc, "-fshallow2", "-r", "-i", os.path.join(content, pat)], capture_output=True, text=True, errors="ignore")
+        bad = [l for l in r.stdout.splitlines() if "failed" in l or "rror" in l]
+        if bad: say("  " + pat + ": " + bad[-1].strip())
+    os.makedirs(CACHE, exist_ok=True)
+    open(stamp, "w").write(h.hexdigest())
+
+
+# ---------------------------------------------------------------- processes ---------------------------------------
+def ps(query):
+    out = subprocess.run(["powershell", "-NoProfile", "-Command", query], capture_output=True, text=True).stdout
+    return [int(x) for x in out.split() if x.strip().isdigit()]
+
+
+def kill(pids):
+    for p in pids: subprocess.run(["taskkill", "/PID", str(p), "/F"], capture_output=True)
+
+
+def dota_pids(): return ps("(Get-Process dota2 -ErrorAction SilentlyContinue).Id")
+def mc_pids(): return ps("Get-CimInstance Win32_Process -Filter \"name='java.exe'\" | Where-Object { $_.CommandLine -like '*fabric.dli*' } | ForEach-Object { $_.ProcessId }")
+def bridge_pids(): return ps("Get-CimInstance Win32_Process -Filter \"name like 'python%.exe'\" | Where-Object { $_.CommandLine -like '*bridge.py*' } | ForEach-Object { $_.ProcessId }")
+
+
+def wait_for(path, words, seconds):
+    for _ in range(seconds):
+        try:
+            text = open(path, encoding="utf-8", errors="ignore").read()
+            for w in words:
+                if w in text: return w
+        except OSError:
+            pass
+        time.sleep(1)
+    return None
+
+
+def host(cfg, dota):
+    pip_needs([("PIL", "pillow"), ("lupa", "lupa")])
+    java = find_java(cfg)
+    res = cfg["host"]["resolution"].strip()
+    w, h = res.lower().split("x")
+    # Lua first: an error in it silently drops the whole game mode
+    if subprocess.run([sys.executable, os.path.join(TOOLS, "check_lua.py")], cwd=ROOT).returncode:
+        fail("ошибка в Lua-скриптах (см. выше)")
+    kill(mc_pids() + dota_pids() + bridge_pids())
+    time.sleep(2)
+    say("мост Minecraft <-> Dota")
+    log = open(os.path.join(ROOT, "bridge", "bridge.log"), "w")
+    subprocess.Popen([sys.executable, "-u", os.path.join(ROOT, "bridge", "bridge.py")], cwd=ROOT, stdout=log, stderr=log,
+                     creationflags=subprocess.CREATE_NO_WINDOW)
+    dlog = os.path.join(dota, "game", "dota", "console.log")
+    if os.path.exists(dlog): os.remove(dlog)
+    say("запускаю Dota: когда все подключатся, нажми в лобби кнопку старта")
+    subprocess.Popen([os.path.join(dota, "game", "bin", "win64", "dota2.exe"), "-novid", "-console", "-condebug", "-windowed",
+                      "-noborder", "-w", w, "-h", h, "+dota_camera_edgemove", "0", "+dota_camera_speed", "0", "+dota_camera_lock", "0",
+                      "+dota_camera_fov_min", "90", "+dota_camera_fov_max", "90", "+dota_camera_z_interp_speed", "4",
+                      "+fps_max", cfg["host"]["dota_fps"], "+engine_no_focus_sleep", "0", "+fog_enable", "0",
+                      "+dota_hud_disable_damage_numbers", "1", "+r_farz", "40000", "+r_texture_stream_mip_bias", "0",
+                      "+dota_camera_zfar_zoomed_in", "40000", "+dota_camera_zfar_zoomed_out", "40000", "+snd_mute_losefocus", "0",
+                      "+snd_musicvolume", "0", "+dota_launch_custom_game", ADDON, cfg["host"]["map"]])
+    # Minecraft: a fresh world each game (Dota rebuilds it), its first run downloads Minecraft and Fabric
+    run = os.path.join(ROOT, "mcmod", "run")
+    os.makedirs(os.path.join(run, "saves", "mcdota"), exist_ok=True)
+    for f, t in (("level.dat", os.path.join(run, "saves", "mcdota", "level.dat")), ("options.txt", os.path.join(run, "options.txt"))):
+        if not os.path.exists(t): shutil.copy(os.path.join(TOOLS, "template", f), t)
+    for d in ("region", "entities", "poi"):
+        shutil.rmtree(os.path.join(run, "saves", "mcdota", d), ignore_errors=True)
+    say("запускаю Minecraft (первый раз долго: скачивается Minecraft и Fabric)")
+    env = dict(os.environ, JAVA_HOME=java, DOTA_SIZE=res, MC_FPS=cfg["host"]["minecraft_fps"])
+    mlog = open(os.path.join(run, "gradle_run.log"), "w")
+    subprocess.Popen(["cmd", "/c", os.path.join(ROOT, "mcmod", "gradlew.bat"), "--no-daemon", "runClient"], cwd=os.path.join(ROOT, "mcmod"), env=env,
+                     stdout=mlog, stderr=mlog, creationflags=subprocess.CREATE_NO_WINDOW)
+    r = wait_for(dlog, ["bridge online", "Script Runtime Error", "Error running script"], 900)
+    if r and r != "bridge online": say("!!! ошибка Lua в Dota: см. " + dlog)
+    r = wait_for(os.path.join(run, "logs", "latest.log"), ["joined the game", "has crashed"], 1200)
+    say("Minecraft: " + (r or "не дождался (см. mcmod/run/gradle_run.log)"))
+    say("готово. Минкрафт и Дота работают; это окно можно закрыть")
+
+
+def player(cfg, dota):
+    ip = cfg["player"]["host_ip"].strip()
+    say(f"подключаюсь к хосту {ip}")
+    subprocess.Popen([os.path.join(dota, "game", "bin", "win64", "dota2.exe"), "-novid", "+connect", ip])
+    say("Dota запускается; это окно можно закрыть")
+
+
+def main():
+    role = sys.argv[1] if len(sys.argv) > 1 else "host"
+    cfg = settings()
+    if sys.version_info < (3, 10): fail("нужен Python 3.10+")
+    if not shutil.which("git"): say("git не найден: обновления пропущены (https://git-scm.com)")
+    git_update(cfg)
+    pip_needs([("PIL", "pillow")])
+    dota = find_dota(cfg)
+    say("Dota: " + dota)
+    check_tools(dota)
+    link_addon(dota)
+    assets(dota)
+    host(cfg, dota) if role == "host" else player(cfg, dota)
+
+
+if __name__ == "__main__":
+    main()

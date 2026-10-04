@@ -29,7 +29,8 @@ SIGNS = {  # id -> kind, 4 lines (keep in step with SIGNS in addon_game_mode.lua
 	"witch": ("stand", ["", "Зелья", "", ""]),
 }
 
-jar = zipfile.ZipFile(sorted(glob.glob(os.path.expanduser("~/.gradle/caches/fabric-loom/*/minecraft-client.jar")))[-1])
+import sys; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import mcjar
+jar = zipfile.ZipFile(mcjar.path())
 def png(path): return Image.open(io.BytesIO(jar.read(path))).convert("RGBA")
 sign_tex = png("assets/minecraft/textures/entity/signs/spruce.png")
 # Minecraft's default font: ascii, then the other 8 px bitmaps (Cyrillic is in nonlatin_european)

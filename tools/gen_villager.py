@@ -117,10 +117,8 @@ VMAT = """Layer0
 }}
 """
 
-jars = glob.glob(os.path.expanduser("~/.gradle/caches/fabric-loom/*/minecraft-client.jar"))
-if not jars:
-    raise SystemExit("no Minecraft jar yet: build the mod first (cd mcmod && ./gradlew build)")
-jar = zipfile.ZipFile(sorted(jars)[-1])
+import sys; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import mcjar
+jar = zipfile.ZipFile(mcjar.path())
 tex = lambda p: Image.open(io.BytesIO(jar.read(f"assets/minecraft/textures/entity/villager/{p}.png"))).convert("RGBA")
 with open(os.path.join(MDL, "villager.obj"), "w") as f:
     f.write(mesh())

@@ -23,7 +23,8 @@ UP = 16  # nearest upscale of the 16 px textures (crisp pixels: at 8 Dota's filt
 TINT = {0: (145, 189, 89), 1: (145, 189, 89), 2: (119, 171, 47)}  # grass / plains foliage; leaves use #77AB2F
 SKIP = {"air", "cave_air", "void_air", "structure_void", "light", "barrier", "moving_piston", "piston_head"}
 
-jar = zipfile.ZipFile(sorted(glob.glob(os.path.expanduser("~/.gradle/caches/fabric-loom/*/minecraft-client.jar")))[-1])
+import sys; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import mcjar
+jar = zipfile.ZipFile(mcjar.path())
 names = set(jar.namelist())
 
 

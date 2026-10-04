@@ -27,3 +27,6 @@ content/models/mc/mob_*
 content/materials/mc/mob_*
 content/models/mc/steve.*
 content/materials/mc/steve*
+tools/.cache/
+settings.ini
+mcmod/run/gradle_run.log

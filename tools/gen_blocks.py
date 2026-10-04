@@ -100,8 +100,8 @@ FACES_MC = {
 
 
 def minecraft_jar():
-    jars = glob.glob(os.path.expanduser("~/.gradle/caches/fabric-loom/*/minecraft-client.jar"))
-    return zipfile.ZipFile(sorted(jars)[-1]) if jars else None
+    import sys; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import mcjar
+    return zipfile.ZipFile(mcjar.path())
 
 
 # cube 128 units, origin at bottom centre; per face: material group and (u, v) per corner, v up the image

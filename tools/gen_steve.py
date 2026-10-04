@@ -61,7 +61,8 @@ def mesh():
     return "\n".join(obj) + "\n"
 
 
-jar = zipfile.ZipFile(sorted(glob.glob(os.path.expanduser("~/.gradle/caches/fabric-loom/*/minecraft-client.jar")))[-1])
+import sys; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import mcjar
+jar = zipfile.ZipFile(mcjar.path())
 img = Image.open(io.BytesIO(jar.read("assets/minecraft/textures/entity/player/wide/steve.png"))).convert("RGBA")
 big = img.resize((TEX * UP, TEX * UP), Image.NEAREST)
 os.makedirs(MAT, exist_ok=True); os.makedirs(MDL, exist_ok=True)

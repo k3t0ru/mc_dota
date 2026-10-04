@@ -11,7 +11,8 @@ MAT, MDL = os.path.join(ROOT, "materials", "mc"), os.path.join(ROOT, "models", "
 PX, UP = 96 / 16, 8
 FWD = -math.pi / 2  # arms held forward (zombies, the skeleton's bow arm)
 
-jar = zipfile.ZipFile(sorted(glob.glob(os.path.expanduser("~/.gradle/caches/fabric-loom/*/minecraft-client.jar")))[-1])
+import sys; sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import mcjar
+jar = zipfile.ZipFile(mcjar.path())
 def png(p): return Image.open(io.BytesIO(jar.read("assets/minecraft/textures/" + (p[3:] if p.startswith("../") else "entity/" + p)))).convert("RGBA")
 
 # box: (texture, (u, v), min, size, inflation, pivot, turn); y down, the face looks to -z, feet at y 24. A "sprite"

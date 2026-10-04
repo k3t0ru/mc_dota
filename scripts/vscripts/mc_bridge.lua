@@ -465,7 +465,7 @@ function MCBridge:MoveSteve( name, pos, frac, yaw )
 	local u = self.steve
 	if not u or u:IsNull() then
 		for _, h in ipairs( HeroList:GetAllHeroes() ) do
-			if h:GetUnitName() == STEVE then u = h break end
+			if MC:IsSteve( h ) and h:IsRealHero() then u = h break end
 		end
 		if not u then return end
 		self.steve = u
