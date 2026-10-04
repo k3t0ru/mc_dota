@@ -124,6 +124,14 @@ def link_addon(dota):
     # the addon inside Dota: game side = this folder, content side = its content folder (junctions)
     for side, target in (("game", ROOT), ("content", os.path.join(ROOT, "content"))):
         p = os.path.join(dota, side, "dota_addons", ADDON)
+        if os.path.lexists(p) and os.path.normcase(os.path.realpath(p)) != os.path.normcase(os.path.realpath(target)):
+            # an older copy of the project (Dota would load ITS assets): point to this one. A link goes (its target
+            # stays); a real folder is kept aside
+            say(f"аддон в Доте вёл в {os.path.realpath(p)}: переключаю на эту папку")
+            if os.path.islink(p) or getattr(os.path, "isjunction", lambda _: False)(p) or os.path.realpath(p) != os.path.abspath(p):
+                os.rmdir(p)
+            else:
+                os.rename(p, p + "_old_" + time.strftime("%Y%m%d%H%M%S"))
         if not os.path.exists(p):
             os.makedirs(os.path.dirname(p), exist_ok=True)
             subprocess.check_call(["cmd", "/c", "mklink", "/J", p, target], stdout=subprocess.DEVNULL)
