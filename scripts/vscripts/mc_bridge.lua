@@ -343,7 +343,8 @@ function MCBridge:HitUnit( hero, amount, direct, kind )
 	-- wards break in two hits, whatever the damage (like Dota's)
 	if hero:GetUnitName():find( "_wards" ) and not ally then
 		hero.mc_hits = ( hero.mc_hits or 0 ) + 1
-		if hero.mc_hits >= 2 then hero:Kill( nil, self.steve ) end
+		if hero.mc_hits >= 2 then hero:Kill( nil, self.steve )
+		else hero:SetHealth( math.max( 1, math.ceil( hero:GetMaxHealth() / 2 ) ) ) end -- (its bar shows the hit)
 		return
 	end
 	if ally and self.steve then

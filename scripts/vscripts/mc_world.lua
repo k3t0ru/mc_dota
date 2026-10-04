@@ -58,7 +58,7 @@ local function runeAimed()
 		local d = r:GetAbsOrigin() - s:GetAbsOrigin()
 		d.z = 0
 		local len = d:Length2D()
-		if len <= 260 and ( len < 60 or d:Normalized():Dot( s:GetForwardVector() ) > 0.94 ) and ( not bd or len < bd ) then best, bd = r, len end
+		if len <= 200 and ( len < 60 or d:Normalized():Dot( s:GetForwardVector() ) > 0.94 ) and ( not bd or len < bd ) then best, bd = r, len end
 	end
 	return best
 end
@@ -81,13 +81,23 @@ end
 -- runes: Dota's pickup (its effect on the hero; RuneEffects mirrors it into Minecraft)
 function MCWorld:Rune( s, rune )
 	local ok, kind = pcall( function() return rune:GetRuneType() end )
+	local water = ( ok and kind == DOTA_RUNE_WATER ) or ( rune:GetModelName() or "" ):find( "water" )
 	if s.PickupRune then s:PickupRune( rune )
-	else -- (no API call in this Dota: the order, let through Steve's order filter)
+	else -- (no API call in this Dota: the order, let through Steve's order filter; then a stop, so an order that
+		-- didn't reach doesn't wait to pick it up later when he walks by)
 		MC.allowOrder = true
 		ExecuteOrderFromTable( { UnitIndex = s:entindex(), OrderType = DOTA_UNIT_ORDER_PICKUP_RUNE, TargetIndex = rune:entindex() } )
 		MC.allowOrder = false
+		s:SetContextThink( "mc_runestop", function()
+			MC.allowOrder = true
+			ExecuteOrderFromTable( { UnitIndex = s:entindex(), OrderType = DOTA_UNIT_ORDER_STOP } )
+			MC.allowOrder = false
+		end, 0.15 )
 	end
-	if ok and kind == DOTA_RUNE_WATER then MCBridge:Send( "buff instant_health 1 1" ) end
+	if water then -- (no modifier: a moment's heal)
+		MCBridge:Send( "buff instant_health 1 1" )
+		MCBridge:Send( "msg Руна воды" )
+	end
 end
 
 -- lotuses: Kunkka picks them up standing in a pool (Dota's own); each one becomes a golden carrot

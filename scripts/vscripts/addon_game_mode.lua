@@ -683,7 +683,10 @@ function MC:Emeralds( gold )
 	MC.goldLeft = ( MC.goldLeft or 0 ) + gold
 	local n = math.floor( MC.goldLeft / EMERALD_GOLD )
 	MC.goldLeft = MC.goldLeft - n * EMERALD_GOLD
-	if n > 0 then MCBridge:Send( string.format( "loot %d %d", n, gold ) ) end
+	if n > 0 then
+		MCBridge:Send( string.format( "loot %d %d", n, gold ) )
+		MCBridge:Send( string.format( "msg +%d изумр. (руна богатства)", n ) )
+	end
 end
 
 function MC:LootFor( dead )

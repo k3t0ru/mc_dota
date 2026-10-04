@@ -78,7 +78,7 @@ public class McDotaClient implements ClientModInitializer {
 		net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, be) -> {
 			if (Hybrid.tree(state) && level.getServer() != null) {
 				Sync.untree(level.getServer(), pos.getX(), pos.getZ());
-				Sync.run(level.getServer(), "give @p minecraft:oak_log 2", false);
+				Progress.loot(level.getServer(), new String[] { "loot", "0", "0", "oak_log", "2" }); // (says "+2 ..." too)
 				Sync.out("chop " + pos.getX() + " " + pos.getZ());
 				return false;
 			}
