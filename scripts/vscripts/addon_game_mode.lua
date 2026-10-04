@@ -34,6 +34,10 @@ require( "mc_block_models" ) -- MCB: every Minecraft block's variants -> Dota mo
 
 
 function Precache( context )
+	PrecacheResource( "particle", "particles/mc/steve_model.vpcf", context )
+	PrecacheResource( "model", "models/mc/steve.vmdl", context )
+	PrecacheResource( "particle", "particles/units/heroes/hero_techies/techies_land_mine_explode.vpcf", context )
+	PrecacheResource( "soundfile", "soundevents/game_sounds_heroes/game_sounds_techies.vsndevts", context )
 	-- wards (torches): loading them at the first torch froze Dota for ~0.2 s (the camera jerked)
 	PrecacheUnitByNameSync( "npc_dota_observer_wards", context )
 	PrecacheUnitByNameSync( "npc_dota_sentry_wards", context )
@@ -94,6 +98,15 @@ function MC:SteveXP( xp )
 end
 
 -- a building's name for the boss bar: "Башня Тьмы (Т1, мид)"
+-- real Dota players in the game besides Steve (Dire's): tricks only Steve's screen needs are off then
+function MC:DotaPlayers()
+	for pid = 0, DOTA_MAX_TEAM_PLAYERS - 1 do
+		if PlayerResource:IsValidPlayerID( pid ) and PlayerResource:GetTeam( pid ) == DOTA_TEAM_BADGUYS
+			and not PlayerResource:IsFakeClient( pid ) then return true end
+	end
+	return false
+end
+
 function MC:BuildingName( n )
 	local side = n:find( "goodguys" ) and "Света" or "Тьмы"
 	local lane = n:find( "top" ) and "верх" or n:find( "mid" ) and "мид" or n:find( "bot" ) and "низ"
@@ -125,8 +138,9 @@ function MC:BossBar( steve )
 end
 
 function MC:Init()
-	GameRules:SetCustomGameTeamMaxPlayers( DOTA_TEAM_GOODGUYS, 4 )
-	GameRules:SetCustomGameTeamMaxPlayers( DOTA_TEAM_BADGUYS, 0 )
+	-- Radiant: Steve, the Minecraft player (the host). Dire: Dota's players, with Dota's heroes
+	GameRules:SetCustomGameTeamMaxPlayers( DOTA_TEAM_GOODGUYS, 1 )
+	GameRules:SetCustomGameTeamMaxPlayers( DOTA_TEAM_BADGUYS, 5 )
 	GameRules:SetSameHeroSelectionEnabled( true )
 	GameRules:SetHeroSelectionTime( 30 )
 	GameRules:SetStrategyTime( 0 )
@@ -134,11 +148,8 @@ function MC:Init()
 	GameRules:SetPreGameTime( 5 )
 
 	local mode = GameRules:GetGameModeEntity()
-	GameRules:SetCustomGameSetupAutoLaunchDelay( 0 ) -- one team anyway: skip the team-select screen
-	if GameRules:IsCheatMode() or IsInToolsMode() then -- dev runs: no hero pick, no pre-game wait
-		mode:SetCustomGameForceHero( STEVE )
-		GameRules:SetPreGameTime( 0 )
-	end
+	GameRules:SetCustomGameSetupAutoLaunchDelay( 0 ) -- the host goes to Radiant (Steve), whoever joins to Dire
+	if GameRules:IsCheatMode() or IsInToolsMode() then GameRules:SetPreGameTime( 0 ) end -- dev runs: no pre-game wait
 	-- always noon, like Minecraft's side (time locked there too): Dota's night lighting turns the blocks blue
 	mode:SetDaynightCycleDisabled( true )
 	GameRules:SetTimeOfDay( 0.5 )
@@ -181,10 +192,12 @@ end
 -- whoever didn't pick a hero in time plays Steve
 function MC:OnState()
 	if GameRules:State_Get() >= DOTA_GAMERULES_STATE_PRE_GAME then GameRules:SetTimeOfDay( 0.5 ) end -- the clock starts at dawn
-	if GameRules:State_Get() ~= DOTA_GAMERULES_STATE_STRATEGY_TIME and GameRules:State_Get() ~= DOTA_GAMERULES_STATE_PRE_GAME then return end
+	local st = GameRules:State_Get()
+	if st ~= DOTA_GAMERULES_STATE_HERO_SELECTION and st ~= DOTA_GAMERULES_STATE_STRATEGY_TIME and st ~= DOTA_GAMERULES_STATE_PRE_GAME then return end
 	for pid = 0, DOTA_MAX_TEAM_PLAYERS - 1 do
 		local player = PlayerResource:IsValidPlayerID( pid ) and PlayerResource:GetPlayer( pid )
-		if player and not PlayerResource:HasSelectedHero( pid ) then
+		-- Radiant's player is Steve; Dire's players pick their heroes
+		if player and not PlayerResource:HasSelectedHero( pid ) and PlayerResource:GetTeam( pid ) == DOTA_TEAM_GOODGUYS then
 			player:SetSelectedHero( STEVE )
 		end
 	end
@@ -231,6 +244,7 @@ function MC:SetupHero( hero )
 		CustomGameEventManager:RegisterListener( "mc_fov", function( _, e ) MCBridge:Send( string.format( "mcfov %.2f", tonumber( e.v ) or 66 ) ) end )
 		-- the unit Dota shows under the crosshair (the screen centre): Minecraft's melee swings land on it
 		CustomGameEventManager:RegisterListener( "mc_aim", function( _, e )
+			if MCBridge.steve and e.PlayerID ~= MCBridge.steve:GetPlayerOwnerID() then return end -- (Steve's client only)
 			local u = tonumber( e.e ) and tonumber( e.e ) > 0 and EntIndexToHScript( tonumber( e.e ) )
 			-- (a target is kept 0.3 s after the crosshair leaves it: a click a frame late still lands)
 			if u and u.GetUnitName then MCBridge.aim, MCBridge.aimAt = u, GameRules:GetGameTime()
@@ -809,19 +823,12 @@ function MC:DamageFilter( f )
 	if attackerUnit and attackerUnit.IsBuilding and attackerUnit:IsBuilding() then return false end -- fountains/towers don't mine
 
 	local attacker = EntIndexToHScript( f.entindex_attacker_const )
-	local hero = attacker:IsRealHero() and attacker or attacker:GetOwner()
-	if not hero or not hero.IsRealHero or not hero:IsRealHero() then return false end
-
-	local tier, power = MC:ToolOf( hero )
-	if tier < def.tier then
-		if attacker.mc_ordered == victim:entindex() and ( not hero.mc_warned or GameRules:GetGameTime() - hero.mc_warned > 3 ) then
-			hero.mc_warned = GameRules:GetGameTime()
-			GameRules:SendCustomMessage( "#mc_need_better_pickaxe", hero:GetPlayerID(), 0 )
-		end
-		return false
-	end
-	f.damage = power
-	victim:RemoveModifierByName( "modifier_mc_block" ) -- health bar becomes the mining progress
+	if not attacker or attacker.mc_player then return false end -- (Steve breaks blocks in Minecraft)
+	local owner = attacker.GetOwner and attacker:GetOwner()
+	local hero = attacker:IsRealHero() and attacker or ( owner and owner.IsRealHero and owner:IsRealHero() and owner ) or nil
+	if not hero and not attacker:IsHero() and attacker:GetTeamNumber() ~= DOTA_TEAM_BADGUYS then return false end -- (lane creeps don't)
+	f.damage = 1 -- a hit per blow, attack or spell, whatever its damage
+	victim:RemoveModifierByName( "modifier_mc_block" ) -- health bar becomes the breaking progress
 	return true
 end
 

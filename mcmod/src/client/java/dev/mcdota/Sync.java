@@ -337,6 +337,8 @@ public final class Sync {
 					case "respawn" -> Progress.respawn(server);
 					case "time" -> ClockHud.set(Integer.parseInt(p[1]), p[2].equals("1"));
 					case "fountain" -> Progress.fountain(server);
+					case "cc" -> Progress.cc(server, p);
+					case "follow" -> Progress.follow(server, Double.parseDouble(p[1]), Double.parseDouble(p[2]));
 					case "dmgnum" -> Progress.damageNumber(server, p[1], Integer.parseInt(p[2]), p.length > 3 ? p[3] : "hit");
 					case "msg" -> Progress.say(server, line.substring(4), "yellow"); // Dota's word for the player (captures...)
 					case "tp" -> run(server, String.format(Locale.ROOT, "tp @p %s.5 %s %s.5", p[1], p[2], p[3])); // twin gates

@@ -21,6 +21,7 @@ public class AttackMixin {
 		var p = mc.player;
 		var server = mc.getSingleplayerServer();
 		if (p == null || server == null || p.isSpectator() || mc.screen != null) return;
+		if (dev.mcdota.Progress.noAttack) return; // stunned or disarmed in Dota
 		float s = p.getAttackStrengthScale(0.5f);
 		if (s < 0.1f) return;
 		boolean crit = s > 0.9f && p.fallDistance > 0 && !p.onGround() && !p.onClimbable() && !p.isInWater() && !p.isPassenger();

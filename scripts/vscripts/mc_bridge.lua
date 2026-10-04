@@ -228,6 +228,16 @@ function MCBridge:Apply( body, stale )
 		if swing and self.steve and self.steve:HasModifier( "modifier_rune_invis" ) then -- attacking breaks invisibility
 			self.steve:RemoveModifierByName( "modifier_rune_invis" )
 		end
+		-- TNT went off in Minecraft: Dota shows (and plays) the blast, for everyone
+		local tx, ty, tz = line:match( "^boom (%S+) (%S+) (%S+)" )
+		if tx then
+			local p = MC.anchor + Vector( tonumber( tx ) * GRID, -tonumber( tz ) * GRID, ( tonumber( ty ) - MC_FLOOR ) * GRID )
+			local fx = ParticleManager:CreateParticle( "particles/units/heroes/hero_techies/techies_land_mine_explode.vpcf", PATTACH_WORLDORIGIN, nil )
+			ParticleManager:SetParticleControl( fx, 0, p )
+			ParticleManager:SetParticleControl( fx, 1, Vector( 400, 0, 0 ) )
+			ParticleManager:ReleaseParticleIndex( fx )
+			EmitSoundOnLocationWithCaster( p, "Hero_Techies.LandMine.Detonate", self.steve )
+		end
 		local cbx, cbz = line:match( "^chop (%S+) (%S+)" )
 		if cbx then MCWorld:Chop( tonumber( cbx ), tonumber( cbz ) ) end
 
@@ -272,7 +282,8 @@ function MCBridge:Apply( body, stale )
 			-- (MCBridge:SmoothEye, Dota's ground under the eye, jerked on cliffs and ledges: Minecraft's eye with smoothed
 			-- step-ups instead, CameraSender)
 			local off = lz - GetGroundHeight( Vector( tonumber( lx ), tonumber( ly ), 0 ), nil )
-			CustomGameEventManager:Send_ServerToAllClients( "mc_cam", { v = table.concat( { lx, ly, yawc, pitch, dist, string.format( "%.1f", off ), sent, lz }, " " ) } )
+			local pl = self.steve and PlayerResource:GetPlayer( self.steve:GetPlayerOwnerID() ) -- (Steve's client only)
+			if pl then CustomGameEventManager:Send_ServerToPlayer( pl, "mc_cam", { v = table.concat( { lx, ly, yawc, pitch, dist, string.format( "%.1f", off ), sent, lz }, " " ) } ) end
 		end
 	end
 end
@@ -377,6 +388,7 @@ function MCBridge:FarBars()
 	local s = self.steve
 	if not s or s:IsNull() or GameRules:GetGameTime() - ( self.barsAt or 0 ) < 0.3 then return end
 	self.barsAt = GameRules:GetGameTime()
+	if MC:DotaPlayers() then return end
 	local near = {}
 	for _, u in ipairs( FindUnitsInRadius( s:GetTeamNumber(), s:GetAbsOrigin(), nil, FAR_BARS, DOTA_UNIT_TARGET_TEAM_BOTH,
 		DOTA_UNIT_TARGET_ALL, DOTA_UNIT_TARGET_FLAG_INVULNERABLE + DOTA_UNIT_TARGET_FLAG_MAGIC_IMMUNE_ENEMIES, FIND_ANY_ORDER, false ) ) do
@@ -389,6 +401,29 @@ function MCBridge:FarBars()
 			if near[ u ] and has then u:RemoveModifierByName( "modifier_mc_nobar" )
 			elseif not near[ u ] and not has then u:AddNewModifier( u, nil, "modifier_mc_nobar", {} ) end
 		end
+	end
+end
+
+-- Dota's disables on Steve's hero, for Minecraft: "cc <stun 0/1> <root 0/1> <speed ratio> <disarmed 0/1>"
+function MCBridge:Control( u )
+	local stun = u:IsStunned() or u:IsFrozen() or u:IsNightmared()
+	local root = stun or u:IsRooted() or u:IsHexed()
+	local ratio = math.min( 1, u:GetIdealSpeed() / math.max( 1, u:GetBaseMoveSpeed() ) )
+	local disarmed = stun or u:IsDisarmed() or u:IsHexed()
+	local line = string.format( "cc %d %d %.2f %d", stun and 1 or 0, root and 1 or 0, ratio, disarmed and 1 or 0 )
+	if line ~= self.ccLine then self.ccLine = line self:Send( line ) end
+end
+
+-- Steve as Dire's players see him: Minecraft's Steve model following his hero (a particle shown to Dire only: his
+-- own player looks out of his eyes in Minecraft), hidden when Dire can't see him (fog of war, invisibility)
+function MCBridge:SteveModel( u )
+	local seen = u:IsAlive() and u:CanBeSeenByAnyOpposingTeam()
+	if seen and not self.modelFx then
+		self.modelFx = ParticleManager:CreateParticleForTeam( "particles/mc/steve_model.vpcf", PATTACH_ABSORIGIN_FOLLOW, u, DOTA_TEAM_BADGUYS )
+	elseif not seen and self.modelFx then
+		ParticleManager:DestroyParticle( self.modelFx, true )
+		ParticleManager:ReleaseParticleIndex( self.modelFx )
+		self.modelFx = nil
 	end
 end
 
@@ -410,6 +445,15 @@ function MCBridge:MoveSteve( name, pos, frac, yaw )
 	end
 	if not u:IsAlive() then self.lastSet = nil return end -- (a respawn moves him: no teleport for Minecraft)
 	if not self.nodrawOff then u:AddNoDraw() end -- (again every time: a respawn shows the model)
+	self:Control( u )
+	self:SteveModel( u )
+	-- pushed, pulled, thrown by a Dota spell: Dota moves him, Minecraft's player follows
+	if u:IsCurrentlyHorizontalMotionControlled() or u:IsCurrentlyVerticalMotionControlled() then
+		local a, p = MC.anchor, u:GetAbsOrigin()
+		self:Send( string.format( "follow %.2f %.2f", ( p.x - a.x ) / GRID, -( p.y - a.y ) / GRID ) )
+		self.lastSet = p
+		return
+	end
 	if self.lastSet and ( u:GetAbsOrigin() - self.lastSet ):Length2D() > 1000 then
 		local bx, bz = MC:CellOf( u:GetAbsOrigin() )
 		self:Send( string.format( "tp %d %d %d", bx, MC.heights[ bx .. "," .. bz ] or MC_FLOOR, bz ) )

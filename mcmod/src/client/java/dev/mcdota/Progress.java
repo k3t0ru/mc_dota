@@ -187,6 +187,31 @@ public final class Progress {
 		}
 	}
 
+	// --- Dota's disables ----------------------------------------------------------------------------------------------
+	// "cc <stun> <root> <speed ratio> <disarmed>": stunned/rooted -> no walking or jumping; slowed -> slower; stunned or
+	// disarmed -> no swinging (AttackMixin asks noAttack)
+	public static volatile boolean noAttack;
+	private static String ccNow = "";
+
+	public static void cc(MinecraftServer server, String[] p) {
+		String now = String.join(" ", p);
+		if (now.equals(ccNow) || dead) return;
+		ccNow = now;
+		boolean stun = p[1].equals("1"), root = p[2].equals("1");
+		double ratio = Double.parseDouble(p[3]);
+		noAttack = stun || p[4].equals("1");
+		Sync.run(server, String.format(Locale.ROOT, "attribute @p minecraft:movement_speed base set %.4f", root ? 0 : 0.1 * ratio), false);
+		Sync.run(server, "attribute @p minecraft:jump_strength base set " + (root ? 0 : 0.42), false);
+		if (stun) say(server, "Оглушён", "red");
+	}
+
+	// "follow x z": a Dota spell moves Steve (a push, a pull): Minecraft's player goes with it
+	public static void follow(MinecraftServer server, double x, double z) {
+		if (server.getPlayerList().getPlayers().isEmpty()) return;
+		ServerPlayer pl = server.getPlayerList().getPlayers().get(0);
+		pl.teleportTo(x, pl.getY(), z);
+	}
+
 	// --- damage numbers ---------------------------------------------------------------------------------------------
 	// Steve's hits on Dota units: the damage in Minecraft's font over the unit (its stand-in), rising and gone in
 	// ~0.9 s; white, a crit yellow, a deny grey

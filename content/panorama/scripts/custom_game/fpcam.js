@@ -208,7 +208,15 @@ function hideTooltips() {
 	if ( t ) t.style.opacity = "0";
 	$.Schedule( 1, hideTooltips );
 }
-hideTooltips();
-// Steve's screen is Minecraft's: hide Dota's HUD (top bar, minimap, abilities, inventory, shop, chat...)
-for ( var k in DotaDefaultUIElement_t ) GameUI.SetDefaultUIEnabled( DotaDefaultUIElement_t[k], false );
-frame();
+// Only Steve's client (the Minecraft player) is steered from Minecraft; Dire's Dota players keep Dota as it is
+var STEVE_HERO = "npc_dota_hero_kunkka"; // STEVE in addon_game_mode.lua
+function start() {
+	var hero = Players.GetPlayerHeroEntityIndex( Players.GetLocalPlayer() );
+	if ( hero === -1 ) { $.Schedule( 0.5, start ); return; } // no hero yet
+	if ( Entities.GetUnitName( hero ) !== STEVE_HERO ) return; // a Dota player
+	hideTooltips();
+	// Steve's screen is Minecraft's: hide Dota's HUD (top bar, minimap, abilities, inventory, shop, chat...)
+	for ( var k in DotaDefaultUIElement_t ) GameUI.SetDefaultUIEnabled( DotaDefaultUIElement_t[k], false );
+	frame();
+}
+start();
