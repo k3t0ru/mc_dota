@@ -133,7 +133,7 @@ function MCWorld:StartCapture( u, kind )
 		EmitSoundOn( "Portal.Loop_Appear", s )
 		self.gateFx = ParticleManager:CreateParticle( "particles/items2_fx/teleport_start.vpcf", PATTACH_ABSORIGIN, s )
 	end
-	self.capture = { unit = u, kind = kind, done = GameRules:GetGameTime() + CAPTURE_TIME[ kind ] }
+	self.capture = { unit = u, kind = kind, done = GameRules:GetGameTime() + CAPTURE_TIME[ kind ], from = s:GetAbsOrigin() }
 	say( kind == "gate" and "Портал..." or "Захват..." )
 end
 
@@ -141,7 +141,9 @@ function MCWorld:Think()
 	local s = steve()
 	local c = self.capture
 	if c then
-		if not s or c.unit:IsNull() or ( c.unit:GetAbsOrigin() - s:GetAbsOrigin() ):Length2D() > USE_RANGE + 200 then
+		-- (a twin gate's channel: any step breaks it, looking around doesn't)
+		if not s or c.unit:IsNull() or ( c.unit:GetAbsOrigin() - s:GetAbsOrigin() ):Length2D() > USE_RANGE + 200
+			or ( c.kind == "gate" and ( s:GetAbsOrigin() - c.from ):Length2D() > 24 ) then
 			self.capture = nil
 			self:GateFxEnd( s )
 			say( "Прервано" )

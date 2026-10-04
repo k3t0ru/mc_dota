@@ -350,7 +350,10 @@ public final class Sync {
 					case "follow" -> Progress.follow(server, Double.parseDouble(p[1]), Double.parseDouble(p[2]));
 					case "dmgnum" -> Progress.damageNumber(server, p[1], Integer.parseInt(p[2]), p.length > 3 ? p[3] : "hit");
 					case "msg" -> Progress.say(server, line.substring(4), "yellow"); // Dota's word for the player (captures...)
-					case "tp" -> run(server, String.format(Locale.ROOT, "tp @p %s.5 %s %s.5", p[1], p[2], p[3])); // twin gates
+					case "tp" -> { // twin gates
+						run(server, String.format(Locale.ROOT, "tp @p %s.5 %s %s.5", p[1], p[2], p[3]));
+						server.execute(() -> Progress.unstuck(server)); // (after the tp has landed)
+					}
 					case "buff" -> run(server, String.format("effect give @p %s %s %s", p[1].contains(":") ? p[1] : "minecraft:" + p[1], p[2], p[3])); // runes
 					case "shard" -> Progress.shard(server); // Tormentor
 					case "unbuff" -> run(server, "effect clear @p " + (p[1].contains(":") ? p[1] : "minecraft:" + p[1]), false); // a rune ended early in Dota
@@ -399,7 +402,7 @@ public final class Sync {
 					case "block" -> { protectedBlocks.add(new BlockPos(Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3])));
 						column(server, Integer.parseInt(p[1]), Integer.parseInt(p[3]), () ->
 						run(server, String.format("setblock %s %s %s minecraft:%s", p[1], p[2], p[3], p[4]))); }
-					case "unblock" -> run(server, String.format("setblock %s %s %s minecraft:air", p[1], p[2], p[3]));
+					case "unblock" -> Progress.unblock(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
 					case "sign" -> { // "sign x y z <block[state]> line|line|...": the stalls' signs (after their blocks: same queue)
 						protectedBlocks.add(new BlockPos(Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3])));
 						String[] lines = line.split(" ", 6).length > 5 ? line.split(" ", 6)[5].split("\\|") : new String[0];

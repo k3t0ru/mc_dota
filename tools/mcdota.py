@@ -24,6 +24,8 @@ repo_url = https://github.com/k3t0ru/mc_dota.git
 resolution = 1920x1080
 ; Minecraft frames a second = how often Dota's camera moves (30 on weak computers)
 minecraft_fps = 60
+; Minecraft's sound volume, percent (it was much louder than Dota)
+minecraft_volume = 40
 ; Dota's frame limit (0 = none)
 dota_fps = 0
 ; dota = the real Dota map
@@ -306,13 +308,14 @@ def host(cfg, dota):
     kill(mc_pids()) # (one left from before would hold the world: "no access to the world")
     try: os.remove(os.path.join(run, "logs", "latest.log")) # (the last game's "joined" is in it)
     except OSError: pass
-    env = dict(os.environ, JAVA_HOME=java, DOTA_SIZE=res, MC_FPS=cfg["host"]["minecraft_fps"])
+    env = dict(os.environ, JAVA_HOME=java, DOTA_SIZE=res, MC_FPS=cfg["host"]["minecraft_fps"], MC_VOLUME=cfg["host"]["minecraft_volume"])
     mlog = open(os.path.join(run, "gradle_run.log"), "w")
-    spawn(["cmd", "/c", os.path.join(ROOT, "mcmod", "gradlew.bat"), "--no-daemon", "runClient"], cwd=os.path.join(ROOT, "mcmod"), env=env,
+    mc = spawn(["cmd", "/c", os.path.join(ROOT, "mcmod", "gradlew.bat"), "--no-daemon", "runClient"], cwd=os.path.join(ROOT, "mcmod"), env=env,
           stdout=mlog, stderr=mlog)
     r = wait_for(os.path.join(run, "logs", "latest.log"), ["joined the game", "has crashed"], 1200)
     say("Minecraft: " + (r or "не дождался (см. mcmod/run/gradle_run.log)"))
-    say("готово. Минкрафт и Дота работают; это окно можно закрыть")
+    say("готово: играем. Это окно закроется само, когда закроется Minecraft")
+    mc.wait()
 
 
 def player(cfg, dota):

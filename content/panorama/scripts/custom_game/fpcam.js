@@ -16,7 +16,7 @@ var lastProbe = 0;
 // Dota measures the height offset from its own smoothed "camera ground", not the real terrain. Its reference = the look-at
 // height it produced minus the offset we gave it; the next offset is exactly wanted - reference (no slow feedback loop,
 // which swung up and down when stepping between high and low ground).
-var zFix = 0, lastOff = 0;
+var zFix = 0, lastOff = 0, lzPrev = null, lzOdd = 0;
 
 // calibration: what Dota really does with the pose we asked for
 function probe( v ) {
@@ -184,7 +184,11 @@ function frame() {
 		GameUI.SetCameraPitchMax( pitch );
 		GameUI.SetCameraDistance( v[4] );
 		var lzp = GameUI.GetCameraLookAtPosition();
+		// (a frame now and then reported Dota's camera ground hundreds of units off: the camera dived at the floor.
+		// Such a jump is ignored for up to 3 frames; a real one, a teleport, stays)
 		var lz = lzp[2];
+		if ( lzPrev !== null && Math.abs( lz - lzPrev ) > 300 && lzOdd < 3 ) { lz = lzPrev; lzOdd++; } else lzOdd = 0;
+		lzPrev = lz;
 		if ( CG_LOG ) $.Msg( "[mc] cg " + lzp[0].toFixed( 1 ) + " " + lzp[1].toFixed( 1 ) + " " + ( lz - lastOff ).toFixed( 1 ) );
 		zStat( lz );
 		// Dota's camera ground under last frame's look-at point (the offset shows one frame late: measured exactly);

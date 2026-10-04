@@ -35,21 +35,29 @@ def humanoid(t, arms=FWD, inflate=0.0, legs=True, head=True, body=True, leg=0.0,
     return b
 
 
-def bow(pivot, turn):
+def bow(pivot, turn, draw=0.0):
     # the bow in the hand at the end of an arm held forward: an upright picture, its length along the arm's way
+    # (the bow is drawn diagonally in its picture: a quarter turn of that upright, its grip in the hand). Four pictures,
+    # Minecraft's: the bow, then its string pulled in 3 steps; the ones not shown sit far under the ground (a bone
+    # can't hide its part, it can move it away)
     x, y, z = pivot
-    # (the bow is drawn diagonally in its picture: a quarter turn of that upright, its grip in the hand)
-    return [("item:bow", None, (0, -8, -8), (0, 16, 16), 0, (x, y + 1, z - 10), (turn + 0.785, 0, 0), "arm_r")]
+    stage = 0 if draw < 0.1 else 1 if draw < 0.4 else 2 if draw < 0.7 else 3
+    out = []
+    for i, tex in enumerate(("item:bow", "item:bow_pulling_0", "item:bow_pulling_1", "item:bow_pulling_2")):
+        out.append((tex, None, (0, -8, -8), (0, 16, 16), 0, (x, y + 1 + (0 if i == stage else 400), z - 10), (turn + 0.785, 0, 0), f"bow{i}"))
+    return out
 
 
 def skeleton(leg=0.0, arm=0.0, dy=0, legs_pose=None):
-    # arm: the bow's draw, 0 = held, 1 = the string pulled (the left hand comes up to the bow, then back to the chin)
-    left = (FWD + 0.5 - 0.5 * min(1, arm * 2), -0.6 * arm, 0)
+    # arm: the bow's draw, 0 = held, 1 = the string pulled: both arms forward like Minecraft's aiming skeleton, the left
+    # hand on the string, pulling it back toward the chin
+    a = min(1, arm)
+    left = (FWD + 0.1 * a, 0.5 - 0.45 * a, 0)
     b = [("skeleton", (0, 0), (-4, -8, -4), (8, 8, 8), 0, (0, dy, 0), 0, "head"),
          ("skeleton", (16, 16), (-4, 0, -2), (8, 12, 4), 0, (0, dy, 0), 0, "body"),
          ("skeleton", (40, 16), (-1, -2, -1), (2, 12, 2), 0, (-5, 2 + dy, 0), FWD, "arm_r"),
          ("skeleton", (40, 16), (-1, -2, -1), (2, 12, 2), 0, (5, 2 + dy, 0), left, "arm_l")]
-    b += bow((-5, 2 + dy, 0), 0)
+    b += bow((-5, 2 + dy, 0), 0, a)
     if legs_pose: b += legs_pose
     else:
         b += [("skeleton", (0, 16), (-1, 0, -1), (2, 12, 2), 0, (-2, 12 + dy, 0), leg, "leg_r"),
@@ -73,6 +81,29 @@ def spider_jockey(leg=0.0, arm=0.0):
     return b
 
 
+def pig(leg):
+    t = "pig"
+    return [(t, (0, 0), (-4, -4, -8), (8, 8, 8), 0, (0, 12, -6), 0, "head"),
+            (t, (16, 16), (-2, 0, -9), (4, 3, 1), 0, (0, 12, -6), 0, "head"),
+            (t, (28, 8), (-5, -10, -7), (10, 16, 8), 0, (0, 11, 2), math.pi / 2, "body"),
+            (t, (0, 16), (-2, 0, -2), (4, 6, 4), 0, (-3, 18, 7), leg, "leg0"),
+            (t, (0, 16), (-2, 0, -2), (4, 6, 4), 0, (3, 18, 7), -leg, "leg1"),
+            (t, (0, 16), (-2, 0, -2), (4, 6, 4), 0, (-3, 18, -5), -leg, "leg2"),
+            (t, (0, 16), (-2, 0, -2), (4, 6, 4), 0, (3, 18, -5), leg, "leg3")]
+
+
+def chicken(leg):
+    t = "chicken"
+    return [(t, (0, 0), (-2, -6, -2), (4, 6, 3), 0, (0, 15, -4), 0, "head"),
+            (t, (14, 0), (-2, -4, -4), (4, 2, 2), 0, (0, 15, -4), 0, "head"),
+            (t, (14, 4), (-1, -2, -3), (2, 2, 2), 0, (0, 15, -4), 0, "head"),
+            (t, (0, 9), (-3, -4, -3), (6, 8, 6), 0, (0, 16, 0), math.pi / 2, "body"),
+            (t, (26, 0), (-1, 0, -3), (3, 5, 3), 0, (-2, 19, 1), leg, "leg0"),
+            (t, (26, 0), (-1, 0, -3), (3, 5, 3), 0, (1, 19, 1), -leg, "leg1"),
+            (t, (24, 13), (0, 0, -3), (1, 4, 6), 0, (-4, 13, 0), (0, 0, abs(leg)), "wing0"),
+            (t, (24, 13), (-1, 0, -3), (1, 4, 6), 0, (4, 13, 0), (0, 0, -abs(leg)), "wing1")]
+
+
 def zombie(leg, arm):
     return humanoid("zombie", leg=leg, arm=arm + 0.12 * leg) + [("zombie", (32, 0), (-4, -8, -4), (8, 8, 8), 0.5, (0, 0, 0), 0, "head")]
 
@@ -83,7 +114,7 @@ def zombie_gold(leg, arm):
          ("gold", (0, 16), (-2, 0, -2), (4, 12, 4), 0.6, (1.9, 12, 0), -leg, "leg_l")]
 
 
-def steve(leg, arm, mode="stand", elytra=False):
+def steve(leg, arm, mode="stand", elytra=False, item=None):
     # Minecraft's PlayerModel (wide arms) with its outer layers, in its poses (the Dota players' view of Steve,
     # MCBridge:Puppet): walking (arms swing against the legs), a hit (the right arm swings), sneaking (bent forward,
     # Minecraft's crouch offsets), drawing a bow (both arms forward), elytra flight (lying forward, wings spread).
@@ -106,6 +137,8 @@ def steve(leg, arm, mode="stand", elytra=False):
          (t, (0, 32), (-2, 0, -2), (4, 12, 4), 0.25, (-1.9, ly, lz), leg, "leg_r"),
          (t, (16, 48), (-2, 0, -2), (4, 12, 4), 0, (1.9, ly, lz), -leg, "leg_l"),
          (t, (0, 48), (-2, 0, -2), (4, 12, 4), 0.25, (1.9, ly, lz), -leg, "leg_l")]
+    if item:  # the item in his right hand: its picture upright along the arm's side, the handle in the hand, pointing forward
+        b.append(("item:" + item, None, (0, -13.6, -2.4), (0, 16, 16), 0, (-6, ay + 10, -1), 3 * math.pi / 4, "arm_r"))
     if elytra:  # Minecraft's ElytraModel, on the back (2 px behind the body)
         x, z = (0.349, -math.pi / 2) if mode == "fly" else (0.2618 + bend, -0.2618)
         b += [("elytra", (22, 0), (-10, 0, 0), (10, 20, 2), 1.0, (5, by, 2), (x, 0, z), "wing_l"),
@@ -120,11 +153,31 @@ def steve(leg, arm, mode="stand", elytra=False):
     return b
 
 
-MOB_BUILD = {"steve": steve, "steve_elytra": lambda leg, arm, mode="stand": steve(leg, arm, mode, True), "zombie": zombie, "skeleton": lambda leg, arm: skeleton(leg, arm / 0.8), "spider_jockey": spider_jockey,
+MOB_BUILD = {"pig": lambda leg, arm: pig(leg), "chicken": lambda leg, arm: chicken(leg), "zombie": zombie, "skeleton": lambda leg, arm: skeleton(leg, arm / 0.8), "spider_jockey": spider_jockey,
              "zombie_gold": zombie_gold}
 TEXTURES = {"zombie": "zombie/zombie.png", "skeleton": "skeleton/skeleton.png", "spider": "spider/spider.png",
             "gold": "equipment/humanoid/gold.png", "item:bow": "../item/bow.png", "steve": "player/wide/steve.png",
-            "elytra": "equipment/wings/elytra.png"}
+            "elytra": "equipment/wings/elytra.png", "pig": "pig/temperate_pig.png", "chicken": "chicken/temperate_chicken.png",
+            "item:bow_pulling_0": "../item/bow_pulling_0.png", "item:bow_pulling_1": "../item/bow_pulling_1.png",
+            "item:bow_pulling_2": "../item/bow_pulling_2.png"}
+# what Steve may hold, shown in his hand to Dota's players (Minecraft's item pictures): his tools and weapons, what the
+# traders sell. A model of him for each (and with an elytra); "bow_pulling_2" is the bow while he draws it.
+HELD = {}
+for tier in ("wooden", "stone", "iron", "golden", "diamond", "netherite"):
+    for tool in ("sword", "pickaxe", "axe", "shovel", "hoe"):
+        HELD[f"{tier}_{tool}"] = f"{tier}_{tool}"
+for i in ("bow", "bow_pulling_2", "flint_and_steel", "ender_pearl", "firework_rocket", "potion", "splash_potion", "golden_apple",
+          "bread", "cooked_beef", "golden_carrot", "emerald", "arrow", "elytra", "stick", "diamond", "iron_ingot", "flint",
+          "book", "enchanted_book", "feather", "string", "paper", "leather", "gunpowder", "lapis_lazuli", "netherite_ingot"):
+    HELD[i] = i
+HELD.update({"torch": "../block/torch", "soul_torch": "../block/soul_torch", "crossbow": "crossbow_standby", "clock": "clock_00"})
+HELD = {k: v for k, v in HELD.items() if f"assets/minecraft/textures/item/{v}.png".replace("item/../", "") in jar.namelist()}
+for k, v in HELD.items():
+    TEXTURES["item:" + k] = "../" + ("item/" + v if not v.startswith("../") else v[3:]) + ".png"
+for elytra in (False, True):
+    for item in [None] + list(HELD):
+        MOB_BUILD["steve" + ("_elytra" if elytra else "") + (f"__{item}" if item else "")] = \
+            (lambda e, it: lambda leg, arm, mode="stand": steve(leg, arm, mode, e, it))(elytra, item)
 
 # animations: (activity, seconds, looping, pose at a moment 0..1) -- like Minecraft's: a walk is a sine of the legs (arms
 # swaying with them for zombies), idle arms bob slowly, an attack swings the arms down (zombies) or draws the bow
@@ -458,10 +511,13 @@ PARTICLE = """<!-- kv3 encoding:text:version{{e21c7f3c-8a33-41c5-9977-a76d3a32aa
 """
 PDIR = os.path.join(ROOT, "particles", "mc", "steve")
 os.makedirs(PDIR, exist_ok=True)
-for model in ("steve", "steve_elytra"):
+for model in [m for m in MOB_BUILD if m.startswith("steve")] + ["pig", "chicken"]:
     for an, act, seconds, looping, _ in anims_for(model):
         with open(os.path.join(PDIR, f"{model}_{an}.vpcf"), "w") as f:
             f.write(PARTICLE.format(model=model, anim=an, loop="true" if looping else "false"))
+with open(os.path.join(ROOT, "..", "scripts", "vscripts", "mc_held.lua"), "w") as f:
+    f.write("-- written by tools/gen_mobs.py: items Steve is drawn holding (models/mc/mob_steve__<item>)\nMC_HELD = { "
+            + ", ".join(f'{k} = true' for k in HELD) + " }\n")
 Image.new("RGB", (4, 4), (0, 0, 0)).save(os.path.join(MAT, "ghost.png"))
 Image.new("L", (4, 4), 0).save(os.path.join(MAT, "ghost_alpha.png"))
 with open(os.path.join(MAT, "ghost.vmat"), "w") as f:

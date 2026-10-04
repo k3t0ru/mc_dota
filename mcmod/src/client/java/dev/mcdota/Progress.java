@@ -220,6 +220,29 @@ public final class Progress {
 		pl.teleportTo(x, y, z);
 	}
 
+	// after a teleport (a twin gate): up out of any block he landed in
+	public static void unstuck(MinecraftServer server) {
+		if (server.getPlayerList().getPlayers().isEmpty()) return;
+		ServerPlayer pl = server.getPlayerList().getPlayers().get(0);
+		double y = pl.getY();
+		net.minecraft.world.phys.AABB box = pl.getBoundingBox();
+		for (int i = 0; i < 16 && !pl.level().noCollision(pl, box); i++) {
+			box = box.move(0, 0.5, 0);
+			y += 0.5;
+		}
+		if (y != pl.getY()) pl.teleportTo(pl.getX(), y, pl.getZ());
+	}
+
+	// a block Dota took away (a Dota hero broke it, or what stood on it): Minecraft's breaking look and sound, no drop
+	public static void unblock(MinecraftServer server, int x, int y, int z) {
+		var level = server.overworld();
+		var pos = new net.minecraft.core.BlockPos(x, y, z);
+		var st = level.getBlockState(pos);
+		if (st.isAir()) return;
+		level.levelEvent(2001, pos, net.minecraft.world.level.block.Block.getId(st));
+		level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 3);
+	}
+
 	// --- mob sounds -----------------------------------------------------------------------------------------------
 	// Radiant's creeps are Minecraft mobs in Dota (gen_mobs.py): their sounds, played at their stand-in (if it has one:
 	// only units near Steve do)
@@ -248,14 +271,15 @@ public final class Progress {
 	public static void damageNumber(MinecraftServer server, String id, int amount, String kind) {
 		Entity e = null;
 		for (Entity c : server.overworld().getAllEntities()) if (c.getTags().contains("dota_" + id)) { e = c; break; }
-		if (e == null || amount <= 0) return;
+		boolean miss = kind.equals("miss");
+		if (e == null || (amount <= 0 && !miss)) return;
 		var r = server.overworld().getRandom();
 		double x = e.getX() + (r.nextDouble() - 0.5) * 0.6, y = e.getY() + e.getBbHeight() + 0.2, z = e.getZ() + (r.nextDouble() - 0.5) * 0.6;
 		String tag = "dmgnum_" + (++numberCount);
 		String color = kind.equals("crit") ? "red" : kind.equals("deny") ? "gray" : "white";
 		Sync.run(server, String.format(Locale.ROOT, "summon minecraft:text_display %.2f %.2f %.2f {billboard:\"center\",background:0,shadow:1b,"
-			+ "Tags:[\"mcdota_dmg\",\"%s\"],text:{text:\"%d\",color:\"%s\",bold:%s},transformation:{left_rotation:[0f,0f,0f,1f],"
-			+ "right_rotation:[0f,0f,0f,1f],translation:[0f,0f,0f],scale:[1.2f,1.2f,1.2f]}}", x, y, z, tag, amount, color,
+			+ "Tags:[\"mcdota_dmg\",\"%s\"],text:{text:\"%s\",color:\"%s\",bold:%s},transformation:{left_rotation:[0f,0f,0f,1f],"
+			+ "right_rotation:[0f,0f,0f,1f],translation:[0f,0f,0f],scale:[1.2f,1.2f,1.2f]}}", x, y, z, tag, miss ? "Промах" : String.valueOf(amount), miss ? "gray" : color,
 			kind.equals("crit") ? "1b" : "0b"), false);
 		numbers.add(new Object[] { tag, 18 });
 	}

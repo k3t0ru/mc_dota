@@ -382,6 +382,12 @@ function MCBridge:HitUnit( hero, amount, direct, kind )
 	else
 		-- melee and arrows: physical (armour); TNT, potions, fire: magical (magic resistance)
 		local magic = kind == "boom" or kind == "magic" or kind == "fire"
+		local ev = not magic and hero.GetEvasion and hero:GetEvasion() or 0
+		if ev > 1 then ev = ev / 100 end
+		if ev > 0 and RandomFloat( 0, 1 ) < ev then
+			self:Send( string.format( "dmgnum %d 0 miss", hero:entindex() ) )
+			return
+		end
 		local dealt = ApplyDamage( { victim = hero, attacker = self.steve or hero, damage = amount * DMG_TO_DOTA * ( kind == "boom" and TNT_MULT or 1 ),
 			damage_type = magic and DAMAGE_TYPE_MAGICAL or DAMAGE_TYPE_PHYSICAL } )
 		-- the number over it, Minecraft style (Progress.damageNumber)
@@ -431,6 +437,10 @@ function MCBridge:Control( u )
 	local root = stun or u:IsRooted()
 	local ratio = math.min( 1, u:GetIdealSpeed() / math.max( 1, u:GetBaseMoveSpeed() ) )
 	if u:IsHexed() then ratio = math.min( ratio, 140 / math.max( 1, u:GetBaseMoveSpeed() ) ) end -- (a hex: Dota's 140 speed)
+	if u:IsHexed() ~= ( self.wasHexed or false ) then
+		self.wasHexed = u:IsHexed()
+		print( "[mc] steve hexed " .. tostring( self.wasHexed ) .. " speed ratio " .. ratio )
+	end
 	local disarmed = stun or u:IsDisarmed() or u:IsHexed()
 	local line = string.format( "cc %d %d %.2f %d", stun and 1 or 0, root and 1 or 0, ratio, disarmed and 1 or 0 )
 	if line ~= self.ccLine then self.ccLine = line self:Send( line ) end
@@ -457,6 +467,12 @@ function MCBridge:Puppet( u, pos, feetY, yaw, moved )
 		local z = GetGroundHeight( pos, nil )
 		if feetY and MC.anchor then z = MC.anchor.z + ( feetY - MC_FLOOR ) * GRID end
 		p:SetAbsOrigin( Vector( pos.x, pos.y, z ) )
+		local aloft = z - GetGroundHeight( pos, nil ) > 3 * GRID
+		for _, unit in ipairs( { u, p } ) do
+			local has = unit:HasModifier( "modifier_mc_aloft" )
+			if aloft and not has then unit:AddNewModifier( unit, nil, "modifier_mc_aloft", {} )
+			elseif not aloft and has then unit:RemoveModifierByName( "modifier_mc_aloft" ) end
+		end
 		local d = ( ( yaw - ( self.bodyYaw or yaw ) + math.pi ) % ( 2 * math.pi ) ) - math.pi
 		self.bodyYaw = ( self.bodyYaw or yaw ) + d * ( self.bodyYaw and 0.3 or 1 )
 		p:SetForwardVector( MC:DirToDota( -math.sin( self.bodyYaw ), math.cos( self.bodyYaw ) ) )
@@ -469,7 +485,15 @@ function MCBridge:Puppet( u, pos, feetY, yaw, moved )
 	local kind = not ( alive and u:CanBeSeenByAnyOpposingTeam() ) and "" or self.pose == "fly" and "fly" or self.pose == "bow" and "bow"
 		or self.pose == "sneak" and ( walking and "sneak_run" or "sneak_idle" )
 		or now - ( self.swingAt or -10 ) < 0.35 and "attack" or walking and "run" or "idle"
-	if kind ~= "" then kind = ( self.elytra and "steve_elytra_" or "steve_" ) .. kind end
+	if kind ~= "" then
+		local item = self.pose == "bow" and self.held == "bow" and "bow_pulling_2" or self.held
+		local model = ( self.elytra and "steve_elytra" or "steve" ) .. ( MC_HELD and MC_HELD[ item ] and "__" .. item or "" )
+		if u:IsHexed() then
+			model = u:HasModifier( "modifier_shadow_shaman_voodoo" ) and "chicken" or "pig"
+			kind = walking and "run" or "idle"
+		end
+		kind = model .. "_" .. kind
+	end
 	if kind == self.modelKind then return end
 	self.modelKind = kind
 	if self.modelFx then

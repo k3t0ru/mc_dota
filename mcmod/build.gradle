@@ -20,6 +20,7 @@ loom {
 			programArgs "--quickPlaySingleplayer", "mcdota"
 			vmArg "-Dmcdota.size=" + (System.getenv("DOTA_SIZE") ?: "1600x900") // set by tools/env.sh
 			vmArg "-Dmcdota.fps=" + (System.getenv("MC_FPS") ?: "30")
+			vmArg "-Dmcdota.volume=" + (System.getenv("MC_VOLUME") ?: "40")
 		}
 	}
 

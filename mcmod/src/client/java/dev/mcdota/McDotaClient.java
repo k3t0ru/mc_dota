@@ -33,6 +33,8 @@ public class McDotaClient implements ClientModInitializer {
 			mc.options.fov().set(FOV); // must match Dota's camera (dota_camera_fov_min/max in tools/dev_launch.sh)
 			mc.options.fovEffectScale().set(0.0); // no sprint/speed zoom: Dota's FOV never changes
 			mc.options.damageTiltStrength().set(0.0); // a hurt camera tilt would tear Minecraft's layer off Dota's
+			// Minecraft was far louder than Dota: its master volume (minecraft_volume in settings.ini, percent)
+			mc.options.getSoundSourceOptionInstance(net.minecraft.sounds.SoundSource.MASTER).set(Integer.getInteger("mcdota.volume", 40) / 100.0);
 			mc.options.framerateLimit().set(Integer.getInteger("mcdota.fps", 30)); // Dota's camera moves once per Minecraft frame (MC_FPS in tools/env.sh)
 			mc.options.ambientOcclusion().set(false); // shaded corners turn the magenta ground into dark triangles
 			mc.options.autoJump().set(true); // the floor follows Dota's terrain in whole-block steps

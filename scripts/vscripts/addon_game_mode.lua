@@ -30,6 +30,7 @@ require( "mc_bridge" )
 require( "mc_world" ) -- runes, trees, outposts, watchers, lotus pools, twin gates, torch wards
 require( "addon_init" ) -- Lua modifiers (the client loads addon_init.lua by itself)
 require( "mc_block_models" ) -- MCB: every Minecraft block's variants -> Dota models (tools/gen_mcblocks.py)
+pcall( require, "mc_held" ) -- MC_HELD: the items Steve is drawn holding (tools/gen_mobs.py)
 
 
 
@@ -38,11 +39,16 @@ function Precache( context )
 	for _, m in ipairs( { "zombie", "skeleton", "spider_jockey", "zombie_gold" } ) do -- (Steve's: below)
 		PrecacheResource( "model", "models/mc/mob_" .. m .. ".vmdl", context )
 	end
-	for _, m in ipairs( { "steve", "steve_elytra" } ) do
+	-- Steve as Dota's players see him: with an elytra or not, each item in his hand (MCBridge:Puppet); hexed: a pig, a chicken
+	local models = { "pig", "chicken" }
+	for _, e in ipairs( { "steve", "steve_elytra" } ) do
+		table.insert( models, e )
+		for item in pairs( MC_HELD or {} ) do table.insert( models, e .. "__" .. item ) end
+	end
+	for _, m in ipairs( models ) do
 		PrecacheResource( "model", "models/mc/mob_" .. m .. ".vmdl", context )
-		for _, a in ipairs( { "idle", "run", "attack", "sneak_idle", "sneak_run", "fly", "bow" } ) do
-			PrecacheResource( "particle", "particles/mc/steve/" .. m .. "_" .. a .. ".vpcf", context )
-		end
+		local anims = m:find( "^steve" ) and { "idle", "run", "attack", "sneak_idle", "sneak_run", "fly", "bow" } or { "idle", "run" }
+		for _, a in ipairs( anims ) do PrecacheResource( "particle", "particles/mc/steve/" .. m .. "_" .. a .. ".vpcf", context ) end
 	end
 	PrecacheResource( "model", "models/mc/mob_steve.vmdl", context )
 	PrecacheResource( "model", "models/mc/steve_ghost.vmdl", context )
@@ -1135,8 +1141,14 @@ function MC:OnKilled( e )
 	local by = dead.mc_y or MC.heights[ dead.mc_cell ] or MC_FLOOR
 	MC:HideBlock( bx, by, bz )
 	MCBridge:Send( string.format( "unblock %d %d %d", bx, by, bz ) )
-	local item = CreateItem( def.drop, nil, nil )
-	CreateItemOnPositionSync( dead:GetAbsOrigin(), item )
+	-- (Dota's heroes can't reach up to break blocks: whatever stood on this one comes down with it)
+	for y = by + 1, by + 64 do
+		local k = bx .. "," .. y .. "," .. bz
+		if not MC.props[ k ] or MC.protected[ k ] then break end
+		MC:HideBlock( bx, y, bz )
+		MCBridge:Send( string.format( "unblock %d %d %d", bx, y, bz ) )
+	end
+	MC:ColumnChanged( bx, bz )
 	if killer and killer.IsRealHero and killer:IsRealHero() then
 		killer:AddExperience( def.xp, DOTA_ModifyXP_Unspecified, false, true )
 	end

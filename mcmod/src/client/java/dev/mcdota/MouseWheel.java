@@ -83,6 +83,7 @@ public final class MouseWheel {
 		}
 		int n = pending;
 		if (n == 0 || mc.player == null) return;
+		if (mc.screen != null) { pending = 0; return; } // (a trader's offers scroll: the hand stays as it is)
 		pending -= n;
 		var inv = mc.player.getInventory();
 		inv.setSelectedSlot(Math.floorMod(inv.getSelectedSlot() - n, 9));
