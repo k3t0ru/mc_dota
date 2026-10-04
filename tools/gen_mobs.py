@@ -1,5 +1,5 @@
-# Radiant's creeps as Minecraft mobs (Dota models): zombie (melee), skeleton (ranged), creeper (siege: it blows up
-# buildings), zombie in gold armour (the flag bearer). Geometry and UVs follow Minecraft's entity models and
+# Radiant's creeps as Minecraft mobs (Dota models): zombie (melee), skeleton (ranged), a spider jockey (siege: a
+# skeleton riding a spider), zombie in gold armour (the flag bearer). Geometry and UVs follow Minecraft's entity models and
 # ModelPart.Cube (like tools/gen_villager.py), textures from the local Minecraft jar (Mojang's: local, gitignored).
 # Output: content/models/mc/mob_<name>.{obj,vmdl}, content/materials/mc/mob_<tex>.{png,vmat}. Faces Dota +X, feet at 0,
 # 16 model pixels = one block (GRID 96). Static (no animation).
@@ -35,20 +35,36 @@ MOBS = {
                  ("skeleton", (40, 16), (-1, -2, -1), (2, 12, 2), 0, (5, 2, 0), -0.3),
                  ("skeleton", (0, 16), (-1, 0, -1), (2, 12, 2), 0, (-2, 12, 0), 0),
                  ("skeleton", (0, 16), (-1, 0, -1), (2, 12, 2), 0, (2, 12, 0), 0)],
-    "creeper": [("creeper", (0, 0), (-4, -8, -4), (8, 8, 8), 0, (0, 6, 0), 0),
-                ("creeper", (16, 16), (-4, 0, -2), (8, 12, 4), 0, (0, 6, 0), 0)]
-               + [("creeper", (0, 16), (-2, 0, -2), (4, 6, 4), 0, (x, 18, z), 0) for x, z in ((-2, 4), (2, 4), (-2, -4), (2, -4))],
+    # SpiderModel (legs: z then y turns), and a skeleton sitting on its back, legs forward (the riding pose)
+    "spider_jockey": [("spider", (32, 4), (-4, -4, -8), (8, 8, 8), 0, (0, 15, -3), 0),
+                      ("spider", (0, 0), (-3, -3, -3), (6, 6, 6), 0, (0, 15, 0), 0),
+                      ("spider", (0, 12), (-5, -4, -6), (10, 8, 12), 0, (0, 15, 9), 0)]
+                     + [("spider", (18, 0), (-15, -1, -1) if side < 0 else (-1, -1, -1), (16, 2, 2), 0, (4 * side, 15, z), (0, ry * side * -1, rz * side))
+                        for z, ry, rz in ((2, 0.7854, 0.7854), (1, 0.3927, 0.5809), (0, -0.3927, 0.5809), (-1, -0.7854, 0.7854))
+                        for side in (-1, 1)]
+                     + [("skeleton", (0, 0), (-4, -8, -4), (8, 8, 8), 0, (0, -1, 2), 0),
+                        ("skeleton", (16, 16), (-4, 0, -2), (8, 12, 4), 0, (0, -1, 2), 0),
+                        ("skeleton", (40, 16), (-1, -2, -1), (2, 12, 2), 0, (-5, 1, 2), FWD),
+                        ("skeleton", (40, 16), (-1, -2, -1), (2, 12, 2), 0, (5, 1, 2), -0.3),
+                        ("skeleton", (0, 16), (-1, 0, -1), (2, 12, 2), 0, (-2, 11, 2), (-1.4, 0.3, 0)),
+                        ("skeleton", (0, 16), (-1, 0, -1), (2, 12, 2), 0, (2, 11, 2), (-1.4, -0.3, 0))],
     "zombie_gold": humanoid("zombie") + humanoid("gold", inflate=1.0, legs=False) +
                    [("gold", (0, 16), (-2, 0, -2), (4, 12, 4), 0.6, (-1.9, 12, 0), 0), ("gold", (0, 16), (-2, 0, -2), (4, 12, 4), 0.6, (1.9, 12, 0), 0)],
 }
-TEXTURES = {"zombie": "zombie/zombie.png", "skeleton": "skeleton/skeleton.png", "creeper": "creeper/creeper.png",
+TEXTURES = {"zombie": "zombie/zombie.png", "skeleton": "skeleton/skeleton.png", "spider": "spider/spider.png",
             "gold": "equipment/humanoid/gold.png"}
 
 
 def dota(p, offset, rot):
+    """rot: an x turn, or (x, y, z) turns applied like Minecraft's ModelPart (Rz * Ry * Rx)."""
+    rx, ry, rz = rot if isinstance(rot, tuple) else (rot, 0, 0)
     x, y, z = p
-    c, s = math.cos(rot), math.sin(rot)
+    c, s = math.cos(rx), math.sin(rx)
     y, z = y * c - z * s, y * s + z * c
+    c, s = math.cos(ry), math.sin(ry)
+    x, z = x * c + z * s, -x * s + z * c
+    c, s = math.cos(rz), math.sin(rz)
+    x, y = x * c - y * s, x * s + y * c
     x, y, z = x + offset[0], y + offset[1], z + offset[2]
     return (x * PX, z * PX, (24 - y) * PX)  # (the villager's mapping turned around: faces Dota +X)
 

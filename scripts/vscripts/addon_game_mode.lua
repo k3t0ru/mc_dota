@@ -34,7 +34,7 @@ require( "mc_block_models" ) -- MCB: every Minecraft block's variants -> Dota mo
 
 
 function Precache( context )
-	for _, m in ipairs( { "zombie", "skeleton", "creeper", "zombie_gold" } ) do PrecacheResource( "model", "models/mc/mob_" .. m .. ".vmdl", context ) end
+	for _, m in ipairs( { "zombie", "skeleton", "spider_jockey", "zombie_gold" } ) do PrecacheResource( "model", "models/mc/mob_" .. m .. ".vmdl", context ) end
 	PrecacheResource( "particle", "particles/mc/steve_model.vpcf", context )
 	PrecacheResource( "model", "models/mc/steve.vmdl", context )
 	PrecacheResource( "particle", "particles/units/heroes/hero_techies/techies_land_mine_explode.vpcf", context )
@@ -219,8 +219,8 @@ function MC:OnState()
 end
 
 -- Radiant's creeps are Minecraft's mobs (tools/gen_mobs.py; static models): melee zombies, ranged skeletons, the
--- siege creep a creeper (it blows up buildings), the flag bearer a zombie in gold armour. Their Dota cosmetics hidden.
-MOB_MODELS = { { "flagbearer", "zombie_gold" }, { "siege", "creeper" }, { "ranged", "skeleton" }, { "melee", "zombie" } }
+-- siege creep a skeleton riding a spider, the flag bearer a zombie in gold armour. Their Dota cosmetics hidden.
+MOB_MODELS = { { "flagbearer", "zombie_gold" }, { "siege", "spider_jockey" }, { "ranged", "skeleton" }, { "melee", "zombie" } }
 function MC:MobModel( u )
 	local name = u:GetUnitName()
 	if not name:find( "creep_goodguys" ) then return end
