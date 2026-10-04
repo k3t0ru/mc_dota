@@ -14,7 +14,11 @@ RUNE_EFFECTS = {
 	modifier_rune_haste = { "speed", 3 }, -- Dota's max speed: ~1.8x
 	modifier_rune_regen = { "regeneration", 3 }, modifier_rune_invis = { "invisibility", 0 },
 	modifier_rune_arcane = { "haste", 1 }, modifier_rune_shield = { "absorption", 2 }, -- ~half his health as a shield
-	modifier_rune_doubledamage = { "glowing", 0 }, -- (just a sign it's on; the damage is Lua's)
+}
+-- what Minecraft's player reads when he takes one
+RUNE_NAMES = {
+	modifier_rune_haste = "Руна ускорения", modifier_rune_doubledamage = "Руна двойного урона", modifier_rune_regen = "Руна регенерации",
+	modifier_rune_invis = "Руна невидимости", modifier_rune_arcane = "Руна волшебства", modifier_rune_shield = "Руна щита",
 }
 
 local function steve() local s = MCBridge.steve return s and not s:IsNull() and s:IsAlive() and s or nil end
@@ -45,12 +49,26 @@ local function byName( part )
 	return out
 end
 
+-- the rune Steve looks at: in reach and within ~20 degrees of where he faces
+local function runeAimed()
+	local s = steve()
+	if not s then return nil end
+	local best, bd
+	for _, r in ipairs( Entities:FindAllByClassname( "dota_item_rune" ) ) do
+		local d = r:GetAbsOrigin() - s:GetAbsOrigin()
+		d.z = 0
+		local len = d:Length2D()
+		if len <= 260 and ( len < 60 or d:Normalized():Dot( s:GetForwardVector() ) > 0.94 ) and ( not bd or len < bd ) then best, bd = r, len end
+	end
+	return best
+end
+
 -- right click in Minecraft
 function MCWorld:Use()
 	local s = steve()
 	if not s or GameRules:GetGameTime() - ( self.usedAt or 0 ) < 0.3 then return end
 	self.usedAt = GameRules:GetGameTime()
-	local rune = inFront( Entities:FindAllByClassname( "dota_item_rune" ) )
+	local rune = runeAimed()
 	if rune then return self:Rune( s, rune ) end
 	local gate = inFront( byName( "twin_gate" ) )
 	if gate then return self:StartCapture( gate, "gate" ) end
@@ -70,15 +88,6 @@ function MCWorld:Rune( s, rune )
 		MC.allowOrder = false
 	end
 	if ok and kind == DOTA_RUNE_WATER then MCBridge:Send( "buff instant_health 1 1" ) end
-	-- the illusion rune's Kunkkas (nobody could lead them): gone, the rune does nothing (and says so)
-	s:SetContextThink( "mc_illusions", function()
-		local any = false
-		for _, u in ipairs( FindUnitsInRadius( s:GetTeamNumber(), s:GetAbsOrigin(), nil, 2000, DOTA_UNIT_TARGET_TEAM_FRIENDLY,
-			DOTA_UNIT_TARGET_HERO, DOTA_UNIT_TARGET_FLAG_NONE, FIND_ANY_ORDER, false ) ) do
-			if u:IsIllusion() and u:GetPlayerOwnerID() == s:GetPlayerOwnerID() then u:RemoveSelf() any = true end
-		end
-		if any then MCBridge:Send( "msg Странно, похоже эта руна никак не подействовала..." ) end
-	end, 0.2 )
 end
 
 -- lotuses: Kunkka picks them up standing in a pool (Dota's own); each one becomes a golden carrot
@@ -126,7 +135,7 @@ function MCWorld:Think()
 			end
 		end
 	end
-	if s then self:Lotuses( s ) self:RuneEffects( s ) end
+	if s then self:Lotuses( s ) self:RuneEffects( s ) self:NoIllusions( s ) end
 	self:TreesBack()
 	-- wards whose Dota unit died (an enemy killed it): their torch goes too
 	for key, w in pairs( MC.wards or {} ) do
@@ -217,9 +226,21 @@ end
 -- a swing at a rune in front breaks it: picked up, like a click
 function MCWorld:SwingRune()
 	local s = steve()
-	local rune = s and inFront( Entities:FindAllByClassname( "dota_item_rune" ) )
+	local rune = s and runeAimed()
 	if rune then self:Rune( s, rune ) return true end
 	return false
+end
+
+-- the illusion rune's Kunkkas (nobody could lead them): gone as soon as they appear; the rune does nothing, and says so
+function MCWorld:NoIllusions( s )
+	local any = false
+	for _, h in ipairs( HeroList:GetAllHeroes() ) do
+		if h:IsIllusion() and h:GetPlayerOwnerID() == s:GetPlayerOwnerID() then h:RemoveSelf() any = true end
+	end
+	if any and GameRules:GetGameTime() - ( self.illusionSaid or -10 ) > 3 then
+		self.illusionSaid = GameRules:GetGameTime()
+		MCBridge:Send( "msg Странно, похоже эта руна никак не подействовала..." )
+	end
 end
 
 -- runes' effects follow Dota's: a Minecraft effect while the Dota modifier lasts (and cleared when it ends early:
@@ -228,17 +249,18 @@ function MCWorld:RuneEffects( s )
 	self.buffs = self.buffs or {}
 	local now = {}
 	for _, m in ipairs( s:FindAllModifiers() ) do
-		local e = RUNE_EFFECTS[ m:GetName() ]
+		local e = RUNE_EFFECTS[ m:GetName() ] or ( RUNE_NAMES[ m:GetName() ] and {} )
 		if e then
 			now[ m:GetName() ] = true
 			if not self.buffs[ m:GetName() ] then
+				if RUNE_NAMES[ m:GetName() ] then MCBridge:Send( "msg " .. RUNE_NAMES[ m:GetName() ] ) end
 				local sec = math.max( 1, math.floor( m:GetRemainingTime() > 0 and m:GetRemainingTime() or 30 ) )
-				MCBridge:Send( string.format( "buff %s %d %d", e[1], sec, e[2] ) )
+				if e[1] then MCBridge:Send( string.format( "buff %s %d %d", e[1], sec, e[2] ) ) end
 			end
 		end
 	end
 	for name in pairs( self.buffs ) do
-		if not now[ name ] then MCBridge:Send( "unbuff " .. RUNE_EFFECTS[ name ][1] ) end
+		if not now[ name ] and RUNE_EFFECTS[ name ] then MCBridge:Send( "unbuff " .. RUNE_EFFECTS[ name ][1] ) end
 	end
 	self.buffs = now
 end
@@ -254,6 +276,7 @@ function MCWorld:Ward( bx, by, bz, kind )
 	local u = CreateUnitByName( kind == "sentry" and "npc_dota_sentry_wards" or "npc_dota_observer_wards", pos, false, s, s, s:GetTeamNumber() )
 	if not u then return end
 	u:AddNoDraw() -- the torch is what you see
+	u:AddNewModifier( u, nil, "modifier_invisible", {} ) -- (enemies need true sight, like for Dota's wards)
 	u:AddNewModifier( u, nil, "modifier_kill", { duration = kind == "sentry" and 420 or 360 } )
 	if kind == "sentry" then u:AddNewModifier( u, nil, "modifier_mc_truesight", {} ) end
 	-- on a tower of 4+ blocks it sees like a ward on a cliff

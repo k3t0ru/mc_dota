@@ -5,7 +5,7 @@
 import math, os
 
 MDL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "content", "models", "mc")
-R, HEIGHT, SIDES = 18, 192, 8  # trunk radius, 2 blocks of 96
+R, HEIGHT, SIDES = 18, 96, 8  # trunk radius, 1 block
 TILE = 96  # one crack texture per block of height and per 96 units around
 
 v, vt, f = [], [], []

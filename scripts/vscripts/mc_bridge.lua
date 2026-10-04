@@ -340,6 +340,12 @@ function MCBridge:HitUnit( hero, amount, direct, kind )
 	local ally = self.steve and hero:GetTeamNumber() == self.steve:GetTeamNumber()
 	local deniable = ally and direct and not hero:IsHero() and hero:GetHealthPercent() < ( hero:IsTower() and 10 or 50 )
 	if hero:IsInvulnerable() or ( ally and not deniable ) then return end
+	-- wards break in two hits, whatever the damage (like Dota's)
+	if hero:GetUnitName():find( "_wards" ) and not ally then
+		hero.mc_hits = ( hero.mc_hits or 0 ) + 1
+		if hero.mc_hits >= 2 then hero:Kill( nil, self.steve ) end
+		return
+	end
 	if ally and self.steve then
 		-- a deny must be an ATTACK, or Dota doesn't count it (no "!", the enemy keeps full XP); DamageFilter swaps in the hit
 		self.steve.mc_attack = amount * DMG_TO_DOTA
