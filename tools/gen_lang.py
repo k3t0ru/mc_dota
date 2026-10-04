@@ -6,6 +6,7 @@ R = os.path.join(os.path.dirname(__file__), "..", "resource")
 T = {  # token -> (en, ru)
     "addon_game_name": ("Minecraft Dungeons x Dota", "Minecraft Dungeons x Dota"),
     "npc_dota_hero_kunkka": ("Steve", "Стив"),
+    "npc_mc_steve": ("Steve", "Стив"),
     "mc_need_better_pickaxe": ("You need a better pickaxe for this block.", "Для этого блока нужна кирка получше."),
     "mc_too_far": ("Get closer to your crafting table.", "Подойди ближе к верстаку."),
     "mc_occupied": ("Something is already there.", "Тут уже что-то есть."),

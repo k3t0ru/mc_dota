@@ -5,6 +5,7 @@
 	{
 		"addon_game_name"	"Minecraft Dungeons x Dota"
 		"npc_dota_hero_kunkka"	"Steve"
+		"npc_mc_steve"	"Steve"
 		"mc_need_better_pickaxe"	"You need a better pickaxe for this block."
 		"mc_too_far"	"Get closer to your crafting table."
 		"mc_occupied"	"Something is already there."

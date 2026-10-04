@@ -6,3 +6,4 @@ LinkLuaModifier( "modifier_mc_highground", "modifier_mc_highground", LUA_MODIFIE
 LinkLuaModifier( "modifier_mc_potion", "modifier_mc_potion", LUA_MODIFIER_MOTION_NONE )
 LinkLuaModifier( "modifier_mc_nobar", "modifier_mc_nobar", LUA_MODIFIER_MOTION_NONE )
 LinkLuaModifier( "modifier_mc_truesight", "modifier_mc_truesight", LUA_MODIFIER_MOTION_NONE )
+LinkLuaModifier( "modifier_mc_puppet", "modifier_mc_puppet", LUA_MODIFIER_MOTION_NONE )

@@ -189,6 +189,16 @@ function MC:Init()
 		if pid then MC:AssignTeam( pid ) end
 	end, nil )
 	ListenToGameEvent( "npc_spawned", Dynamic_Wrap( MC, "OnSpawned" ), MC )
+	-- each player's copy of the game (tools/mcdota.py writes the commit): a different one than the host's is told
+	pcall( require, "mc_version" )
+	CustomGameEventManager:RegisterListener( "mc_version", function( _, e )
+		if MC_VERSION and e.v ~= MC_VERSION then
+			local who = PlayerResource:GetPlayerName( e.PlayerID ) or "?"
+			print( "[mc] version of " .. who .. ": " .. tostring( e.v ) .. ", host " .. MC_VERSION )
+			GameRules:SendCustomMessage( "<font color='#ff5050'>У игрока " .. who .. " другая версия игры (" .. tostring( e.v ) ..
+				", у хоста " .. MC_VERSION .. "): закройте Доту и запустите play_dota.bat заново</font>", 0, 0 )
+		end
+	end )
 	ListenToGameEvent( "entity_killed", Dynamic_Wrap( MC, "OnKilled" ), MC )
 	ListenToGameEvent( "game_rules_state_change", Dynamic_Wrap( MC, "OnState" ), MC )
 	ListenToGameEvent( "player_chat", Dynamic_Wrap( MC, "OnChat" ), MC )
@@ -328,7 +338,7 @@ function MC:SetupHero( hero )
 		end
 		MC.anchor = GetGroundPosition( Vector( math.floor( f.x / GRID + 0.5 ) * GRID, math.floor( f.y / GRID + 0.5 ) * GRID, 0 ), nil )
 		-- Dota's own camera controls would fight Minecraft's (launch args alone get overridden by the user's config)
-		SendToConsole( "dota_camera_edgemove 0; dota_camera_speed 0; dota_camera_lock 0; dota_camera_fov_min 90; dota_camera_fov_max 90; dota_hud_disable_damage_numbers 1; snd_mute_losefocus 0; snd_musicvolume 0" ) -- Dota's sound plays with Minecraft holding focus; music is Minecraft's
+		SendToConsole( "dota_disable_unit_ring 1; dota_hero_indicators_max_distance 0; dota_hero_indicators_max_radius 0; dota_camera_edgemove 0; dota_camera_speed 0; dota_camera_lock 0; dota_camera_fov_min 90; dota_camera_fov_max 90; dota_hud_disable_damage_numbers 1; snd_mute_losefocus 0; snd_musicvolume 0" ) -- Dota's sound plays with Minecraft holding focus; music is Minecraft's
 		MC:SendTerrain()
 		MCWorld:SendTrees()
 		MC:StructureWalls()
@@ -1014,6 +1024,9 @@ function MC:OrderFilter( f )
 		local u = EntIndexToHScript( idx )
 		if u and u.mc_player and not MC.allowOrder then return false end -- Steve moves and attacks from Minecraft only
 	end
+	-- an order on Steve's stand-in is an order on Steve (MCBridge:Puppet)
+	local tgt = f.entindex_target and f.entindex_target > 0 and EntIndexToHScript( f.entindex_target )
+	if tgt and tgt.mc_puppet and MCBridge.steve and not MCBridge.steve:IsNull() then f.entindex_target = MCBridge.steve:entindex() end
 	for _, idx in pairs( f.units ) do
 		EntIndexToHScript( idx ).mc_ordered = f.order_type == DOTA_UNIT_ORDER_ATTACK_TARGET and f.entindex_target or nil
 	end
@@ -1025,6 +1038,13 @@ function MC:DamageFilter( f )
 	local victim = EntIndexToHScript( f.entindex_victim_const )
 	if victim.mc_player then
 		MCBridge:OnSteveDamaged( victim, f.damage, f.entindex_attacker_const )
+		return false
+	end
+	-- Steve's stand-in: an attack on it hits Steve (spells' splash reaches Steve himself, so that is dropped)
+	if victim.mc_puppet then
+		if not f.entindex_inflictor_const and MCBridge.steve and not MCBridge.steve:IsNull() then
+			MCBridge:OnSteveDamaged( MCBridge.steve, f.damage, f.entindex_attacker_const )
+		end
 		return false
 	end
 	local attackerUnit = EntIndexToHScript( f.entindex_attacker_const )

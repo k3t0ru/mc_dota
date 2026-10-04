@@ -34,3 +34,5 @@ content/panorama/images/custom_game/steve_face.png
 __pycache__/
 content/models/mc/steve_ghost.vmdl
 content/materials/mc/ghost*
+scripts/vscripts/mc_version.lua
+content/panorama/scripts/custom_game/version.js

@@ -1,5 +1,26 @@
 "DOTAUnits"
 {
+	// Steve's stand-in for Dota's players (MCBridge:Puppet): invisible model with Steve's hitbox
+	"npc_mc_steve"
+	{
+		"BaseClass"	"npc_dota_creature"
+		"Model"	"models/mc/steve_ghost.vmdl"
+		"ModelScale"	"1"
+		"Level"	"1"
+		"StatusHealth"	"10000"
+		"StatusHealthRegen"	"0"
+		"AttackCapabilities"	"DOTA_UNIT_CAP_NO_ATTACK"
+		"MovementCapabilities"	"DOTA_UNIT_CAP_MOVE_NONE"
+		"BoundsHullName"	"DOTA_HULL_SIZE_HERO"
+		"RingRadius"	"40"
+		"VisionDaytimeRange"	"0"
+		"VisionNighttimeRange"	"0"
+		"BountyXP"	"0"
+		"BountyGoldMin"	"0"
+		"BountyGoldMax"	"0"
+		"HealthBarOffset"	"220"
+		"UnitRelationshipClass"	"DOTA_NPC_UNIT_RELATIONSHIP_TYPE_DEFAULT"
+	}
 	"npc_mc_block_log"
 	{
 		"BaseClass"	"npc_dota_creature"

@@ -5,6 +5,7 @@
 	{
 		"addon_game_name"	"Minecraft Dungeons x Dota"
 		"npc_dota_hero_kunkka"	"Стив"
+		"npc_mc_steve"	"Стив"
 		"mc_need_better_pickaxe"	"Для этого блока нужна кирка получше."
 		"mc_too_far"	"Подойди ближе к верстаку."
 		"mc_occupied"	"Тут уже что-то есть."

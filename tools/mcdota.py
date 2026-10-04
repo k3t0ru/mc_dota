@@ -167,7 +167,10 @@ def assets(dota):
         h.update(open(os.path.join(TOOLS, g), "rb").read())
     for d in ("particles", "panorama"):
         for f in sorted(glob.glob(os.path.join(ROOT, "content", d, "**", "*.*"), recursive=True)):
-            h.update(open(f, "rb").read())
+            if os.path.basename(f) != "version.js": h.update(open(f, "rb").read())
+    rc = os.path.join(dota, "game", "bin", "win64", "resourcecompiler.exe")
+    content = os.path.join(dota, "content", "dota_addons", ADDON)
+    version(rc, content)
     stamp = os.path.join(CACHE, "assets.stamp")
     if os.path.exists(stamp) and open(stamp).read() == h.hexdigest() and not missing_compiled():
         say("ресурсы готовы")
@@ -176,8 +179,6 @@ def assets(dota):
     for g in GENERATORS:
         say("готовлю " + g)
         subprocess.check_call([sys.executable, os.path.join(TOOLS, g)], cwd=ROOT, env=env, stdout=subprocess.DEVNULL)
-    rc = os.path.join(dota, "game", "bin", "win64", "resourcecompiler.exe")
-    content = os.path.join(dota, "content", "dota_addons", ADDON)
     say("компилирую ресурсы для Dota (первый раз ~15-20 минут)...")
     for pat in ("models\\mcb\\*.vmdl", "models\\*.vmdl", "particles\\*.vpcf", "panorama\\*.xml", "panorama\\*.js"):
         r = subprocess.run([rc, "-fshallow2", "-r", "-i", os.path.join(content, pat)], capture_output=True, text=True, errors="ignore")
@@ -187,6 +188,18 @@ def assets(dota):
     if gone: fail("Dota не скомпилировала: " + ", ".join(gone) + " (ошибки компиляции выше)")
     os.makedirs(CACHE, exist_ok=True)
     open(stamp, "w").write(h.hexdigest())
+
+
+def version(rc, content):
+    # this copy's commit, for the server (Lua) and for each player's screen (Panorama): a Dota player whose copy differs
+    # from the host's gets told in the chat (an old copy drew error models, Kunkka, sideways mobs)
+    v = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip() or "?"
+    open(os.path.join(ROOT, "scripts", "vscripts", "mc_version.lua"), "w").write(f'MC_VERSION = "{v}"\n')
+    js = os.path.join(ROOT, "content", "panorama", "scripts", "custom_game", "version.js")
+    text = f'"use strict";\n// written by tools/mcdota.py\nGameEvents.SendCustomGameEventToServer( "mc_version", {{ v: "{v}" }} );\n'
+    if not os.path.exists(js) or open(js).read() != text or not os.path.exists(os.path.join(ROOT, "panorama", "scripts", "custom_game", "version.vjs_c")):
+        open(js, "w").write(text)
+        subprocess.run([rc, "-i", os.path.join(content, "panorama", "scripts", "custom_game", "version.js")], capture_output=True)
 
 
 # what Dota draws from this addon, compiled: missing = error models, an invisible Steve, no HUD
@@ -279,7 +292,7 @@ def host(cfg, dota):
                       "+fps_max", cfg["host"]["dota_fps"], "+engine_no_focus_sleep", "0", "+fog_enable", "0",
                       "+dota_hud_disable_damage_numbers", "1", "+r_farz", "40000", "+r_texture_stream_mip_bias", "0",
                       "+dota_camera_zfar_zoomed_in", "40000", "+dota_camera_zfar_zoomed_out", "40000", "+snd_mute_losefocus", "0",
-                      "+snd_musicvolume", "0", "+sv_cheats", "1", "+dota_launch_custom_game", ADDON, cfg["host"]["map"]])
+                      "+snd_musicvolume", "0", "+sv_cheats", "1", "+dota_disable_unit_ring", "1", "+dota_hero_indicators_max_distance", "0", "+dota_launch_custom_game", ADDON, cfg["host"]["map"]])
     # Minecraft: a fresh world each game (Dota rebuilds it), its first run downloads Minecraft and Fabric
     run = os.path.join(ROOT, "mcmod", "run")
     os.makedirs(os.path.join(run, "saves", "mcdota"), exist_ok=True)
