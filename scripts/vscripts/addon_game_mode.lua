@@ -222,6 +222,7 @@ function MC:SetupHero( hero )
 		SendToConsole( "dota_camera_edgemove 0; dota_camera_speed 0; dota_camera_lock 0; dota_camera_fov_min 90; dota_camera_fov_max 90; snd_mute_losefocus 0; snd_musicvolume 0" ) -- Dota's sound plays with Minecraft holding focus; music is Minecraft's
 		MC:SendTerrain()
 		MCWorld:SendTrees()
+		MCWorld:WarmUpWards( hero:GetTeamNumber() )
 		MC:SpawnTraders()
 		MC:Sky()
 		-- Panorama's camera playback delay: Minecraft's overlay waits as long (see fpcam.js)

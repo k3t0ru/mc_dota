@@ -303,6 +303,21 @@ function MCWorld:Unward( bx, by, bz )
 	if not w.unit:IsNull() and w.unit:IsAlive() then w.unit:ForceKill( false ) end
 end
 
+-- the first ward froze Dota for ~0.2 s (its effects loading): one of each, invisible, at game start, gone a second later
+function MCWorld:WarmUpWards( team )
+	local spot = Vector( 0, 0, 0 )
+	for _, name in ipairs( { "npc_dota_observer_wards", "npc_dota_sentry_wards" } ) do
+		local u = CreateUnitByName( name, spot, false, nil, nil, team )
+		if u then
+			u:AddNoDraw()
+			u:AddNewModifier( u, nil, "modifier_invisible", {} )
+			u:AddNewModifier( u, nil, "modifier_mc_truesight", {} )
+			u:AddNewModifier( u, nil, "modifier_mc_highground", {} )
+			u:AddNewModifier( u, nil, "modifier_kill", { duration = 1 } )
+		end
+	end
+end
+
 WARD_KINDS = { torch = "observer", wall_torch = "observer", soul_torch = "sentry", soul_wall_torch = "sentry" }
 
 _G.MCWorld = MCWorld
