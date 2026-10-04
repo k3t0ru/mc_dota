@@ -16,7 +16,7 @@ DEFAULT_SETTINGS = """; Minecraft x Dota settings. "auto" = found by itself.
 ; Dota 2 folder (with game\\bin\\win64\\dota2.exe), e.g. D:\\SteamLibrary\\steamapps\\common\\dota 2 beta
 dota_dir = auto
 ; where to get updates from (a git address); empty = don't update
-repo_url =
+repo_url = https://github.com/k3t0ru/mc_dota.git
 
 [host]
 ; the Minecraft player's screen: Dota's window and Minecraft's picture have this size
@@ -73,7 +73,7 @@ def git_update(cfg):
     remotes = subprocess.run(["git", "remote"], cwd=ROOT, capture_output=True, text=True).stdout.split()
     if "origin" not in remotes: subprocess.run(["git", "remote", "add", "origin", url], cwd=ROOT)
     say("обновляюсь из " + url)
-    r = subprocess.run(["git", "pull", "--ff-only", "origin", "HEAD"], cwd=ROOT)
+    r = subprocess.run(["git", "pull", "--ff-only"], cwd=ROOT)
     if r.returncode: say("обновиться не вышло (локальные изменения?), играю с тем, что есть")
 
 
