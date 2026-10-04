@@ -1,6 +1,7 @@
 # One launcher for everything: checks and fetches what's needed, prepares the assets, starts the game.
 #   python tools/mcdota.py host     the Minecraft player (Steve, Radiant): Dota + the bridge + Minecraft
 #   python tools/mcdota.py player   a Dota player (Dire): Dota, joining the host
+#   python tools/mcdota.py prepare  a Dota player's part without the game: updates, checks, downloads, assets
 # (play_host.bat / play_dota.bat do the same by double click.) Settings: settings.ini next to this folder (made on the
 # first run, with comments). Windows only (Dota's tools are).
 import configparser, glob, hashlib, json, os, shutil, subprocess, sys, time, urllib.request, zipfile
@@ -181,7 +182,8 @@ def assets(dota):
 
 # what Dota draws from this addon, compiled: missing = error models, an invisible Steve, no HUD
 COMPILED = ["models/mc/mob_zombie.vmdl_c", "models/mc/steve.vmdl_c", "models/mc/sky.vmdl_c", "particles/mc/steve_model.vpcf_c",
-            "panorama/layout/custom_game/custom_ui_manifest.vxml_c", "panorama/scripts/custom_game/fpcam.vjs_c"]
+            "panorama/layout/custom_game/custom_ui_manifest.vxml_c", "panorama/scripts/custom_game/fpcam.vjs_c",
+            "panorama/layout/custom_game/hero_select.vxml_c", "panorama/images/custom_game/steve_face_png.vtex_c"]
 
 
 def missing_compiled():
@@ -226,9 +228,22 @@ def spawn(args, **kw):
     except OSError: return subprocess.Popen(args, creationflags=DETACHED, **kw) # (a job that forbids breaking away)
 
 
+def build_mc(java):
+    # the first build downloads Minecraft and Fabric (minutes); later ones take seconds
+    say("собираю мод Minecraft (первый раз долго: скачивается Minecraft и Fabric)")
+    r = subprocess.run(["cmd", "/c", os.path.join(ROOT, "mcmod", "gradlew.bat"), "--no-daemon", "-q", "build"],
+                       cwd=os.path.join(ROOT, "mcmod"), env=dict(os.environ, JAVA_HOME=java))
+    if r.returncode: fail("мод Minecraft не собрался (см. выше)")
+
+
+def prepare(cfg):
+    say("всё готово, теперь play_dota.bat")
+
+
 def host(cfg, dota):
     pip_needs([("PIL", "pillow"), ("lupa", "lupa")])
     java = find_java(cfg)
+    build_mc(java)
     res = cfg["host"]["resolution"].strip()
     w, h = res.lower().split("x")
     # Lua first: an error in it silently drops the whole game mode
@@ -248,7 +263,7 @@ def host(cfg, dota):
     try: os.remove(dlog)
     except OSError: pass
     dstart = os.path.getsize(dlog) if os.path.exists(dlog) else 0 # (a log still held open: read past its old end)
-    say("запускаю Dota: когда все подключатся, нажми в лобби кнопку старта")
+    say("запускаю Dota: когда все подключатся, нажми в лобби кнопку старта (Minecraft запустится после неё)")
     subprocess.Popen([os.path.join(dota, "game", "bin", "win64", "dota2.exe"), "-novid", "-console", "-condebug", "-windowed",
                       "-noborder", "-w", w, "-h", h, "+dota_camera_edgemove", "0", "+dota_camera_speed", "0", "+dota_camera_lock", "0",
                       "+dota_camera_fov_min", "90", "+dota_camera_fov_max", "90", "+dota_camera_z_interp_speed", "4",
@@ -263,13 +278,15 @@ def host(cfg, dota):
         if not os.path.exists(t): shutil.copy(os.path.join(TOOLS, "template", f), t)
     for d in ("region", "entities", "poi"):
         shutil.rmtree(os.path.join(run, "saves", "mcdota", d), ignore_errors=True)
-    say("запускаю Minecraft (первый раз долго: скачивается Minecraft и Fabric)")
+    r = wait_for(dlog, ["Script Runtime Error", "Error running script", "[mc] state "], 6 * 3600, dstart)
+    if r != "[mc] state ": fail("ошибка Lua в Dota: см. " + dlog if r else "игра так и не началась")
+    say("игра началась: запускаю Minecraft")
+    try: os.remove(os.path.join(run, "logs", "latest.log")) # (the last game's "joined" is in it)
+    except OSError: pass
     env = dict(os.environ, JAVA_HOME=java, DOTA_SIZE=res, MC_FPS=cfg["host"]["minecraft_fps"])
     mlog = open(os.path.join(run, "gradle_run.log"), "w")
     spawn(["cmd", "/c", os.path.join(ROOT, "mcmod", "gradlew.bat"), "--no-daemon", "runClient"], cwd=os.path.join(ROOT, "mcmod"), env=env,
           stdout=mlog, stderr=mlog)
-    r = wait_for(dlog, ["bridge online", "Script Runtime Error", "Error running script"], 900, dstart)
-    if r and r != "bridge online": say("!!! ошибка Lua в Dota: см. " + dlog)
     r = wait_for(os.path.join(run, "logs", "latest.log"), ["joined the game", "has crashed"], 1200)
     say("Minecraft: " + (r or "не дождался (см. mcmod/run/gradle_run.log)"))
     say("готово. Минкрафт и Дота работают; это окно можно закрыть")
@@ -294,7 +311,7 @@ def main():
     check_tools(dota)
     link_addon(dota)
     assets(dota)
-    host(cfg, dota) if role == "host" else player(cfg, dota)
+    {"host": host, "player": player}.get(role, lambda c, d: prepare(c))(cfg, dota)
 
 
 if __name__ == "__main__":

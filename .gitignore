@@ -30,3 +30,5 @@ content/materials/mc/steve*
 tools/.cache/
 settings.ini
 mcmod/run/gradle_run.log
+content/panorama/images/custom_game/steve_face.png
+__pycache__/

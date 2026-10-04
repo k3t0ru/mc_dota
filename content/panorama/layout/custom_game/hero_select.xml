@@ -1,0 +1,9 @@
+<root>
+	<scripts>
+		<include src="file://{resources}/scripts/custom_game/hero_select.js" />
+	</scripts>
+	<Panel hittest="false" style="width: 100%; height: 100%;">
+		<!-- (referenced here so the face gets compiled; the script puts it over Kunkka's portraits) -->
+		<Image id="SteveFace" src="file://{images}/custom_game/steve_face.png" style="visibility: collapse;" />
+	</Panel>
+</root>

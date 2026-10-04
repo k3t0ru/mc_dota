@@ -68,6 +68,12 @@ big = img.resize((TEX * UP, TEX * UP), Image.NEAREST)
 os.makedirs(MAT, exist_ok=True); os.makedirs(MDL, exist_ok=True)
 big.convert("RGB").save(os.path.join(MAT, "steve.png"))
 big.split()[3].save(os.path.join(MAT, "steve_alpha.png"))
+# his face for Dota's hero pick (Panorama, hero_select.js): the head's front with the hat layer over it
+face = img.crop((8, 8, 16, 16))
+face.alpha_composite(img.crop((40, 8, 48, 16)))
+PAN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "content", "panorama", "images", "custom_game")
+os.makedirs(PAN, exist_ok=True)
+face.resize((128, 128), Image.NEAREST).save(os.path.join(PAN, "steve_face.png"))
 with open(os.path.join(MAT, "steve.vmat"), "w") as f:
     f.write('Layer0\n{\n\tshader "global_lit_simple.vfx"\n\tF_SPECULAR 0\n\tF_ALPHA_TEST 1\n\tF_RENDER_BACKFACES 1\n'
             '\tg_flAlphaTestReference "0.500"\n\tTextureColor "materials/mc/steve.png"\n'

@@ -148,17 +148,20 @@ function MC:Init()
 	GameRules:SetCustomGameTeamMaxPlayers( DOTA_TEAM_GOODGUYS, 1 )
 	GameRules:SetCustomGameTeamMaxPlayers( DOTA_TEAM_BADGUYS, 5 )
 	GameRules:SetSameHeroSelectionEnabled( true )
-	GameRules:SetHeroSelectionTime( 30 )
-	GameRules:SetStrategyTime( 0 )
+	-- Dota's own phases: picks, a look at the teams, then time to buy and walk out before the creeps
+	GameRules:SetHeroSelectionTime( 60 )
+	GameRules:SetStrategyTime( 15 )
 	GameRules:SetShowcaseTime( 0 )
-	GameRules:SetPreGameTime( 5 )
+	GameRules:SetPreGameTime( 60 )
 
 	local mode = GameRules:GetGameModeEntity()
 	-- the host goes to Radiant (Steve), whoever joins to Dire. A real game waits in the lobby until the host starts it
-	-- (everyone has time to connect); dev runs (sv_cheats) start at once, with no pre-game wait
-	GameRules:SetCustomGameSetupAutoLaunchDelay( 0 )
-	if GameRules:IsCheatMode() or IsInToolsMode() then GameRules:SetPreGameTime( 0 )
-	else GameRules:SetCustomGameSetupTimeout( -1 ) end
+	-- (everyone has time to connect; Minecraft starts only then: its cursor lock left no way to press the button);
+	-- dev runs (sv_cheats) skip the lobby
+	if not ( GameRules:IsCheatMode() or IsInToolsMode() ) then
+		GameRules:SetCustomGameSetupTimeout( -1 )
+		GameRules:EnableCustomGameSetupAutoLaunch( false )
+	end
 	-- always noon, like Minecraft's side (time locked there too): Dota's night lighting turns the blocks blue
 	mode:SetDaynightCycleDisabled( true )
 	GameRules:SetTimeOfDay( 0.5 )
@@ -215,7 +218,12 @@ function MC:AssignTeam( pid )
 	PlayerResource:SetCustomTeamAssignment( pid, pid == 0 and DOTA_TEAM_GOODGUYS or DOTA_TEAM_BADGUYS )
 end
 
+-- the launcher (tools/mcdota.py) starts Minecraft at the first of these in console.log
+local STATE_NAMES = { [ DOTA_GAMERULES_STATE_HERO_SELECTION ] = "hero_selection", [ DOTA_GAMERULES_STATE_STRATEGY_TIME ] = "strategy",
+	[ DOTA_GAMERULES_STATE_PRE_GAME ] = "pre_game", [ DOTA_GAMERULES_STATE_GAME_IN_PROGRESS ] = "game" }
+
 function MC:OnState()
+	if STATE_NAMES[ GameRules:State_Get() ] then print( "[mc] state " .. STATE_NAMES[ GameRules:State_Get() ] ) end
 	if GameRules:State_Get() == DOTA_GAMERULES_STATE_CUSTOM_GAME_SETUP then
 		for pid = 0, DOTA_MAX_TEAM_PLAYERS - 1 do MC:AssignTeam( pid ) end
 		if GameRules:IsCheatMode() or IsInToolsMode() then GameRules:FinishCustomGameSetup() end -- (dev: no lobby)
