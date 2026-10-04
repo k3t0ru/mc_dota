@@ -171,6 +171,11 @@ function MC:Init()
 	end, MC )
 	mode:SetExecuteOrderFilter( Dynamic_Wrap( MC, "OrderFilter" ), MC )
 
+	-- the host (the Minecraft player, player 0) is Radiant's Steve; everyone joining plays Dire
+	ListenToGameEvent( "player_connect_full", function( e )
+		local pid = e.PlayerID or ( e.index and e.index - 1 )
+		if pid then MC:AssignTeam( pid ) end
+	end, nil )
 	ListenToGameEvent( "npc_spawned", Dynamic_Wrap( MC, "OnSpawned" ), MC )
 	ListenToGameEvent( "entity_killed", Dynamic_Wrap( MC, "OnKilled" ), MC )
 	ListenToGameEvent( "game_rules_state_change", Dynamic_Wrap( MC, "OnState" ), MC )
@@ -190,7 +195,15 @@ function MC:OnChat( e )
 end
 
 -- whoever didn't pick a hero in time plays Steve
+function MC:AssignTeam( pid )
+	if not PlayerResource:IsValidPlayerID( pid ) then return end
+	PlayerResource:SetCustomTeamAssignment( pid, pid == 0 and DOTA_TEAM_GOODGUYS or DOTA_TEAM_BADGUYS )
+end
+
 function MC:OnState()
+	if GameRules:State_Get() == DOTA_GAMERULES_STATE_CUSTOM_GAME_SETUP then
+		for pid = 0, DOTA_MAX_TEAM_PLAYERS - 1 do MC:AssignTeam( pid ) end
+	end
 	if GameRules:State_Get() >= DOTA_GAMERULES_STATE_PRE_GAME then GameRules:SetTimeOfDay( 0.5 ) end -- the clock starts at dawn
 	local st = GameRules:State_Get()
 	if st ~= DOTA_GAMERULES_STATE_HERO_SELECTION and st ~= DOTA_GAMERULES_STATE_STRATEGY_TIME and st ~= DOTA_GAMERULES_STATE_PRE_GAME then return end
