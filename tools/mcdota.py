@@ -178,12 +178,23 @@ def assets(dota):
         say("ресурсы готовы")
         return
     env = dict(os.environ, MC_JAR=jar)
+    # (a generator writing a file again with the same content: its old time back, so Dota's compiler skips it; an update
+    # recompiled every model, ~15 minutes)
+    before = {}
+    for f in glob.glob(os.path.join(ROOT, "content", "**", "*.*"), recursive=True):
+        st = os.stat(f)
+        before[f] = (st.st_size, st.st_mtime, hashlib.md5(open(f, "rb").read()).hexdigest())
     for g in GENERATORS:
         say("готовлю " + g)
         subprocess.check_call([sys.executable, os.path.join(TOOLS, g)], cwd=ROOT, env=env, stdout=subprocess.DEVNULL)
+    for f, (size, mtime, md5) in before.items():
+        try:
+            if os.path.getsize(f) == size and hashlib.md5(open(f, "rb").read()).hexdigest() == md5: os.utime(f, (mtime, mtime))
+        except OSError:
+            pass
     say("компилирую ресурсы для Dota (первый раз ~15-20 минут)...")
     for pat in ("models\\mcb\\*.vmdl", "models\\*.vmdl", "particles\\*.vpcf", "panorama\\*.xml", "panorama\\*.js"):
-        r = subprocess.run([rc, "-fshallow2", "-r", "-i", os.path.join(content, pat)], capture_output=True, text=True, errors="ignore")
+        r = subprocess.run([rc, "-r", "-i", os.path.join(content, pat)], capture_output=True, text=True, errors="ignore")
         bad = [l for l in r.stdout.splitlines() if "failed" in l or "rror" in l]
         if bad: say("  " + pat + ": " + " | ".join(l.strip() for l in bad[-3:]))
     gone = missing_compiled()
@@ -205,7 +216,7 @@ def version(rc, content):
 
 
 # what Dota draws from this addon, compiled: missing = error models, an invisible Steve, no HUD
-COMPILED = ["models/mc/mob_zombie.vmdl_c", "models/mc/steve.vmdl_c", "models/mc/sky.vmdl_c", "particles/mc/steve/steve_idle.vpcf_c", "models/mc/steve_ghost.vmdl_c",
+COMPILED = ["models/mc/mob_zombie.vmdl_c", "models/mc/steve.vmdl_c", "models/mc/sky.vmdl_c", "particles/mc/steve/steve_idle.vpcf_c", "models/mc/steve_ghost.vmdl_c", "models/mc/block_ghost.vmdl_c",
             "panorama/layout/custom_game/custom_ui_manifest.vxml_c", "panorama/scripts/custom_game/fpcam.vjs_c",
             "panorama/layout/custom_game/hero_select.vxml_c", "panorama/images/custom_game/steve_face_png.vtex_c"]
 
@@ -229,8 +240,9 @@ def mc_pids(): return ps("Get-CimInstance Win32_Process -Filter \"name='java.exe
 def bridge_pids(): return ps("Get-CimInstance Win32_Process -Filter \"name like 'python%.exe'\" | Where-Object { $_.CommandLine -like '*bridge.py*' } | ForEach-Object { $_.ProcessId }")
 
 
-def wait_for(path, words, seconds, start=0):
+def wait_for(path, words, seconds, start=0, proc=None):
     for _ in range(seconds):
+        if proc is not None and proc.poll() is not None: return None  # (the process it waits on has ended)
         try:
             with open(path, encoding="utf-8", errors="ignore") as f:
                 f.seek(start)
@@ -312,10 +324,12 @@ def host(cfg, dota):
     mlog = open(os.path.join(run, "gradle_run.log"), "w")
     mc = spawn(["cmd", "/c", os.path.join(ROOT, "mcmod", "gradlew.bat"), "--no-daemon", "runClient"], cwd=os.path.join(ROOT, "mcmod"), env=env,
           stdout=mlog, stderr=mlog)
-    r = wait_for(os.path.join(run, "logs", "latest.log"), ["joined the game", "has crashed"], 1200)
+    r = wait_for(os.path.join(run, "logs", "latest.log"), ["joined the game", "has crashed"], 1200, proc=mc)
     say("Minecraft: " + (r or "не дождался (см. mcmod/run/gradle_run.log)"))
     say("готово: играем. Это окно закроется само, когда закроется Minecraft")
     mc.wait()
+    # Minecraft closed: the game is over for the host (Steve): Dota and the bridge go too
+    kill(dota_pids() + bridge_pids() + mc_pids())
 
 
 def player(cfg, dota):

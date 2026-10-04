@@ -167,10 +167,35 @@ def build(name, frame=0):
         f.write("\n".join(obj) + "\n")
     remaps = "".join(f'\t\t\t\t\t\t\t{{ from = "{mat}.vmat" to = "materials/mcb/{mat}.vmat" }},\n' for mat in faces)
     with open(os.path.join(MDL, fname + ".vmdl"), "w") as f:
-        f.write(VMDL.replace("@REMAPS@", remaps).replace("@OBJ@", f"models/mcb/{fname}.obj"))
+        f.write(VMDL.replace("@REMAPS@", remaps).replace("@OBJ@", f"models/mcb/{fname}.obj").replace("@HITBOX@", HITBOX if "torch" in fname else ""))
     return fname
 
 
+# a torch is a ward unit's model (MC:ShowBlock): clickable (128 units a block, centred on the block)
+HITBOX = """
+			{
+				_class = "HitboxSetList"
+				children =
+				[
+					{
+						_class = "HitboxSet"
+						name = "default"
+						children =
+						[
+							{
+								_class = "Hitbox"
+								name = "body"
+								parent_bone = ""
+								surface_property = ""
+								translation_only = false
+								group_id = 0
+								hitbox_mins = [ -48.0, -48.0, -64.0 ]
+								hitbox_maxs = [ 48.0, 48.0, 48.0 ]
+							},
+						]
+					},
+				]
+			},"""
 VMDL = """<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:modeldoc32:version{c5dcef98-b629-46ab-88e3-a17c005c935e} -->
 {
 	rootNode =
@@ -195,7 +220,7 @@ VMDL = """<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} f
 			{
 				_class = "RenderMeshList"
 				children = [ { _class = "RenderMeshFile" filename = "@OBJ@" import_scale = 1.0 } ]
-			},
+			},@HITBOX@
 		]
 		model_archetype = ""
 		primary_associated_entity = ""

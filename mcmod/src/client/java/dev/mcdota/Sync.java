@@ -49,6 +49,10 @@ public final class Sync {
 		int surface = Hybrid.surfaceAt(p.getX(), p.getZ());
 		if (p.getY() < surface) return;
 		if (Hybrid.slabAt(p.getX(), p.getZ()) && halfStep(p, s, surface)) return;
+		if (s.isAir() && !collapsing) {
+			var server = Minecraft.getInstance().getSingleplayerServer();
+			if (server != null) server.execute(() -> collapse(server, p));
+		}
 		if (s.isAir() || !Hybrid.drawnByDota(s, p)) out.add(String.format("break %d %d %d", p.getX(), p.getY(), p.getZ()));
 		else {
 			// its state too ("axis=x,facing=north,..."): Dota picks the blockstate variant (MC:Variant) to turn its model
@@ -58,6 +62,59 @@ public final class Sync {
 			out.add(String.format("set %d %d %d %s %d %s", p.getX(), p.getY(), p.getZ(), BuiltInRegistries.BLOCK.getKey(s.getBlock()).getPath(),
 				s.blocksMotion() ? 1 : 0, state.length() > 0 ? state : "-")); // 0: fire, torches, flowers: drawn, units don't bump into them
 		}
+	}
+
+	// A block is gone: whatever was held up only through it (no chain of blocks down to the ground) comes down, every
+	// block of it broken with Minecraft's look and sound, nothing dropped. (Dota's heroes can't reach up to break a
+	// tower or a bridge: they break its foot.) Each neighbour's connected blocks, searched up to MAX_HANGING of them.
+	private static boolean collapsing;
+	private static final int MAX_HANGING = 2048;
+	private static void collapse(net.minecraft.server.MinecraftServer server, BlockPos gone) {
+		var level = server.overworld();
+		Set<BlockPos> done = new HashSet<>();
+		for (var d : net.minecraft.core.Direction.values()) {
+			BlockPos start = gone.relative(d);
+			if (done.contains(start) || !hangs(level, start)) continue;
+			Set<BlockPos> part = new HashSet<>();
+			java.util.ArrayDeque<BlockPos> todo = new java.util.ArrayDeque<>();
+			todo.add(start);
+			part.add(start);
+			boolean grounded = false;
+			while (!todo.isEmpty() && !grounded) {
+				BlockPos q = todo.poll();
+				for (var e : net.minecraft.core.Direction.values()) {
+					BlockPos n = q.relative(e);
+					if (part.contains(n)) continue;
+					if (n.getY() <= Hybrid.surfaceAt(n.getX(), n.getZ()) || protectedBlocks.contains(n)) {
+						if (!level.getBlockState(n).isAir()) { grounded = true; break; }
+						continue;
+					}
+					if (!hangs(level, n)) continue;
+					part.add(n);
+					todo.add(n);
+					if (part.size() > MAX_HANGING) { grounded = true; break; } // (too big to be a loose part)
+				}
+			}
+			if (start.getY() <= Hybrid.surfaceAt(start.getX(), start.getZ())) grounded = true;
+			done.addAll(part);
+			if (grounded) continue;
+			collapsing = true;
+			try {
+				for (BlockPos q : part) {
+					var st = level.getBlockState(q);
+					level.levelEvent(2001, q, net.minecraft.world.level.block.Block.getId(st));
+					level.setBlock(q, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 2 | 16);
+				}
+			} finally {
+				collapsing = false;
+			}
+		}
+	}
+
+	// a block that falls with what holds it: built or placed things (not air, not water, not Dota's trees)
+	private static boolean hangs(net.minecraft.server.level.ServerLevel level, BlockPos p) {
+		var st = level.getBlockState(p);
+		return !st.isAir() && st.getFluidState().isEmpty() && !Hybrid.tree(st) && !protectedBlocks.contains(p) && p.getY() > -60 && p.getY() < 60;
 	}
 
 	// On a half step (the terrain's top is a slab) a block placed on it stood half a block above Dota's ground, a gap
@@ -350,10 +407,7 @@ public final class Sync {
 					case "follow" -> Progress.follow(server, Double.parseDouble(p[1]), Double.parseDouble(p[2]));
 					case "dmgnum" -> Progress.damageNumber(server, p[1], Integer.parseInt(p[2]), p.length > 3 ? p[3] : "hit");
 					case "msg" -> Progress.say(server, line.substring(4), "yellow"); // Dota's word for the player (captures...)
-					case "tp" -> { // twin gates
-						run(server, String.format(Locale.ROOT, "tp @p %s.5 %s %s.5", p[1], p[2], p[3]));
-						server.execute(() -> Progress.unstuck(server)); // (after the tp has landed)
-					}
+					case "tp" -> Progress.teleport(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3])); // twin gates
 					case "buff" -> run(server, String.format("effect give @p %s %s %s", p[1].contains(":") ? p[1] : "minecraft:" + p[1], p[2], p[3])); // runes
 					case "shard" -> Progress.shard(server); // Tormentor
 					case "unbuff" -> run(server, "effect clear @p " + (p[1].contains(":") ? p[1] : "minecraft:" + p[1]), false); // a rune ended early in Dota

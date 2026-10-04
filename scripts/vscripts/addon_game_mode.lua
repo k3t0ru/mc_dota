@@ -52,6 +52,7 @@ function Precache( context )
 	end
 	PrecacheResource( "model", "models/mc/mob_steve.vmdl", context )
 	PrecacheResource( "model", "models/mc/steve_ghost.vmdl", context )
+	PrecacheResource( "model", "models/mc/block_ghost.vmdl", context )
 	PrecacheResource( "particle", "particles/units/heroes/hero_techies/techies_land_mine_explode.vpcf", context )
 	PrecacheResource( "soundfile", "soundevents/game_sounds_heroes/game_sounds_techies.vsndevts", context )
 	-- wards (torches): loading them at the first torch froze Dota for ~0.2 s (the camera jerked)
@@ -559,7 +560,11 @@ function MC:SpawnBlock( name, pos, fromMC )
 	MC.cells[ key ] = b
 	b:AddNewModifier( b, nil, "modifier_mc_block", {} )
 	b:SetHullRadius( GRID * 0.375 ) -- neighbours' hulls overlap: Dota heroes can't squeeze between blocks
-	if not CALIBRATE then b:AddNoDraw() end -- ponytail: Minecraft draws the block; Dota keeps only the collision (Dota-only players would see nothing)
+	if not CALIBRATE then -- Dota draws the blocks as props: this unit is invisible, but clickable (Dota's players attack it)
+		b:SetOriginalModel( "models/mc/block_ghost.vmdl" )
+		b:SetModel( "models/mc/block_ghost.vmdl" )
+		b:SetModelScale( 1 )
+	end
 	if not fromMC then MCBridge:Send( string.format( "block %d %d %d %s", bx, MC.heights[ key ] or MC_FLOOR, bz, def.mc ) ) end
 	return b
 end
@@ -665,6 +670,7 @@ end
 -- a Minecraft block appeared/vanished in this column: keep its Dota block unit (mining target, and a wall when 2 high)
 function MC:ColumnChanged( bx, bz )
 	local low, high, g = MC:Column( bx, bz )
+	MC:Obstruct( bx, bz, high ~= nil )
 	if not low and not high then MC:RemoveBlock( bx, bz ) return end
 	local b = MC.cells[ bx .. "," .. bz ]
 	if not b or b:IsNull() or not b:IsAlive() then
@@ -675,6 +681,47 @@ function MC:ColumnChanged( bx, bz )
 	b.mc_protected = MC.protected[ bx .. "," .. bz ] or MC:NearFountain( b:GetAbsOrigin() )
 	local m = b:FindModifierByName( "modifier_mc_block" )
 	if m then m:SetStackCount( ( low and not high ) and 1 or 0 ) end -- 1 = walkable: no collision
+end
+
+-- A wall (a block at head height) is an obstacle in Dota's grid like a tree: point_simple_obstruction in each of Dota's
+-- 64-unit nav squares the turned Minecraft cell covers (shared squares counted). Units only bumped into the block units
+-- before, and walked through walls 2-3 blocks high.
+MC.navRef, MC.walls = {}, {}
+function MC:Obstruct( bx, bz, on )
+	local key = bx .. "," .. bz
+	if ( MC.walls[ key ] ~= nil ) == on or not MC.anchor then return end
+	if on then
+		local squares = {}
+		for _, o in ipairs( { { 0.5, 0.5 }, { 0.15, 0.15 }, { 0.85, 0.15 }, { 0.15, 0.85 }, { 0.85, 0.85 } } ) do
+			local p = MC.anchor + MC:Offset( bx + o[1], bz + o[2] )
+			local gx, gy = GridNav:WorldToGridPosX( p.x ), GridNav:WorldToGridPosY( p.y )
+			local nk = gx .. "," .. gy
+			if not squares[ nk ] then
+				squares[ nk ] = true
+				local r = MC.navRef[ nk ]
+				if not r then
+					local c = Vector( GridNav:GridPosToWorldCenterX( gx ), GridNav:GridPosToWorldCenterY( gy ), p.z )
+					r = { n = 0, e = SpawnEntityFromTableSynchronous( "point_simple_obstruction",
+						{ origin = string.format( "%f %f %f", c.x, c.y, c.z ), block_fow = false } ) }
+					MC.navRef[ nk ] = r
+				end
+				r.n = r.n + 1
+			end
+		end
+		MC.walls[ key ] = squares
+	else
+		for nk in pairs( MC.walls[ key ] ) do
+			local r = MC.navRef[ nk ]
+			if r then
+				r.n = r.n - 1
+				if r.n <= 0 then
+					if r.e and not r.e:IsNull() then r.e:RemoveSelf() end
+					MC.navRef[ nk ] = nil
+				end
+			end
+		end
+		MC.walls[ key ] = nil
+	end
 end
 
 -- a unit standing in a walkable column is drawn one block up (Dota keeps it on its ground; this is only visual)
@@ -1137,18 +1184,12 @@ function MC:OnKilled( e )
 	MC.cells[ dead.mc_cell ] = nil
 	dead:AddNoDraw()
 	if dead.mc_silent then return end
-	local bx, bz = MC:CellOf( dead:GetAbsOrigin() )
+	local bx, bz = dead.mc_cell:match( "^(%-?%d+),(%-?%d+)$" )
+	bx, bz = tonumber( bx ), tonumber( bz )
 	local by = dead.mc_y or MC.heights[ dead.mc_cell ] or MC_FLOOR
 	MC:HideBlock( bx, by, bz )
 	MCBridge:Send( string.format( "unblock %d %d %d", bx, by, bz ) )
-	-- (Dota's heroes can't reach up to break blocks: whatever stood on this one comes down with it)
-	for y = by + 1, by + 64 do
-		local k = bx .. "," .. y .. "," .. bz
-		if not MC.props[ k ] or MC.protected[ k ] then break end
-		MC:HideBlock( bx, y, bz )
-		MCBridge:Send( string.format( "unblock %d %d %d", bx, y, bz ) )
-	end
-	MC:ColumnChanged( bx, bz )
+	MC:ColumnChanged( bx, bz ) -- (what stood on it comes down in Minecraft, Sync.collapse, and Dota hears of each)
 	if killer and killer.IsRealHero and killer:IsRealHero() then
 		killer:AddExperience( def.xp, DOTA_ModifyXP_Unspecified, false, true )
 	end

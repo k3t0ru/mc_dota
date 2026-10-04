@@ -32,7 +32,7 @@ public final class Progress {
 	private static final int TEST_EMERALDS = 192; // testing: 3 stacks at the start of every match (0 for real games)
 	private static final int HP_PER_LEVEL = 1; // half a heart per Dota level: level 30 = 49 hp (Dota's DOTA_TO_MC: 1 hp = 50 Dota damage)
 	private static final double SWEEP = 0.8; // sweep hits deal this share of the main hit (vanilla: 1 damage flat)
-	private static final int ARROW_TICKS = 80; // Steve's arrows fly straight (Dota's camera can't look up to lob them) for 4 s
+	private static final int ARROW_TICKS = 300; // Steve's arrows: gone after 15 s
 	private static int level = 1;
 	private static boolean dead;
 
@@ -220,17 +220,18 @@ public final class Progress {
 		pl.teleportTo(x, y, z);
 	}
 
-	// after a teleport (a twin gate): up out of any block he landed in
-	public static void unstuck(MinecraftServer server) {
+	// a teleport (a twin gate) to block x, y, z: on the first height there with room for him (blocks built there)
+	public static void teleport(MinecraftServer server, int x, int y, int z) {
 		if (server.getPlayerList().getPlayers().isEmpty()) return;
 		ServerPlayer pl = server.getPlayerList().getPlayers().get(0);
-		double y = pl.getY();
-		net.minecraft.world.phys.AABB box = pl.getBoundingBox();
-		for (int i = 0; i < 16 && !pl.level().noCollision(pl, box); i++) {
+		double tx = x + 0.5, tz = z + 0.5, ty = y;
+		net.minecraft.world.phys.AABB box = pl.getBoundingBox().move(tx - pl.getX(), ty - pl.getY(), tz - pl.getZ());
+		for (int i = 0; i < 40 && !pl.level().noCollision(pl, box); i++) {
 			box = box.move(0, 0.5, 0);
-			y += 0.5;
+			ty += 0.5;
 		}
-		if (y != pl.getY()) pl.teleportTo(pl.getX(), y, pl.getZ());
+		pl.teleportTo(tx, ty, tz);
+		pl.fallDistance = 0;
 	}
 
 	// a block Dota took away (a Dota hero broke it, or what stood on it): Minecraft's breaking look and sound, no drop
@@ -385,7 +386,6 @@ public final class Progress {
 	// server thread: an entity joined the world
 	public static void entityLoaded(Entity e) {
 		if (e instanceof AbstractArrow a && a.getOwner() instanceof Player) {
-			a.setNoGravity(true);
 			arrows.add(a);
 		}
 	}
@@ -578,6 +578,14 @@ public final class Progress {
 			return true;
 		});
 		numbersTick(server);
+		if (!server.getPlayerList().getPlayers().isEmpty()) {
+			ServerPlayer pl = server.getPlayerList().getPlayers().get(0);
+			if (pl.getY() < -62 && pl.isAlive()) {
+				int sx = (int) Math.floor(pl.getX()), sz = (int) Math.floor(pl.getZ());
+				pl.teleportTo(pl.getX(), Math.max(Hybrid.surfaceAt(sx, sz) + 1, server.overworld().getHeight(Heightmap.Types.MOTION_BLOCKING, sx, sz)), pl.getZ());
+				pl.fallDistance = 0;
+			}
+		}
 		if (++ticks % 20 == 0) deadTitle(server);
 		if (ticks % 40 != 0 || server.getPlayerList().getPlayers().isEmpty()) return;
 		ServerPlayer me = server.getPlayerList().getPlayers().get(0);

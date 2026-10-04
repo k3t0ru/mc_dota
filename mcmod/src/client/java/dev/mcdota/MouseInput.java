@@ -23,7 +23,9 @@ public final class MouseInput {
 		for (int b = 0; b < 3; b++) {
 			boolean now = (u.GetAsyncKeyState(VK[b]) & 0x8000) != 0;
 			if (now != menuDown[b]) {
-				m.mcdota$button(win, new net.minecraft.client.input.MouseButtonInfo(b, 0), now ? 1 : 0);
+				int mods = ((u.GetAsyncKeyState(0x10) & 0x8000) != 0 ? 1 : 0) | ((u.GetAsyncKeyState(0x11) & 0x8000) != 0 ? 2 : 0)
+					| ((u.GetAsyncKeyState(0x12) & 0x8000) != 0 ? 4 : 0); // (GLFW_MOD_SHIFT, _CONTROL, _ALT)
+				m.mcdota$button(win, new net.minecraft.client.input.MouseButtonInfo(b, mods), now ? 1 : 0);
 			}
 			menuDown[b] = now;
 		}

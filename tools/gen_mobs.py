@@ -122,23 +122,33 @@ def steve(leg, arm, mode="stand", elytra=False, item=None):
     t = "steve"
     hy, by, ay, ly, lz, bend, lift = 0, 0, 2, 12, 0, 0, 0
     if mode == "sneak": hy, by, ay, ly, lz, bend, lift = 4.2, 3.2, 5.2, 12.2, 4, 0.5, 0.4
-    rarm, larm = -0.8 * leg - 1.8 * arm + lift, 0.8 * leg + lift
+    rarm, larm = -0.8 * leg + lift, 0.8 * leg + lift
+    body_rot = bend
+    rx = lx = 0
+    if mode == "swing":
+        tt = arm
+        by_ = math.sin(math.sqrt(tt) * 2 * math.pi) * 0.2
+        f = 1 - (1 - tt) ** 4
+        rarm = (-(math.sin(f * math.pi) * 1.2 + math.sin(tt * math.pi) * 0.525), 3 * by_, -0.4 * math.sin(tt * math.pi))
+        larm = (by_, by_, 0)
+        body_rot = (0, by_, 0)
+        rx, lx = math.sin(by_) * 5, -math.sin(by_) * 5  # (the shoulders turn with the body: their z)
     if mode == "bow": rarm, larm = (FWD, -0.1, 0), (FWD, 0.5, 0)
     if mode == "fly": rarm, larm = 0.0, 0.0
     b = [(t, (0, 0), (-4, -8, -4), (8, 8, 8), 0, (0, hy, 0), 0, "head"),
          (t, (32, 0), (-4, -8, -4), (8, 8, 8), 0.5, (0, hy, 0), 0, "head"),
-         (t, (16, 16), (-4, 0, -2), (8, 12, 4), 0, (0, by, 0), bend, "body"),
-         (t, (16, 32), (-4, 0, -2), (8, 12, 4), 0.25, (0, by, 0), bend, "body"),
-         (t, (40, 16), (-3, -2, -2), (4, 12, 4), 0, (-5, ay, 0), rarm, "arm_r"),
-         (t, (40, 32), (-3, -2, -2), (4, 12, 4), 0.25, (-5, ay, 0), rarm, "arm_r"),
-         (t, (32, 48), (-1, -2, -2), (4, 12, 4), 0, (5, ay, 0), larm, "arm_l"),
-         (t, (48, 48), (-1, -2, -2), (4, 12, 4), 0.25, (5, ay, 0), larm, "arm_l"),
+         (t, (16, 16), (-4, 0, -2), (8, 12, 4), 0, (0, by, 0), body_rot, "body"),
+         (t, (16, 32), (-4, 0, -2), (8, 12, 4), 0.25, (0, by, 0), body_rot, "body"),
+         (t, (40, 16), (-3, -2, -2), (4, 12, 4), 0, (-5, ay, rx), rarm, "arm_r"),
+         (t, (40, 32), (-3, -2, -2), (4, 12, 4), 0.25, (-5, ay, rx), rarm, "arm_r"),
+         (t, (32, 48), (-1, -2, -2), (4, 12, 4), 0, (5, ay, lx), larm, "arm_l"),
+         (t, (48, 48), (-1, -2, -2), (4, 12, 4), 0.25, (5, ay, lx), larm, "arm_l"),
          (t, (0, 16), (-2, 0, -2), (4, 12, 4), 0, (-1.9, ly, lz), leg, "leg_r"),
          (t, (0, 32), (-2, 0, -2), (4, 12, 4), 0.25, (-1.9, ly, lz), leg, "leg_r"),
          (t, (16, 48), (-2, 0, -2), (4, 12, 4), 0, (1.9, ly, lz), -leg, "leg_l"),
          (t, (0, 48), (-2, 0, -2), (4, 12, 4), 0.25, (1.9, ly, lz), -leg, "leg_l")]
     if item:  # the item in his right hand: its picture upright along the arm's side, the handle in the hand, pointing forward
-        b.append(("item:" + item, None, (0, -13.6, -2.4), (0, 16, 16), 0, (-6, ay + 10, -1), 3 * math.pi / 4, "arm_r"))
+        b.append(("item:" + item, None, (0, -8.5, -1.5), (0, 10, 10), 0, (-6, ay + 9.5, -1 + rx), 3 * math.pi / 4, "arm_r"))
     if elytra:  # Minecraft's ElytraModel, on the back (2 px behind the body)
         x, z = (0.349, -math.pi / 2) if mode == "fly" else (0.2618 + bend, -0.2618)
         b += [("elytra", (22, 0), (-10, 0, 0), (10, 20, 2), 1.0, (5, by, 2), (x, 0, z), "wing_l"),
@@ -166,7 +176,7 @@ HELD = {}
 for tier in ("wooden", "stone", "iron", "golden", "diamond", "netherite"):
     for tool in ("sword", "pickaxe", "axe", "shovel", "hoe"):
         HELD[f"{tier}_{tool}"] = f"{tier}_{tool}"
-for i in ("bow", "bow_pulling_2", "flint_and_steel", "ender_pearl", "firework_rocket", "potion", "splash_potion", "golden_apple",
+for i in ("bow", "bow_pulling_0", "bow_pulling_1", "bow_pulling_2", "flint_and_steel", "ender_pearl", "firework_rocket", "potion", "splash_potion", "golden_apple",
           "bread", "cooked_beef", "golden_carrot", "emerald", "arrow", "elytra", "stick", "diamond", "iron_ingot", "flint",
           "book", "enchanted_book", "feather", "string", "paper", "leather", "gunpowder", "lapis_lazuli", "netherite_ingot"):
     HELD[i] = i
@@ -194,8 +204,11 @@ STEVE_ANIMS = [
     ("sneak_run", "", 1.2, True, lambda k: (0.5 * math.sin(2 * math.pi * k), 0, "sneak")),
     ("fly", "", 1.0, True, lambda k: (0.08 * math.sin(2 * math.pi * k), 0, "fly")),
     ("bow", "", 1.0, True, lambda k: (0, 0, "bow")),
+    ("attack", "ACT_DOTA_ATTACK", 0.3, False, lambda k: (0, k, "swing")),
 ]
-def anims_for(name): return ANIMS + (STEVE_ANIMS if name.startswith("steve") else [])
+def anims_for(name):
+    if not name.startswith("steve"): return ANIMS
+    return [a for a in ANIMS if a[0] != "attack"] + STEVE_ANIMS
 
 
 # --- space: Minecraft model pixels (y down, face -z) -> Dota units (z up, face +X) ---
@@ -264,10 +277,31 @@ def mesh_smd(boxes, sizes, order):
         quads = []
         centre = dota_point((x0 + w / 2, y0 + h / 2, z0 + d / 2), off, rot)
         if uv0 is None:  # a sprite: the whole picture on a flat quad (both sides drawn: the material renders backfaces)
-            if w == 0: c = [(x0, y0, z0), (x0, y0, z0 + d), (x0, y0 + h, z0 + d), (x0, y0 + h, z0)]
-            elif d == 0: c = [(x0, y0, z0), (x0 + w, y0, z0), (x0 + w, y0 + h, z0), (x0, y0 + h, z0)]
-            else: c = [(x0, y0, z0), (x0 + w, y0, z0), (x0 + w, y0, z0 + d), (x0, y0, z0 + d)]
-            quads.append(([dota_point(p, off, rot) for p in c], [(0, 1), (1, 1), (1, 0), (0, 0)]))
+            if w == 0:  # (all the items are pictures across x: extruded along x)
+                t = d / 16 / 2
+                for xs in (x0 - t, x0 + t):
+                    c = [(xs, y0, z0), (xs, y0, z0 + d), (xs, y0 + h, z0 + d), (xs, y0 + h, z0)]
+                    quads.append(([dota_point(q, off, rot) for q in c], [(0, 1), (1, 1), (1, 0), (0, 0)]))
+                img = IMAGES[tex]
+                W, Hh = img.size
+                a = img.split()[3].load()
+                solid = lambda i, j: 0 <= i < W and 0 <= j < Hh and a[i, j] > 127
+                for j in range(Hh):
+                    for i in range(W):
+                        if not solid(i, j): continue
+                        za, zb = z0 + i * d / W, z0 + (i + 1) * d / W
+                        ya, yb = y0 + j * h / Hh, y0 + (j + 1) * h / Hh
+                        uv = ((i + 0.5) / W, 1 - (j + 0.5) / Hh)
+                        for di, dj, c in ((-1, 0, [(x0 - t, ya, za), (x0 + t, ya, za), (x0 + t, yb, za), (x0 - t, yb, za)]),
+                                          (1, 0, [(x0 - t, ya, zb), (x0 - t, yb, zb), (x0 + t, yb, zb), (x0 + t, ya, zb)]),
+                                          (0, -1, [(x0 - t, ya, za), (x0 - t, ya, zb), (x0 + t, ya, zb), (x0 + t, ya, za)]),
+                                          (0, 1, [(x0 - t, yb, za), (x0 + t, yb, za), (x0 + t, yb, zb), (x0 - t, yb, zb)])):
+                            if not solid(i + di, j + dj):
+                                quads.append(([dota_point(q, off, rot) for q in c], [uv] * 4))
+            else:
+                if d == 0: c = [(x0, y0, z0), (x0 + w, y0, z0), (x0 + w, y0 + h, z0), (x0, y0 + h, z0)]
+                else: c = [(x0, y0, z0), (x0 + w, y0, z0), (x0 + w, y0, z0 + d), (x0, y0, z0 + d)]
+                quads.append(([dota_point(q, off, rot) for q in c], [(0, 1), (1, 1), (1, 0), (0, 0)]))
         else:
             u, v = uv0
             x1, y1, z1 = x0 + w + g, y0 + h + g, z0 + d + g
@@ -303,7 +337,8 @@ def mesh_smd(boxes, sizes, order):
 
 def anim_smd(build, order, rest, pose, seconds, looping):
     # each bone: its turn in this pose relative to the rest pose (the mesh is the rest pose), about its own pivot
-    frames = max(2, round(seconds * FPS)) + (1 if looping else 0)
+    fps = anim_fps(seconds, looping)
+    frames = max(2, round(seconds * fps)) + (1 if looping else 0)
     first_rest = bones_of(rest)[1]
     lines = ["version 1", "nodes"] + [f'{i} "{n}" -1' for i, n in enumerate(order)] + ["end", "skeleton"]
     for f in range(frames):
@@ -319,6 +354,9 @@ def anim_smd(build, order, rest, pose, seconds, looping):
             lines.append(f"{i} {x:.4f} {y:.4f} {z:.4f} {ax:.5f} {ay:.5f} {az:.5f}")
     lines.append("end")
     return "\n".join(lines) + "\n"
+
+
+def anim_fps(seconds, looping): return 30 if looping else 120
 
 
 def kv_vec(v): return "[ " + ", ".join(f"{x:.2f}" for x in v) + " ]"
@@ -345,7 +383,7 @@ def vmdl(name, used, lo, hi, attachments, material=None):
 						source_filename = "models/mc/mob_{name}_{an}.smd"
 						start_frame = -1
 						end_frame = -1
-						framerate = {FPS}.0
+						framerate = {anim_fps(seconds, looping)}.0
 						take = 0
 						reverse = false
 					}},
@@ -433,10 +471,11 @@ def vmdl(name, used, lo, hi, attachments, material=None):
 os.makedirs(MAT, exist_ok=True); os.makedirs(MDL, exist_ok=True)
 for old in set(glob.glob(os.path.join(MDL, "mob_*_[wa][0-9]*.*")) + glob.glob(os.path.join(MDL, "mob_*.obj"))):
     os.remove(old)  # (the pose-frame models)
-sizes = {}
+sizes, IMAGES = {}, {}
 for tex, path in TEXTURES.items():
     img = png(path)
     sizes[tex] = img.size
+    IMAGES[tex] = img
     tex = tex.replace("item:", "")
     big = img.resize((img.width * UP, img.height * UP), Image.NEAREST)
     big.convert("RGB").save(os.path.join(MAT, f"mob_{tex}.png"))
@@ -535,3 +574,44 @@ for name, path in (("slowness", "mob_effect/slowness.png"), ("weakness", "mob_ef
     back = Image.new("RGBA", icon.size, (40, 40, 40, 255))
     back.alpha_composite(icon)
     back.resize((128, 128), Image.NEAREST).convert("RGB").save(os.path.join(ICONS, name + ".png"))
+
+# a Minecraft block column's Dota unit (MC:SpawnBlock): drawn by nothing (Dota draws the blocks as props), but with a
+# block's hitbox, two high, so Dota's players can click it to attack (hidden with NoDraw, it couldn't be clicked)
+H = GRID_UNITS = 96
+cube = [(-48, -48, 0), (48, -48, 0), (48, 48, 0), (-48, 48, 0), (-48, -48, 2 * H), (48, -48, 2 * H), (48, 48, 2 * H), (-48, 48, 2 * H)]
+lines = ["version 1", "nodes", '0 "root" -1', "end", "skeleton", "time 0", "0 0 0 0 0 0 0", "end", "triangles"]
+for q in ((0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)):
+    for tri in ((q[0], q[1], q[2]), (q[0], q[2], q[3])):
+        lines.append("materials/mc/ghost.vmat")
+        lines += [f"0 {cube[i][0]} {cube[i][1]} {cube[i][2]} 0 0 1 0 0" for i in tri]
+lines.append("end")
+with open(os.path.join(MDL, "block_ghost.smd"), "w") as f:
+    f.write("\n".join(lines) + "\n")
+with open(os.path.join(MDL, "block_ghost.vmdl"), "w") as f:
+    f.write(f"""<!-- kv3 encoding:text:version{{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d}} format:modeldoc32:version{{c5dcef98-b629-46ab-88e3-a17c005c935e}} -->
+{{
+	rootNode =
+	{{
+		_class = "RootNode"
+		children =
+		[
+			{{ _class = "RenderMeshList" children = [ {{ _class = "RenderMeshFile" filename = "models/mc/block_ghost.smd" import_scale = 1.0 }} ] }},
+			{{
+				_class = "HitboxSetList"
+				children =
+				[
+					{{
+						_class = "HitboxSet"
+						name = "default"
+						children = [ {{ _class = "Hitbox" name = "body" parent_bone = "" surface_property = "" translation_only = false group_id = 0
+							hitbox_mins = [ -48.0, -48.0, 0.0 ] hitbox_maxs = [ 48.0, 48.0, {2 * H}.0 ] }}, ]
+					}},
+				]
+			}},
+		]
+		model_archetype = ""
+		primary_associated_entity = ""
+		anim_graph_name = ""
+	}}
+}}
+""")

@@ -317,10 +317,10 @@ function MCBridge:SmoothEye( lx, ly, yawc, pitch, dist, lz )
 	if not ground then return lz end
 	local above = ( ez - a.z ) / GRID - 1.62 - ground -- feet over Minecraft's ground (0 when standing on it)
 	if above < -0.6 then return lz end
-	-- Dota's ground averaged around the eye: its little bumps (paving, rocks) shook the camera by up to 17 a frame
+	-- Dota's ground averaged around the eye: its little bumps (paving, rocks, the fountain's steps) shook the camera
 	local g = 0
-	for dx = -48, 48, 48 do for dy = -48, 48, 48 do g = g + GetGroundHeight( Vector( ex + dx, ey + dy, 0 ), nil ) end end
-	local want = g / 9 + ( 1.62 + math.max( 0, above ) ) * GRID
+	for dx = -96, 96, 48 do for dy = -96, 96, 48 do g = g + GetGroundHeight( Vector( ex + dx, ey + dy, 0 ), nil ) end end
+	local want = g / 25 + ( 1.62 + math.max( 0, above ) ) * GRID
 	return lz + ( want - ez )
 end
 
@@ -486,7 +486,13 @@ function MCBridge:Puppet( u, pos, feetY, yaw, moved )
 		or self.pose == "sneak" and ( walking and "sneak_run" or "sneak_idle" )
 		or now - ( self.swingAt or -10 ) < 0.35 and "attack" or walking and "run" or "idle"
 	if kind ~= "" then
-		local item = self.pose == "bow" and self.held == "bow" and "bow_pulling_2" or self.held
+		-- drawing a bow: its string in Minecraft's three steps
+		if self.pose == "bow" then self.bowAt = self.bowAt or now else self.bowAt = nil end
+		local item = self.held
+		if self.pose == "bow" and self.held == "bow" then
+			local d = now - self.bowAt
+			item = d < 0.25 and "bow_pulling_0" or d < 0.5 and "bow_pulling_1" or "bow_pulling_2"
+		end
 		local model = ( self.elytra and "steve_elytra" or "steve" ) .. ( MC_HELD and MC_HELD[ item ] and "__" .. item or "" )
 		if u:IsHexed() then
 			model = u:HasModifier( "modifier_shadow_shaman_voodoo" ) and "chicken" or "pig"
