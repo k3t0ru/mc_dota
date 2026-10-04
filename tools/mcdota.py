@@ -196,6 +196,15 @@ def wait_for(path, words, seconds):
     return None
 
 
+# the bridge and Minecraft outlive this window (closing it, or it ending, took the bridge along)
+DETACHED = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
+
+
+def spawn(args, **kw):
+    try: return subprocess.Popen(args, creationflags=DETACHED | subprocess.CREATE_BREAKAWAY_FROM_JOB, **kw)
+    except OSError: return subprocess.Popen(args, creationflags=DETACHED, **kw) # (a job that forbids breaking away)
+
+
 def host(cfg, dota):
     pip_needs([("PIL", "pillow"), ("lupa", "lupa")])
     java = find_java(cfg)
@@ -208,8 +217,7 @@ def host(cfg, dota):
     time.sleep(2)
     say("мост Minecraft <-> Dota")
     log = open(os.path.join(ROOT, "bridge", "bridge.log"), "w")
-    subprocess.Popen([sys.executable, "-u", os.path.join(ROOT, "bridge", "bridge.py")], cwd=ROOT, stdout=log, stderr=log,
-                     creationflags=subprocess.CREATE_NO_WINDOW)
+    spawn([sys.executable, "-u", os.path.join(ROOT, "bridge", "bridge.py")], cwd=ROOT, stdout=log, stderr=log)
     dlog = os.path.join(dota, "game", "dota", "console.log")
     if os.path.exists(dlog): os.remove(dlog)
     say("запускаю Dota: когда все подключатся, нажми в лобби кнопку старта")
@@ -230,8 +238,8 @@ def host(cfg, dota):
     say("запускаю Minecraft (первый раз долго: скачивается Minecraft и Fabric)")
     env = dict(os.environ, JAVA_HOME=java, DOTA_SIZE=res, MC_FPS=cfg["host"]["minecraft_fps"])
     mlog = open(os.path.join(run, "gradle_run.log"), "w")
-    subprocess.Popen(["cmd", "/c", os.path.join(ROOT, "mcmod", "gradlew.bat"), "--no-daemon", "runClient"], cwd=os.path.join(ROOT, "mcmod"), env=env,
-                     stdout=mlog, stderr=mlog, creationflags=subprocess.CREATE_NO_WINDOW)
+    spawn(["cmd", "/c", os.path.join(ROOT, "mcmod", "gradlew.bat"), "--no-daemon", "runClient"], cwd=os.path.join(ROOT, "mcmod"), env=env,
+          stdout=mlog, stderr=mlog)
     r = wait_for(dlog, ["bridge online", "Script Runtime Error", "Error running script"], 900)
     if r and r != "bridge online": say("!!! ошибка Lua в Dota: см. " + dlog)
     r = wait_for(os.path.join(run, "logs", "latest.log"), ["joined the game", "has crashed"], 1200)
