@@ -203,6 +203,7 @@ end
 function MC:OnState()
 	if GameRules:State_Get() == DOTA_GAMERULES_STATE_CUSTOM_GAME_SETUP then
 		for pid = 0, DOTA_MAX_TEAM_PLAYERS - 1 do MC:AssignTeam( pid ) end
+		GameRules:FinishCustomGameSetup() -- (no team screen: who plays what is fixed)
 	end
 	if GameRules:State_Get() >= DOTA_GAMERULES_STATE_PRE_GAME then GameRules:SetTimeOfDay( 0.5 ) end -- the clock starts at dawn
 	local st = GameRules:State_Get()
