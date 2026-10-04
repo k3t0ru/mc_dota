@@ -1,11 +1,11 @@
 # Breaking cracks for Dota's trees: chopping a tree in Minecraft (its magenta log column) shows Minecraft's
-# destroy_stage cracks wrapped around the Dota tree's trunk: an 8-sided tube, 3 blocks tall, in Dota units (scale 1),
+# destroy_stage cracks wrapped around the Dota tree's trunk: an 8-sided tube, 2 blocks tall, in Dota units (scale 1),
 # feet at 0. Uses the block cracks' materials (materials/mc/crack_<n>_side.vmat, tools/gen_blocks.py).
 # Output: content/models/mc/tree_crack.obj, tree_crack_<n>.vmdl. Then compile with resourcecompiler.
 import math, os
 
 MDL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "content", "models", "mc")
-R, HEIGHT, SIDES = 36, 288, 8  # trunk radius, 3 blocks of 96
+R, HEIGHT, SIDES = 18, 192, 8  # trunk radius, 2 blocks of 96
 TILE = 96  # one crack texture per block of height and per 96 units around
 
 v, vt, f = [], [], []

@@ -148,11 +148,7 @@ function MCWorld:Gate( s, from )
 	local bx, bz = MC:CellOf( p )
 	local y = MC.heights[ bx .. "," .. bz ] or MC_FLOOR
 	MCBridge:Send( string.format( "tp %d %d %d", bx, y, bz ) )
-	EmitSoundOnLocationWithCaster( p, "Portal.Hero_Appear", s )
-	local fx = ParticleManager:CreateParticle( "particles/items2_fx/teleport_end.vpcf", PATTACH_WORLDORIGIN, nil )
-	ParticleManager:SetParticleControl( fx, 0, p )
-	ParticleManager:SetParticleControl( fx, 1, p )
-	ParticleManager:ReleaseParticleIndex( fx )
+	EmitSoundOnLocationWithCaster( p, "Portal.Hero_Appear", s ) -- (no arrival effect: it showed after he was there)
 end
 
 function MCWorld:GateFxEnd( s )

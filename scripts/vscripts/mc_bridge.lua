@@ -170,6 +170,10 @@ function MCBridge:Apply( body, stale )
 			elseif dev:match( "^nodraw " ) and self.steve then -- does Dota's AI ignore a hero it doesn't draw?
 				self.nodrawOff = dev == "nodraw 0"
 				if self.nodrawOff then self.steve:RemoveEffects( EF_NODRAW ) end
+			elseif dev:match( "^lua " ) then -- run a line of Lua (tests: spawning runes, wards...)
+				local f, err = ( loadstring or load )( dev:sub( 5 ) )
+				if f then local ok, e = pcall( f ) if not ok then print( "[mc] lua error: " .. tostring( e ) ) end
+				else print( "[mc] lua syntax: " .. tostring( err ) ) end
 			elseif dev == "classes" then -- every entity class on the map, with a count (looking for the sky/fog)
 				local c, e = {}, Entities:First()
 				while e do c[ e:GetClassname() ] = ( c[ e:GetClassname() ] or 0 ) + 1 e = Entities:Next( e ) end
