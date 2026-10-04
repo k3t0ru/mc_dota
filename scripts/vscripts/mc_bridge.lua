@@ -405,8 +405,8 @@ function MCBridge:FarBars()
 		DOTA_UNIT_TARGET_ALL, DOTA_UNIT_TARGET_FLAG_INVULNERABLE + DOTA_UNIT_TARGET_FLAG_MAGIC_IMMUNE_ENEMIES, FIND_ANY_ORDER, false ) ) do
 		if not u.mc_block and not u.mc_player and not u.mc_puppet then
 			local has = u:HasModifier( "modifier_mc_nobar" )
-			if near[ u ] and has then u:RemoveModifierByName( "modifier_mc_nobar" )
-			elseif not near[ u ] and not has then u:AddNewModifier( u, nil, "modifier_mc_nobar", {} ) end
+			if ( near[ u ] or u:IsHero() ) and has then -- (heroes keep their bars at any distance) u:RemoveModifierByName( "modifier_mc_nobar" )
+			elseif not near[ u ] and not u:IsHero() and not has then u:AddNewModifier( u, nil, "modifier_mc_nobar", {} ) end
 		end
 	end
 end
