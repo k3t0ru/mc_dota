@@ -151,7 +151,7 @@ def assets(dota):
         for f in sorted(glob.glob(os.path.join(ROOT, "content", d, "**", "*.*"), recursive=True)):
             h.update(open(f, "rb").read())
     stamp = os.path.join(CACHE, "assets.stamp")
-    if os.path.exists(stamp) and open(stamp).read() == h.hexdigest():
+    if os.path.exists(stamp) and open(stamp).read() == h.hexdigest() and not missing_compiled():
         say("ресурсы готовы")
         return
     env = dict(os.environ, MC_JAR=jar)
@@ -164,9 +164,20 @@ def assets(dota):
     for pat in ("models\\mcb\\*.vmdl", "models\\*.vmdl", "particles\\*.vpcf", "panorama\\*.xml", "panorama\\*.js"):
         r = subprocess.run([rc, "-fshallow2", "-r", "-i", os.path.join(content, pat)], capture_output=True, text=True, errors="ignore")
         bad = [l for l in r.stdout.splitlines() if "failed" in l or "rror" in l]
-        if bad: say("  " + pat + ": " + bad[-1].strip())
+        if bad: say("  " + pat + ": " + " | ".join(l.strip() for l in bad[-3:]))
+    gone = missing_compiled()
+    if gone: fail("Dota не скомпилировала: " + ", ".join(gone) + " (ошибки компиляции выше)")
     os.makedirs(CACHE, exist_ok=True)
     open(stamp, "w").write(h.hexdigest())
+
+
+# what Dota draws from this addon, compiled: missing = error models, an invisible Steve, no HUD
+COMPILED = ["models/mc/mob_zombie.vmdl_c", "models/mc/steve.vmdl_c", "models/mc/sky.vmdl_c", "particles/mc/steve_model.vpcf_c",
+            "panorama/layout/custom_game/custom_ui_manifest.vxml_c", "panorama/scripts/custom_game/fpcam.vjs_c"]
+
+
+def missing_compiled():
+    return [f for f in COMPILED if not os.path.exists(os.path.join(ROOT, f))]
 
 
 # ---------------------------------------------------------------- processes ---------------------------------------
@@ -259,8 +270,8 @@ def host(cfg, dota):
 def player(cfg, dota):
     ip = cfg["player"]["host_ip"].strip()
     say(f"подключаюсь к хосту {ip}")
-    subprocess.Popen([os.path.join(dota, "game", "bin", "win64", "dota2.exe"), "-novid", "+connect", ip])
-    say("Dota запускается; это окно можно закрыть")
+    subprocess.Popen([os.path.join(dota, "game", "bin", "win64", "dota2.exe"), "-novid", "-console", "-condebug", "+connect", ip])
+    say("Dota запускается. Если что-то не так: пришли хосту " + os.path.join(dota, "game", "dota", "console.log"))
 
 
 def main():
