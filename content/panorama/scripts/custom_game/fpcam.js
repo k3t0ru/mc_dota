@@ -200,6 +200,15 @@ function frame() {
 	}
 	$.Schedule( 0, frame );
 }
+// Dota's tooltips (the cursor sits at the screen's centre: a rune there showed its description): never shown
+function hideTooltips() {
+	var root = $.GetContextPanel();
+	while ( root.GetParent() ) root = root.GetParent();
+	var t = root.FindChildTraverse( "Tooltips" );
+	if ( t ) t.style.opacity = "0";
+	$.Schedule( 1, hideTooltips );
+}
+hideTooltips();
 // Steve's screen is Minecraft's: hide Dota's HUD (top bar, minimap, abilities, inventory, shop, chat...)
 for ( var k in DotaDefaultUIElement_t ) GameUI.SetDefaultUIEnabled( DotaDefaultUIElement_t[k], false );
 frame();

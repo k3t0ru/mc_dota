@@ -26,6 +26,7 @@ public class McDotaClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+		RuneEffects.register(); // (registries freeze after the mods' init)
 		ClientLifecycleEvents.CLIENT_STARTED.register(mc -> {
 			mc.options.cloudStatus().set(CloudStatus.OFF);
 			if (net.minecraft.client.renderer.fog.FogRenderer.toggleFog()) net.minecraft.client.renderer.fog.FogRenderer.toggleFog(); // off: fog tints the magenta floor

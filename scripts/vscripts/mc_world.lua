@@ -10,10 +10,10 @@ CAPTURE_VISION = { outpost = 900, lantern = 1100 } -- what a captured one shows 
 
 -- Dota's rune effects as Minecraft effects: effect, amplifier (the duration is the Dota modifier's)
 -- (double damage is Lua's: MCBridge's swing x2; the illusion rune does nothing: Kunkka's illusions served no one)
-RUNE_EFFECTS = {
-	modifier_rune_haste = { "speed", 3 }, -- Dota's max speed: ~1.8x
-	modifier_rune_regen = { "regeneration", 3 }, modifier_rune_invis = { "invisibility", 0 },
-	modifier_rune_arcane = { "haste", 1 }, modifier_rune_shield = { "absorption", 2 }, -- ~half his health as a shield
+RUNE_EFFECTS = { -- our own Minecraft effects (RuneEffects.java): the rune's name, icon and what it does
+	modifier_rune_haste = { "mcdota:rune_haste", 0 }, modifier_rune_doubledamage = { "mcdota:rune_double_damage", 0 },
+	modifier_rune_regen = { "mcdota:rune_regen", 0 }, modifier_rune_invis = { "mcdota:rune_invis", 0 },
+	modifier_rune_arcane = { "mcdota:rune_arcane", 0 }, modifier_rune_shield = { "mcdota:rune_shield", 0 },
 }
 -- what Minecraft's player reads when he takes one
 RUNE_NAMES = {

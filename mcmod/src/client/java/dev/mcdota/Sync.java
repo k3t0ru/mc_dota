@@ -339,9 +339,9 @@ public final class Sync {
 					case "fountain" -> Progress.fountain(server);
 					case "msg" -> Progress.say(server, line.substring(4), "yellow"); // Dota's word for the player (captures...)
 					case "tp" -> run(server, String.format(Locale.ROOT, "tp @p %s.5 %s %s.5", p[1], p[2], p[3])); // twin gates
-					case "buff" -> run(server, String.format("effect give @p minecraft:%s %s %s", p[1], p[2], p[3])); // runes
+					case "buff" -> run(server, String.format("effect give @p %s %s %s", p[1].contains(":") ? p[1] : "minecraft:" + p[1], p[2], p[3])); // runes
 					case "shard" -> Progress.shard(server); // Tormentor
-					case "unbuff" -> run(server, "effect clear @p minecraft:" + p[1], false); // a rune ended early in Dota
+					case "unbuff" -> run(server, "effect clear @p " + (p[1].contains(":") ? p[1] : "minecraft:" + p[1]), false); // a rune ended early in Dota
 					case "tree" -> { // Dota's tree on this column: three magenta logs on the ground
 						int x = Integer.parseInt(p[1]), z = Integer.parseInt(p[2]);
 						column(server, x, z, () -> {
