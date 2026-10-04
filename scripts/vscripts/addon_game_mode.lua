@@ -336,7 +336,7 @@ function MC:SetupHero( hero )
 	local place = hero:FindAbilityByName( "mc_place_block" )
 	if place then place:SetLevel( 1 ) end
 
-	if not MC.world_done then
+	if not MC.world_done and MC:IsSteve( hero ) and hero:IsRealHero() then -- (Steve's: a Dire hero may well spawn first)
 		MC.world_done = true
 		-- Minecraft (0,0) maps here: our fountain, on the grid. (The hero's own spawn spot moves a little from game to game,
 		-- which shifted every terrain column against what an earlier session had built: the ground stopped matching.)

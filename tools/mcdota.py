@@ -32,6 +32,10 @@ map = dota
 java_home = auto
 
 [player]
+; how Dota opens: fullscreen, borderless (a window without a frame over the whole screen), windowed
+window = fullscreen
+; Dota's resolution, e.g. 1920x1080; auto = the screen's own
+resolution = auto
 ; the host's address (same network, or a VPN like ZeroTier/Radmin; the host's UDP port 27015 must be reachable)
 host_ip = 192.168.0.10
 """
@@ -74,8 +78,13 @@ def git_update(cfg):
     remotes = subprocess.run(["git", "remote"], cwd=ROOT, capture_output=True, text=True).stdout.split()
     if "origin" not in remotes: subprocess.run(["git", "remote", "add", "origin", url], cwd=ROOT)
     say("обновляюсь из " + url)
+    head = lambda: subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout
+    before = head()
     r = subprocess.run(["git", "pull", "--ff-only"], cwd=ROOT)
     if r.returncode: say("обновиться не вышло (локальные изменения?), играю с тем, что есть")
+    elif head() != before: # this very script may have changed: run the new one
+        say("обновился, перезапускаюсь")
+        sys.exit(subprocess.call([sys.executable] + sys.argv))
 
 
 def find_dota(cfg):
@@ -281,6 +290,7 @@ def host(cfg, dota):
     r = wait_for(dlog, ["Script Runtime Error", "Error running script", "[mc] state "], 6 * 3600, dstart)
     if r != "[mc] state ": fail("ошибка Lua в Dota: см. " + dlog if r else "игра так и не началась")
     say("игра началась: запускаю Minecraft")
+    kill(mc_pids()) # (one left from before would hold the world: "no access to the world")
     try: os.remove(os.path.join(run, "logs", "latest.log")) # (the last game's "joined" is in it)
     except OSError: pass
     env = dict(os.environ, JAVA_HOME=java, DOTA_SIZE=res, MC_FPS=cfg["host"]["minecraft_fps"])
@@ -295,7 +305,16 @@ def host(cfg, dota):
 def player(cfg, dota):
     ip = cfg["player"]["host_ip"].strip()
     say(f"подключаюсь к хосту {ip}")
-    subprocess.Popen([os.path.join(dota, "game", "bin", "win64", "dota2.exe"), "-novid", "-console", "-condebug", "+connect", ip])
+    mode = cfg["player"]["window"].strip().lower()
+    args = {"fullscreen": ["-fullscreen"], "windowed": ["-windowed"]}.get(mode, ["-windowed", "-noborder"])
+    res = cfg["player"]["resolution"].strip().lower()
+    if "x" in res: args += ["-w", res.split("x")[0], "-h", res.split("x")[1]]
+    elif mode == "borderless":  # a frameless window the screen's size
+        import ctypes
+        u = ctypes.windll.user32
+        u.SetProcessDPIAware() # (the real pixels, not the scaled ones)
+        args += ["-w", str(u.GetSystemMetrics(0)), "-h", str(u.GetSystemMetrics(1))]
+    subprocess.Popen([os.path.join(dota, "game", "bin", "win64", "dota2.exe"), "-novid", "-console", "-condebug"] + args + ["+connect", ip])
     say("Dota запускается. Если что-то не так: пришли хосту " + os.path.join(dota, "game", "dota", "console.log"))
 
 
