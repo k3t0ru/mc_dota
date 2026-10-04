@@ -27,6 +27,7 @@ TERRAIN_R = 400 -- max cells from the anchor mirrored into Minecraft (the map's 
 MC_FLOOR = 0 -- Minecraft y where feet stand on flat ground (the world is a superflat whose top layer is y -1)
 
 require( "mc_bridge" )
+require( "mc_world" ) -- runes, trees, outposts, watchers, lotus pools, twin gates, torch wards
 require( "addon_init" ) -- Lua modifiers (the client loads addon_init.lua by itself)
 require( "mc_block_models" ) -- MCB: every Minecraft block's variants -> Dota models (tools/gen_mcblocks.py)
 
@@ -147,7 +148,9 @@ function MC:Init()
 	end, MC )
 	-- Steve has no use for Dota gold (his money is emeralds, MC:LootFor): none, so no yellow "+45" over his kills either
 	mode:SetModifyGoldFilter( function( _, f )
-		return not ( MCBridge.steve and f.player_id_const == MCBridge.steve:GetPlayerOwnerID() )
+		local mine = MCBridge.steve and f.player_id_const == MCBridge.steve:GetPlayerOwnerID()
+		if mine and f.reason_const == DOTA_ModifyGold_BountyRune then MC:Emeralds( f.gold ) end -- a bounty rune: emeralds
+		return not mine
 	end, MC )
 	mode:SetExecuteOrderFilter( Dynamic_Wrap( MC, "OrderFilter" ), MC )
 
@@ -382,6 +385,7 @@ function MC:ShowBlock( bx, by, bz, kind, solid, state )
 	if v and MCB_ANIM[ v[2] ] then MC:Animate( p, v[2] ) end
 	p.mc_kind = kind
 	if kind == "cobweb" then MC.cobwebs[ p ] = true end
+	if WARD_KINDS[ kind ] then MCWorld:Ward( bx, by, bz, WARD_KINDS[ kind ] ) end
 	p.mc_solid = solid ~= false -- fire, torches, flowers: drawn, but units neither bump into nor stand on them
 	MC.props[ key ] = p
 end
@@ -670,6 +674,14 @@ NEUTRAL_LOOT = { -- unit name part -> Minecraft item, count (first match wins; a
 	{ "troll", "flint", 2 }, { "ogre", "iron_ingot", 1 }, { "golem", "iron_ingot", 2 }, { "ghost", "gunpowder", 2 },
 	{ "fel_beast", "gunpowder", 2 }, { "warpine", "oak_log", 6 },
 }
+-- gold that isn't a kill (a bounty rune) as emeralds, with the same carried-over remainder
+function MC:Emeralds( gold )
+	MC.goldLeft = ( MC.goldLeft or 0 ) + gold
+	local n = math.floor( MC.goldLeft / EMERALD_GOLD )
+	MC.goldLeft = MC.goldLeft - n * EMERALD_GOLD
+	if n > 0 then MCBridge:Send( string.format( "loot %d %d", n, gold ) ) end
+end
+
 function MC:LootFor( dead )
 	local gold, name = dead:GetGoldBounty(), dead:GetUnitName()
 	local items = {}
@@ -693,6 +705,11 @@ function MC:LootFor( dead )
 	elseif RandomInt( 1, 2 ) == 1 then
 		items = { "bread", 1 }
 	end
+	-- (Tormentor: gems and its "shard": two more hearts for good)
+	if name:find( "miniboss" ) then
+		items = { "diamond", 4, "emerald", 6, "enchanted_golden_apple", 1 }
+		MCBridge:Send( "shard" )
+	end
 	-- every unit pays its own bounty, like gold in Dota: what doesn't make a whole emerald waits for the next kill
 	MC.goldLeft = ( MC.goldLeft or 0 ) + gold
 	local emeralds = math.floor( MC.goldLeft / EMERALD_GOLD )
@@ -715,6 +732,7 @@ end
 
 function MC:HideBlock( bx, by, bz )
 	local key = bx .. "," .. by .. "," .. bz
+	MCWorld:Unward( bx, by, bz )
 	local p = MC.props[ key ]
 	if p and not p:IsNull() then p:RemoveSelf() end
 	MC.props[ key ] = nil
@@ -744,7 +762,7 @@ end
 function MC:OrderFilter( f )
 	for _, idx in pairs( f.units ) do
 		local u = EntIndexToHScript( idx )
-		if u and u.mc_player then return false end -- Steve moves and attacks from Minecraft only
+		if u and u.mc_player and not MC.allowOrder then return false end -- Steve moves and attacks from Minecraft only
 	end
 	for _, idx in pairs( f.units ) do
 		EntIndexToHScript( idx ).mc_ordered = f.order_type == DOTA_UNIT_ORDER_ATTACK_TARGET and f.entindex_target or nil

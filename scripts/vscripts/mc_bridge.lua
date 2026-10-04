@@ -63,6 +63,7 @@ function MCBridge:Tick()
 	end
 	MC:BossBar( self.steve )
 	self:FarBars()
+	MCWorld:Think()
 	-- cobwebs hold units like in Minecraft (90% slower while inside)
 	for p in pairs( MC.cobwebs ) do
 		if p:IsNull() then MC.cobwebs[ p ] = nil
@@ -202,6 +203,7 @@ function MCBridge:Apply( body, stale )
 				SendToServerConsole( dev )
 			end
 		end
+		if line == "use" then MCWorld:Use() end
 		if line == "light" and self.aim and not self.aim:IsNull() and self.aim:IsAlive() and self.steve
 			and GameRules:GetGameTime() - ( self.aimAt or 0 ) <= 0.6
 			and ( self.aim:GetAbsOrigin() - self.steve:GetAbsOrigin() ):Length2D() <= MELEE_REACH * GRID + self.aim:GetHullRadius() then
@@ -215,8 +217,9 @@ function MCBridge:Apply( body, stale )
 			local d = ( self.aim:GetAbsOrigin() - self.steve:GetAbsOrigin() ):Length2D()
 			if self.aim:GetTeamNumber() == self.steve:GetTeamNumber() then self.denySwingAt = GameRules:GetGameTime() end
 			local k = MeleeScale( tonumber( full ), tonumber( wbase ), tonumber( sharp ) )
-			if d <= reach then self:Swing( self.aim, tonumber( swing ) * k, crit == "1", ( tonumber( sweep ) or 0 ) * k, tonumber( fire ) or 0 ) end
-		end
+			if d <= reach then self:Swing( self.aim, tonumber( swing ) * k, crit == "1", ( tonumber( sweep ) or 0 ) * k, tonumber( fire ) or 0 )
+			else MCWorld:Chop() end
+		elseif swing then MCWorld:Chop() end
 
 		local bx, by, bz, kind, solid, state = line:match( "^mcblock (%S+) (%S+) (%S+) (%S+) ?(%S*) ?(%S*)" )
 		if bx then

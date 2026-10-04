@@ -67,6 +67,7 @@ public class McDotaClient implements ClientModInitializer {
 		// flint and steel: Dota sets the unit under the crosshair on fire if it's in reach ("light")
 		net.fabricmc.fabric.api.event.player.UseItemCallback.EVENT.register((player, level, hand) -> {
 			if (!level.isClientSide() && player.getItemInHand(hand).is(net.minecraft.world.item.Items.FLINT_AND_STEEL)) Sync.out("light");
+			if (!level.isClientSide()) Sync.out("use"); // Dota's objects in front of Steve: runes, outposts, lotus pools...
 			return net.minecraft.world.InteractionResult.PASS;
 		});
 		// no digging into the ground (Hybrid.ground): not even the mining cracks start

@@ -36,13 +36,13 @@ public final class Progress {
 	private static int level = 1;
 	private static boolean dead;
 
-	private static void say(MinecraftServer server, String text, String color) {
+	static void say(MinecraftServer server, String text, String color) {
 		Sync.run(server, "title @p actionbar {text:\"" + text + "\",color:\"" + color + "\"}");
 	}
 
 	// the player's own attributes: also after a respawn, which resets them
 	public static void attributes(MinecraftServer server) {
-		Sync.run(server, "attribute @p minecraft:max_health base set " + (20 + (level - 1) * HP_PER_LEVEL));
+		Sync.run(server, "attribute @p minecraft:max_health base set " + (20 + (level - 1) * HP_PER_LEVEL + 4 * shards));
 		Sync.run(server, "attribute @p minecraft:sweeping_damage_ratio base set " + SWEEP);
 		Sync.run(server, "attribute @p minecraft:knockback_resistance base set 1"); // Dota hits hurt but don't shove the camera
 	}
@@ -50,6 +50,7 @@ public final class Progress {
 	// server thread: new Dota match
 	public static void newMatch(MinecraftServer server) {
 		level = 1;
+		shards = 0;
 		dead = false;
 		placed = false;
 		for (String c : new String[] {
@@ -107,14 +108,20 @@ public final class Progress {
 		Sync.run(server, "xp set @p " + (need > 0 ? Math.min(points - 1, (int) ((long) xp * points / need)) : 0) + " points", false);
 	}
 
-	// server thread, twice a second in our fountain's aura: 5% health and a drumstick back each time (full in ~10 s)
+	// server thread, twice a second in our fountain's aura: 5% health back each time (full in ~10 s); not hunger
 	public static void fountain(MinecraftServer server) {
 		if (dead || server.getPlayerList().getPlayers().isEmpty()) return;
 		ServerPlayer p = server.getPlayerList().getPlayers().get(0);
 		p.heal(p.getMaxHealth() * 0.05f);
-		var food = p.getFoodData();
-		food.setFoodLevel(Math.min(20, food.getFoodLevel() + 1));
-		food.setSaturation(Math.min(food.getFoodLevel(), food.getSaturationLevel() + 1));
+	}
+
+	// Tormentor's reward, like Aghanim's shard: two more hearts for the rest of the match
+	private static int shards;
+
+	public static void shard(MinecraftServer server) {
+		shards++;
+		attributes(server);
+		say(server, "Осколок терзателя: +2 сердца", "light_purple");
 	}
 
 	// --- Dota's hits ----------------------------------------------------------------------------------------------
@@ -425,7 +432,8 @@ public final class Progress {
 			buy(1, "oak_log", 8), buy(1, "cobblestone", 32), buy(1, "string", 2), buy(1, "flint", 4), buy(1, "feather", 8),
 			buy(1, "leather", 2), buy(2, "iron_ingot"), buy(1, "gunpowder", 2), buy(1, "paper", 6),
 			buy(1, "arrow", 16), buy(1, "bread", 4), buy(1, "cooked_beef", 2), buy(6, "tnt"), buy(2, "flint_and_steel"),
-			buy(2, "clock")))); // the clock shows Dota's game time (ClockHud)
+			buy(2, "clock"), // the clock shows Dota's game time (ClockHud)
+			buy(2, "torch"), buy(3, "soul_torch")))); // wards: a torch is an observer, a soul torch a sentry
 		TRADERS.add(new Trader("Библиотекарь", "librarian", List.of( // basic shop: enchanting
 			buy(12, "enchanting_table"), buy(2, "bookshelf"), buy(1, "lapis_lazuli", 8), buy(1, "book", 3), buy(8, "anvil"),
 			book(15, "sharpness", 3), book(15, "protection", 3), book(12, "power", 3), book(10, "quick_charge", 2),

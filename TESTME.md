@@ -2,6 +2,13 @@
 
 Things Claude could not check alone (they need a real person playing), newest first. Strike them out or tell Claude.
 
+## 2026-10-04 (Dota objects)
+- [ ] Right click on a rune in front of you: picked up, its effect in Minecraft (bounty: emeralds, wisdom: XP).
+- [ ] Outpost / watcher: right click, stay next to it 3 / 1.5 s -> yours. Twin gate: right click, wait 3 s -> other gate.
+- [ ] Lotus pool: right click -> golden carrots. Hit a tree 3 times -> it falls, 2 logs.
+- [ ] Torch = observer ward (vision), soul torch = sentry (shows invisible). Fountain doesn't feed you any more.
+- [ ] Tormentor: diamonds, emeralds, enchanted golden apple, +2 hearts.
+
 ## 2026-10-04 (00:10)
 - [ ] Sword damage (iron ~105, +S5 ~394; towers take ~40% less: armour), TNT kills creeps next to it (magic damage).
 - [ ] Witch: hat, "Зелья" sign facing her way (I turned it a quarter, unchecked), brewing stand, potions; splash

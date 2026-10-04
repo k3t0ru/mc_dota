@@ -93,6 +93,7 @@ public final class Sync {
 		BlockPos pos = hit.getBlockPos();
 		var pass = net.minecraft.world.InteractionResult.PASS;
 		if (player.getItemInHand(hand).is(net.minecraft.world.item.Items.FLINT_AND_STEEL) && !level.isClientSide()) out("light");
+		if (!level.isClientSide()) out("use");
 		// clicked on the side of a block: the cell beside it, if that's a terrain slab (a half step), is where it goes
 		if (hit.getDirection().getAxis().isHorizontal()) {
 			BlockPos t = pos.relative(hit.getDirection());
@@ -325,6 +326,10 @@ public final class Sync {
 					case "respawn" -> Progress.respawn(server);
 					case "time" -> ClockHud.set(Integer.parseInt(p[1]), p[2].equals("1"));
 					case "fountain" -> Progress.fountain(server);
+					case "msg" -> Progress.say(server, line.substring(4), "yellow"); // Dota's word for the player (captures...)
+					case "tp" -> run(server, String.format(Locale.ROOT, "tp @p %s.5 %s %s.5", p[1], p[2], p[3])); // twin gates
+					case "buff" -> run(server, String.format("effect give @p minecraft:%s %s %s", p[1], p[2], p[3])); // runes
+					case "shard" -> Progress.shard(server); // Tormentor
 					case "spawnat" -> Progress.spawnAt(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
 					case "lvl" -> Progress.level(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
 					case "delay" -> Overlay.dotaDelay(Integer.parseInt(p[1]));

@@ -501,3 +501,15 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
   auto-attacks (a click in Dota's window sent Kunkka at blocks); flint and steel sets the aimed unit on fire ("light");
   a block clicked on its side next to a terrain half step takes the slab's place; tripwire hooks no longer sold;
   witch sign turned 180.
+
+## 2026-10-04: Dota's map objects (mc_world.lua)
+- Right click ("use" from UseItem/UseBlock) acts on the object right in front of Steve: runes (Dota pickup; the rune's
+  modifier becomes a Minecraft effect: haste->speed, DD->strength, regen->regeneration, invis->invisibility,
+  arcane->haste, shield->absorption; bounty gold -> emeralds via the gold filter; wisdom XP -> Steve's level), lotus
+  pools (a golden carrot per lotus grown, one per 3 min up to 6), outposts and watchers (stand by 3 / 1.5 s ->
+  Steve's team), twin gates (3 s, then the other gate; 30 s cooldown). Messages in the actionbar ("msg").
+- A swing with no unit in reach chops a tree in front (3 swings, 2 oak logs).
+- Torches are observer wards, soul torches sentry wards (true sight aura, modifier_mc_truesight); the ward unit is
+  invisible (the torch shows), lives 6/7 min; when it dies its torch goes (unblock). Fletcher sells both.
+- Fountain: health only, no hunger. Tormentor: 4 diamonds, 6 emeralds, an enchanted golden apple and a "shard":
+  +2 hearts for the match.
