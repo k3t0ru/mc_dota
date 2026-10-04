@@ -14,18 +14,20 @@
 			m_ModelList =
 			[
 				{
-					m_model = resource:"models/mc/steve.vmdl"
+					m_model = resource:"models/mc/mob_steve.vmdl"
 				},
 			]
+			m_bAnimated = true
+			m_bForceLoopingAnimation = false
 			m_nLOD = 1
 		},
 	]
 	m_Operators =
 	[
 		{
-			_class = "C_OP_RemapCPOrientationToRotations"
+			_class = "C_OP_RemapCPOrientationToYaw"
 			m_nCP = 0
-			m_vecRotation = [ 0.0, 180.0, 0.0 ]
+			m_flRotOffset = 0.0
 		},
 		{
 			_class = "C_OP_SetToCP"
@@ -37,6 +39,12 @@
 		{
 			_class = "C_INIT_CreateWithinSphere"
 			m_nControlPointNumber = 0
+		},
+		{
+			_class = "C_INIT_RandomNamedModelSequence"
+			m_bModelFromRenderer = true
+			m_names = [ "attack" ]
+			m_nFieldOutput = 13
 		},
 	]
 	m_Emitters =

@@ -118,6 +118,17 @@ end
 function MCWorld:StartCapture( u, kind )
 	local s = steve()
 	if kind ~= "gate" and u:GetTeamNumber() == s:GetTeamNumber() then return end
+	-- Dota's own capture (its channel, team, vision; Dire can take it back and Steve again): our SetTeam alone was
+	-- undone by Dota once a Dire player had captured one
+	local native = ( { lantern = "ability_lamp_use", outpost = "ability_capture" } )[ kind ]
+	local ab = native and s:FindAbilityByName( native )
+	if ab then
+		MC.allowOrder = true
+		ExecuteOrderFromTable( { UnitIndex = s:entindex(), OrderType = DOTA_UNIT_ORDER_CAST_TARGET, TargetIndex = u:entindex(), AbilityIndex = ab:entindex() } )
+		MC.allowOrder = false
+		say( "Захват..." )
+		return
+	end
 	if kind == "gate" then -- Dota's sound and look of a portal channel
 		EmitSoundOn( "Portal.Loop_Appear", s )
 		self.gateFx = ParticleManager:CreateParticle( "particles/items2_fx/teleport_start.vpcf", PATTACH_ABSORIGIN, s )

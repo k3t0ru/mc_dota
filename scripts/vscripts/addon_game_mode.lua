@@ -35,11 +35,12 @@ require( "mc_block_models" ) -- MCB: every Minecraft block's variants -> Dota mo
 
 function Precache( context )
 	PrecacheResource( "particle", "particles/generic_gameplay/illusion_killed.vpcf", context )
-	for _, m in ipairs( { "zombie", "skeleton", "spider_jockey", "zombie_gold" } ) do
+	for _, m in ipairs( { "zombie", "skeleton", "spider_jockey", "zombie_gold" } ) do -- (Steve's: below)
 		PrecacheResource( "model", "models/mc/mob_" .. m .. ".vmdl", context )
 	end
-	PrecacheResource( "particle", "particles/mc/steve_model.vpcf", context )
-	PrecacheResource( "model", "models/mc/steve.vmdl", context )
+	for _, a in ipairs( { "idle", "run", "attack" } ) do PrecacheResource( "particle", "particles/mc/steve_" .. a .. ".vpcf", context ) end
+	PrecacheResource( "model", "models/mc/mob_steve.vmdl", context )
+	PrecacheResource( "model", "models/mc/steve_ghost.vmdl", context )
 	PrecacheResource( "particle", "particles/units/heroes/hero_techies/techies_land_mine_explode.vpcf", context )
 	PrecacheResource( "soundfile", "soundevents/game_sounds_heroes/game_sounds_techies.vsndevts", context )
 	-- wards (torches): loading them at the first torch froze Dota for ~0.2 s (the camera jerked)

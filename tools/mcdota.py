@@ -190,7 +190,7 @@ def assets(dota):
 
 
 # what Dota draws from this addon, compiled: missing = error models, an invisible Steve, no HUD
-COMPILED = ["models/mc/mob_zombie.vmdl_c", "models/mc/steve.vmdl_c", "models/mc/sky.vmdl_c", "particles/mc/steve_model.vpcf_c",
+COMPILED = ["models/mc/mob_zombie.vmdl_c", "models/mc/steve.vmdl_c", "models/mc/sky.vmdl_c", "particles/mc/steve_idle.vpcf_c", "models/mc/steve_ghost.vmdl_c",
             "panorama/layout/custom_game/custom_ui_manifest.vxml_c", "panorama/scripts/custom_game/fpcam.vjs_c",
             "panorama/layout/custom_game/hero_select.vxml_c", "panorama/images/custom_game/steve_face_png.vtex_c"]
 

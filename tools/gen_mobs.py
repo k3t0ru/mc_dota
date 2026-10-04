@@ -83,10 +83,28 @@ def zombie_gold(leg, arm):
          ("gold", (0, 16), (-2, 0, -2), (4, 12, 4), 0.6, (1.9, 12, 0), -leg, "leg_l")]
 
 
-MOB_BUILD = {"zombie": zombie, "skeleton": lambda leg, arm: skeleton(leg, arm / 0.8), "spider_jockey": spider_jockey,
+def steve(leg, arm):
+    # Minecraft's PlayerModel (wide arms) with its outer layers; arms swing against the legs when walking, the right arm
+    # swings up and down for a hit (the Dota players' view of Steve, MCBridge:SteveModel)
+    t = "steve"
+    return [(t, (0, 0), (-4, -8, -4), (8, 8, 8), 0, (0, 0, 0), 0, "head"),
+            (t, (32, 0), (-4, -8, -4), (8, 8, 8), 0.5, (0, 0, 0), 0, "head"),
+            (t, (16, 16), (-4, 0, -2), (8, 12, 4), 0, (0, 0, 0), 0, "body"),
+            (t, (16, 32), (-4, 0, -2), (8, 12, 4), 0.25, (0, 0, 0), 0, "body"),
+            (t, (40, 16), (-3, -2, -2), (4, 12, 4), 0, (-5, 2, 0), -0.8 * leg - 1.8 * arm, "arm_r"),
+            (t, (40, 32), (-3, -2, -2), (4, 12, 4), 0.25, (-5, 2, 0), -0.8 * leg - 1.8 * arm, "arm_r"),
+            (t, (32, 48), (-1, -2, -2), (4, 12, 4), 0, (5, 2, 0), 0.8 * leg, "arm_l"),
+            (t, (48, 48), (-1, -2, -2), (4, 12, 4), 0.25, (5, 2, 0), 0.8 * leg, "arm_l"),
+            (t, (0, 16), (-2, 0, -2), (4, 12, 4), 0, (-1.9, 12, 0), leg, "leg_r"),
+            (t, (0, 32), (-2, 0, -2), (4, 12, 4), 0.25, (-1.9, 12, 0), leg, "leg_r"),
+            (t, (16, 48), (-2, 0, -2), (4, 12, 4), 0, (1.9, 12, 0), -leg, "leg_l"),
+            (t, (0, 48), (-2, 0, -2), (4, 12, 4), 0.25, (1.9, 12, 0), -leg, "leg_l")]
+
+
+MOB_BUILD = {"steve": steve, "zombie": zombie, "skeleton": lambda leg, arm: skeleton(leg, arm / 0.8), "spider_jockey": spider_jockey,
              "zombie_gold": zombie_gold}
 TEXTURES = {"zombie": "zombie/zombie.png", "skeleton": "skeleton/skeleton.png", "spider": "spider/spider.png",
-            "gold": "equipment/humanoid/gold.png", "item:bow": "../item/bow.png"}
+            "gold": "equipment/humanoid/gold.png", "item:bow": "../item/bow.png", "steve": "player/wide/steve.png"}
 
 # animations: (activity, seconds, looping, pose at a moment 0..1) -- like Minecraft's: a walk is a sine of the legs (arms
 # swaying with them for zombies), idle arms bob slowly, an attack swings the arms down (zombies) or draws the bow
@@ -114,9 +132,11 @@ def mc_rot(rot):
     return mat_mul(Z, mat_mul(Y, X))
 
 
-# Minecraft (x, y, z) -> Dota: x, z across, -y up; then a quarter turn so the face (Minecraft -z) looks to Dota +X
-# (the OBJ version's import did that turn itself)
-M = [[0, 0, -1], [1, 0, 0], [0, -1, 0]]
+# Minecraft (x, y, z) -> the SMD's space: x, z across, -y up (the face, Minecraft -z, to -Y). Dota's import then turns the
+# model a quarter, (x, y) -> (-y, x), like it did the OBJs: the face ends up looking to Dota +X. (Turned here as well,
+# the mobs walked sideways.) Hitboxes are in the final space: TURN.
+M = [[1, 0, 0], [0, 0, 1], [0, -1, 0]]
+def TURN(p): return (-p[1], p[0], p[2])
 
 
 def dota_point(p, off, rot):
@@ -222,8 +242,8 @@ def anim_smd(build, order, rest, pose, seconds, looping):
 def kv_vec(v): return "[ " + ", ".join(f"{x:.2f}" for x in v) + " ]"
 
 
-def vmdl(name, used, lo, hi, attachments):
-    remaps = " ".join(f'{{ from = "materials/mc/mob_{t}.vmat" to = "materials/mc/mob_{t}.vmat" }},' for t in used)
+def vmdl(name, used, lo, hi, attachments, material=None):
+    remaps = " ".join(f'{{ from = "materials/mc/mob_{t}.vmat" to = "{material or f"materials/mc/mob_{t}.vmat"}" }},' for t in used)
     anims = ""
     for an, act, seconds, looping, _ in ANIMS:
         anims += f"""					{{
@@ -346,7 +366,9 @@ for tex, path in TEXTURES.items():
 for name, build in MOB_BUILD.items():
     rest = build(0, 0)
     order, first = bones_of(rest)
-    smd, (lo, hi) = mesh_smd(rest, sizes, order)
+    smd, (lo0, hi0) = mesh_smd(rest, sizes, order)
+    a, b = TURN(lo0), TURN(hi0)
+    lo, hi = tuple(min(x, y) for x, y in zip(a, b)), tuple(max(x, y) for x, y in zip(a, b))
     with open(os.path.join(MDL, f"mob_{name}.smd"), "w") as f:
         f.write(smd)
     for an, act, seconds, looping, pose in ANIMS:
@@ -367,4 +389,15 @@ for name, build in MOB_BUILD.items():
         att += [("attach_attack1", "arm_r", tuple(a - b for a, b in zip(hand, dota_pivot(first["arm_r"][5]))))]
     with open(os.path.join(MDL, f"mob_{name}.vmdl"), "w") as f:
         f.write(vmdl(name, used, lo, hi, att))
+    if name == "steve":
+        # his hero wears an invisible copy: Dota's players can click it, his own camera sits inside it (every pixel
+        # alpha-tested away). attach_feet: where his visible model (a Dire-only particle) stands, lifted with the hero.
+        feet = tuple(a - b for a, b in zip(dota_pivot((0, 24, 0)), dota_pivot(first["body"][5])))
+        with open(os.path.join(MDL, "steve_ghost.vmdl"), "w") as f:
+            f.write(vmdl(name, used, lo, hi, att + [("attach_feet", "body", feet)], "materials/mc/ghost.vmat"))
+Image.new("RGB", (4, 4), (0, 0, 0)).save(os.path.join(MAT, "ghost.png"))
+Image.new("L", (4, 4), 0).save(os.path.join(MAT, "ghost_alpha.png"))
+with open(os.path.join(MAT, "ghost.vmat"), "w") as f:
+    f.write("\n".join(['Layer0', '{', '\tshader "global_lit_simple.vfx"', '\tF_ALPHA_TEST 1', '\tg_flAlphaTestReference "0.500"',
+                       '\tTextureColor "materials/mc/ghost.png"', '\tTextureTranslucency "materials/mc/ghost_alpha.png"', '}', '']))
 print("mobs:", ", ".join(MOB_BUILD), "anims:", ", ".join(a[0] for a in ANIMS))

@@ -32,3 +32,5 @@ settings.ini
 mcmod/run/gradle_run.log
 content/panorama/images/custom_game/steve_face.png
 __pycache__/
+content/models/mc/steve_ghost.vmdl
+content/materials/mc/ghost*

@@ -114,12 +114,13 @@ end
 
 function MCBridge:Apply( body, stale )
 	-- a swing at an ally (a deny) first: its sweep's hit lines may come earlier in the same batch
+	if body:find( "swing" ) then self.swingAt = GameRules:GetGameTime() end -- (Dire's view of him swings: SteveModel)
 	if body:find( "swing " ) and self.aim and not self.aim:IsNull() and self.steve
 		and self.aim:GetTeamNumber() == self.steve:GetTeamNumber() then self.denySwingAt = GameRules:GetGameTime() end
 	for line in body:gmatch( "[^\n]+" ) do
 		local name, x, z, hp, max, yaw, my = line:match( "^steve (%S+) (%S+) (%S+) (%S+) (%S+) (%S+) ?(%S*)" )
 		if name and not stale then
-			self:MoveSteve( name, to_dota( tonumber( x ), tonumber( z ) ), tonumber( hp ) / tonumber( max ), math.rad( tonumber( yaw ) ) )
+			self:MoveSteve( name, to_dota( tonumber( x ), tonumber( z ) ), tonumber( hp ) / tonumber( max ), math.rad( tonumber( yaw ) ), tonumber( my ) )
 			self:HighGround( tonumber( x ), tonumber( z ), tonumber( my ) )
 		end
 
@@ -441,26 +442,48 @@ function MCBridge:Control( u )
 	local stun = u:IsStunned() or u:IsFrozen() or u:IsNightmared()
 	local root = stun or u:IsRooted()
 	local ratio = math.min( 1, u:GetIdealSpeed() / math.max( 1, u:GetBaseMoveSpeed() ) )
+	if u:IsHexed() then ratio = math.min( ratio, 140 / math.max( 1, u:GetBaseMoveSpeed() ) ) end -- (a hex: Dota's 140 speed)
 	local disarmed = stun or u:IsDisarmed() or u:IsHexed()
 	local line = string.format( "cc %d %d %.2f %d", stun and 1 or 0, root and 1 or 0, ratio, disarmed and 1 or 0 )
 	if line ~= self.ccLine then self.ccLine = line self:Send( line ) end
 end
 
--- Steve as Dire's players see him: Minecraft's Steve model following his hero (a particle shown to Dire only: his
--- own player looks out of his eyes in Minecraft), hidden when Dire can't see him (fog of war, invisibility)
-function MCBridge:SteveModel( u )
-	local seen = u:IsAlive() and u:CanBeSeenByAnyOpposingTeam()
-	if seen and not self.modelFx then
-		self.modelFx = ParticleManager:CreateParticleForTeam( "particles/mc/steve_model.vpcf", PATTACH_ABSORIGIN_FOLLOW, u, DOTA_TEAM_BADGUYS )
-	elseif not seen and self.modelFx then
+-- Steve as Dire's players see him: Minecraft's Steve (models/mc/mob_steve.vmdl: idle, run, a swing) as a particle
+-- shown to Dire only (his own player looks out of his eyes), at the feet of his hero's invisible model (steve_ghost:
+-- lifted with it when he stands on blocks), gone when Dire can't see him (fog of war, invisibility)
+function MCBridge:SteveModel( u, moved )
+	local now = GameRules:GetGameTime()
+	if moved then self.movedAt = now end
+	local kind = not ( u:IsAlive() and u:CanBeSeenByAnyOpposingTeam() ) and "" or
+		now - ( self.swingAt or -10 ) < 0.35 and "attack" or now - ( self.movedAt or -10 ) < 0.15 and "run" or "idle"
+	if kind == self.modelKind then return end
+	self.modelKind = kind
+	if self.modelFx then
 		ParticleManager:DestroyParticle( self.modelFx, true )
 		ParticleManager:ReleaseParticleIndex( self.modelFx )
 		self.modelFx = nil
 	end
+	if kind == "" then return end
+	local team = self.steveForAll and DOTA_TEAM_GOODGUYS or DOTA_TEAM_BADGUYS -- (dev "lua MCBridge.steveForAll = true")
+	self.modelFx = self.steveForAll and ParticleManager:CreateParticle( "particles/mc/steve_" .. kind .. ".vpcf", PATTACH_POINT_FOLLOW, u )
+		or ParticleManager:CreateParticleForTeam( "particles/mc/steve_" .. kind .. ".vpcf", PATTACH_POINT_FOLLOW, u, team )
+	ParticleManager:SetParticleControlEnt( self.modelFx, 0, u, PATTACH_POINT_FOLLOW, "attach_feet", u:GetAbsOrigin(), true )
+end
+
+-- standing on blocks (a pillar, a bridge): his hero is drawn that much higher (Dota keeps him on its ground)
+function MCBridge:LiftSteve( u, feetY )
+	if not feetY or not MC.anchor then return end
+	local lift = math.floor( MC.anchor.z + ( feetY - MC_FLOOR ) * GRID - GetGroundHeight( u:GetAbsOrigin(), u ) + 0.5 )
+	if math.abs( lift ) < 8 then lift = 0 end
+	local m = u:FindModifierByName( "modifier_mc_lift" )
+	if lift ~= 0 and not m then m = u:AddNewModifier( u, nil, "modifier_mc_lift", {} ) end
+	if m then
+		if lift == 0 then m:Destroy() elseif m:GetStackCount() ~= lift then m:SetStackCount( lift ) end
+	end
 end
 
 -- the Minecraft player drives the first Steve hero; Minecraft owns its health
-function MCBridge:MoveSteve( name, pos, frac, yaw )
+function MCBridge:MoveSteve( name, pos, frac, yaw, feetY )
 	local u = self.steve
 	if not u or u:IsNull() then
 		for _, h in ipairs( HeroList:GetAllHeroes() ) do
@@ -470,19 +493,20 @@ function MCBridge:MoveSteve( name, pos, frac, yaw )
 		self.steve = u
 		u.mc_player = name
 		u:SetCustomHealthLabel( name, 120, 255, 120 )
-		-- the camera sits inside him: his own model is see-through for everyone (a hidden entity, AddNoDraw, hid the Steve
-		-- model Dire's players get too: MCBridge:SteveModel). It is Steve's shape, so Dota's players can click him.
-		u:SetOriginalModel( "models/mc/steve.vmdl" )
-		u:SetModel( "models/mc/steve.vmdl" )
+		-- the camera sits inside him: his own model draws nothing, for everyone (AddNoDraw hid the Steve Dire's players
+		-- get too: MCBridge:SteveModel). It is Steve's shape, so Dota's players can click him.
+		u:SetOriginalModel( "models/mc/steve_ghost.vmdl" )
+		u:SetModel( "models/mc/steve_ghost.vmdl" )
 		-- he never attacks on his own (Dota's auto-attack went for the blocks next to him); Minecraft does his fighting
 		u:SetIdleAcquire( false )
 		u:SetAcquisitionRange( 0 )
 	end
-	if not u:IsAlive() then self.lastSet = nil return end -- (a respawn moves him: no teleport for Minecraft)
-	u:SetRenderAlpha( self.nodrawOff and 255 or 0 ) -- (again every time: a respawn, an invisibility rune change it)
+	if not u:IsAlive() then self.lastSet = nil self:SteveModel( u ) return end -- (a respawn moves him: no teleport for Minecraft)
+	if u:GetModelName() ~= "models/mc/steve_ghost.vmdl" then u:SetModel( "models/mc/steve_ghost.vmdl" ) end -- (a respawn)
 	MC:HideAttached( u ) -- (Kunkka's sword and such)
 	self:Control( u )
-	self:SteveModel( u )
+	self:SteveModel( u, self.lastSet and ( pos - self.lastSet ):Length2D() > 2 )
+	self:LiftSteve( u, feetY )
 	-- pushed, pulled, thrown by a Dota spell: Dota moves him, Minecraft's player follows
 	if u:IsCurrentlyHorizontalMotionControlled() or u:IsCurrentlyVerticalMotionControlled() then
 		local a, p = MC.anchor, u:GetAbsOrigin()
