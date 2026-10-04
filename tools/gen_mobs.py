@@ -2,7 +2,7 @@
 # skeleton riding a spider), zombie in gold armour (the flag bearer). Geometry and UVs follow Minecraft's entity models and
 # ModelPart.Cube (like tools/gen_villager.py), textures from the local Minecraft jar (Mojang's: local, gitignored).
 # Output: content/models/mc/mob_<name>.{obj,vmdl}, content/materials/mc/mob_<tex>.{png,vmat}. Faces Dota +X, feet at 0,
-# 16 model pixels = one block (GRID 96). Static (no animation).
+# 16 model pixels = one block (GRID 96). Animation: pose frames (POSES), swapped by Lua.
 import glob, io, math, os, zipfile
 from PIL import Image
 
@@ -12,47 +12,70 @@ PX, UP = 96 / 16, 8
 FWD = -math.pi / 2  # arms held forward (zombies, the skeleton's bow arm)
 
 jar = zipfile.ZipFile(sorted(glob.glob(os.path.expanduser("~/.gradle/caches/fabric-loom/*/minecraft-client.jar")))[-1])
-def png(p): return Image.open(io.BytesIO(jar.read("assets/minecraft/textures/entity/" + p))).convert("RGBA")
+def png(p): return Image.open(io.BytesIO(jar.read("assets/minecraft/textures/" + (p[3:] if p.startswith("../") else "entity/" + p)))).convert("RGBA")
 
-# box: (texture, (u, v), min, size, inflation, pivot, x rotation); y down, the face looks to -z, feet at y 24
-def humanoid(t, arms=FWD, inflate=0.0, legs=True, head=True, body=True):
+# box: (texture, (u, v), min, size, inflation, pivot, turn); y down, the face looks to -z, feet at y 24. A "sprite"
+# (an item: the skeleton's bow) is a flat picture: ("item:<texture>", None, min, size with one 0, 0, pivot, turn).
+# Poses (frames swapped by Lua, MC:AnimateMobs): legs swing by `leg`, arms by `arm` (an attack: arms swung down).
+def humanoid(t, arms=FWD, inflate=0.0, legs=True, head=True, body=True, leg=0.0, arm=0.0):
     b = []
     if head: b += [(t, (0, 0), (-4, -8, -4), (8, 8, 8), inflate, (0, 0, 0), 0)]
     if body: b += [(t, (16, 16), (-4, 0, -2), (8, 12, 4), inflate, (0, 0, 0), 0)]
     if arms is not None:
-        b += [(t, (40, 16), (-3, -2, -2), (4, 12, 4), inflate, (-5, 2, 0), arms),
-              (t, (40, 16), (-1, -2, -2), (4, 12, 4), inflate, (5, 2, 0), arms)]
+        b += [(t, (40, 16), (-3, -2, -2), (4, 12, 4), inflate, (-5, 2, 0), arms + arm),
+              (t, (40, 16), (-1, -2, -2), (4, 12, 4), inflate, (5, 2, 0), arms + arm)]
     if legs:
-        b += [(t, (0, 16), (-2, 0, -2), (4, 12, 4), inflate, (-1.9, 12, 0), 0),
-              (t, (0, 16), (-2, 0, -2), (4, 12, 4), inflate, (1.9, 12, 0), 0)]
+        b += [(t, (0, 16), (-2, 0, -2), (4, 12, 4), inflate, (-1.9, 12, 0), leg),
+              (t, (0, 16), (-2, 0, -2), (4, 12, 4), inflate, (1.9, 12, 0), -leg)]
     return b
 
-MOBS = {
-    "zombie": humanoid("zombie") + [("zombie", (32, 0), (-4, -8, -4), (8, 8, 8), 0.5, (0, 0, 0), 0)],
-    "skeleton": [("skeleton", (0, 0), (-4, -8, -4), (8, 8, 8), 0, (0, 0, 0), 0),
-                 ("skeleton", (16, 16), (-4, 0, -2), (8, 12, 4), 0, (0, 0, 0), 0),
-                 ("skeleton", (40, 16), (-1, -2, -1), (2, 12, 2), 0, (-5, 2, 0), FWD),
-                 ("skeleton", (40, 16), (-1, -2, -1), (2, 12, 2), 0, (5, 2, 0), -0.3),
-                 ("skeleton", (0, 16), (-1, 0, -1), (2, 12, 2), 0, (-2, 12, 0), 0),
-                 ("skeleton", (0, 16), (-1, 0, -1), (2, 12, 2), 0, (2, 12, 0), 0)],
-    # SpiderModel (legs: z then y turns), and a skeleton sitting on its back, legs forward (the riding pose)
-    "spider_jockey": [("spider", (32, 4), (-4, -4, -8), (8, 8, 8), 0, (0, 15, -3), 0),
-                      ("spider", (0, 0), (-3, -3, -3), (6, 6, 6), 0, (0, 15, 0), 0),
-                      ("spider", (0, 12), (-5, -4, -6), (10, 8, 12), 0, (0, 15, 9), 0)]
-                     + [("spider", (18, 0), (-15, -1, -1) if side < 0 else (-1, -1, -1), (16, 2, 2), 0, (4 * side, 15, z), (0, ry * side * -1, rz * side))
-                        for z, ry, rz in ((2, 0.7854, 0.7854), (1, 0.3927, 0.5809), (0, -0.3927, 0.5809), (-1, -0.7854, 0.7854))
-                        for side in (-1, 1)]
-                     + [("skeleton", (0, 0), (-4, -8, -4), (8, 8, 8), 0, (0, -1, 2), 0),
-                        ("skeleton", (16, 16), (-4, 0, -2), (8, 12, 4), 0, (0, -1, 2), 0),
-                        ("skeleton", (40, 16), (-1, -2, -1), (2, 12, 2), 0, (-5, 1, 2), FWD),
-                        ("skeleton", (40, 16), (-1, -2, -1), (2, 12, 2), 0, (5, 1, 2), -0.3),
-                        ("skeleton", (0, 16), (-1, 0, -1), (2, 12, 2), 0, (-2, 11, 2), (-1.4, 0.3, 0)),
-                        ("skeleton", (0, 16), (-1, 0, -1), (2, 12, 2), 0, (2, 11, 2), (-1.4, -0.3, 0))],
-    "zombie_gold": humanoid("zombie") + humanoid("gold", inflate=1.0, legs=False) +
-                   [("gold", (0, 16), (-2, 0, -2), (4, 12, 4), 0.6, (-1.9, 12, 0), 0), ("gold", (0, 16), (-2, 0, -2), (4, 12, 4), 0.6, (1.9, 12, 0), 0)],
+
+def bow(pivot, turn):
+    # the bow in the hand at the end of an arm held forward: an upright picture, its length along the arm's way
+    x, y, z = pivot
+    return [("item:bow", None, (0, -8, -8), (0, 16, 16), 0, (x, y + 1, z - 10), (turn, 0, 0))]
+
+
+def skeleton(leg=0.0, arm=0.0, dy=0, legs_pose=None):
+    b = [("skeleton", (0, 0), (-4, -8, -4), (8, 8, 8), 0, (0, dy, 0), 0),
+         ("skeleton", (16, 16), (-4, 0, -2), (8, 12, 4), 0, (0, dy, 0), 0),
+         ("skeleton", (40, 16), (-1, -2, -1), (2, 12, 2), 0, (-5, 2 + dy, 0), FWD + arm),
+         ("skeleton", (40, 16), (-1, -2, -1), (2, 12, 2), 0, (5, 2 + dy, 0), FWD + 0.5 + arm)]
+    b += bow((-5, 2 + dy, 0), arm)
+    if legs_pose: b += legs_pose
+    else:
+        b += [("skeleton", (0, 16), (-1, 0, -1), (2, 12, 2), 0, (-2, 12 + dy, 0), leg),
+              ("skeleton", (0, 16), (-1, 0, -1), (2, 12, 2), 0, (2, 12 + dy, 0), -leg)]
+    return b
+
+
+def spider_jockey(leg=0.0, arm=0.0):
+    b = [("spider", (32, 4), (-4, -4, -8), (8, 8, 8), 0, (0, 15, -3), 0),
+         ("spider", (0, 0), (-3, -3, -3), (6, 6, 6), 0, (0, 15, 0), 0),
+         ("spider", (0, 12), (-5, -4, -6), (10, 8, 12), 0, (0, 15, 9), 0)]
+    for i, (z, ry, rz) in enumerate(((2, 0.7854, 0.7854), (1, 0.3927, 0.5809), (0, -0.3927, 0.5809), (-1, -0.7854, 0.7854))):
+        for side in (-1, 1):
+            swing = leg * (1 if (i + (side > 0)) % 2 else -1)  # alternate legs step together
+            b.append(("spider", (18, 0), (-15, -1, -1) if side < 0 else (-1, -1, -1), (16, 2, 2), 0, (4 * side, 15, z),
+                      (0, (ry + swing) * -side, rz * side)))
+    # the rider: sitting on the spider's back, legs forward
+    b += skeleton(arm=arm, dy=-1, legs_pose=[("skeleton", (0, 16), (-1, 0, -1), (2, 12, 2), 0, (-2, 11, 2), (-1.4, 0.3, 0)),
+                                             ("skeleton", (0, 16), (-1, 0, -1), (2, 12, 2), 0, (2, 11, 2), (-1.4, -0.3, 0))])
+    return b
+
+
+MOB_BUILD = {
+    "zombie": lambda leg, arm: humanoid("zombie", leg=leg, arm=arm) + [("zombie", (32, 0), (-4, -8, -4), (8, 8, 8), 0.5, (0, 0, 0), 0)],
+    "skeleton": lambda leg, arm: skeleton(leg, arm),
+    "spider_jockey": spider_jockey,
+    "zombie_gold": lambda leg, arm: humanoid("zombie", leg=leg, arm=arm) + humanoid("gold", inflate=1.0, legs=False, arm=arm) +
+        [("gold", (0, 16), (-2, 0, -2), (4, 12, 4), 0.6, (-1.9, 12, 0), leg), ("gold", (0, 16), (-2, 0, -2), (4, 12, 4), 0.6, (1.9, 12, 0), -leg)],
 }
+# frames: the model itself (standing), walk w0..w3, attack a0..a1 (MC:AnimateMobs plays them)
+POSES = {"": (0, 0), "_w0": (0.6, 0), "_w1": (0, 0), "_w2": (-0.6, 0), "_w3": (0, 0), "_a0": (0, 0.7), "_a1": (0, -0.2)}
+MOBS = {name + suffix: build(leg, arm) for name, build in MOB_BUILD.items() for suffix, (leg, arm) in POSES.items()}
 TEXTURES = {"zombie": "zombie/zombie.png", "skeleton": "skeleton/skeleton.png", "spider": "spider/spider.png",
-            "gold": "equipment/humanoid/gold.png"}
+            "gold": "equipment/humanoid/gold.png", "item:bow": "../item/bow.png"}
 
 
 def dota(p, offset, rot):
@@ -71,8 +94,20 @@ def dota(p, offset, rot):
 
 def mesh(boxes, sizes):
     verts, uvs, faces = [], [], {}
-    for tex, (u, v), (x0, y0, z0), (w, h, d), g, off, rot in boxes:
+    for tex, uv0, (x0, y0, z0), (w, h, d), g, off, rot in boxes:
         tw, th = sizes[tex]
+        if uv0 is None:  # a sprite: the whole picture on a flat quad (both sides drawn: the material renders backfaces)
+            if w == 0: c = [(x0, y0, z0), (x0, y0, z0 + d), (x0, y0 + h, z0 + d), (x0, y0 + h, z0)]
+            elif d == 0: c = [(x0, y0, z0), (x0 + w, y0, z0), (x0 + w, y0 + h, z0), (x0, y0 + h, z0)]
+            else: c = [(x0, y0, z0), (x0 + w, y0, z0), (x0 + w, y0, z0 + d), (x0, y0, z0 + d)]
+            face = []
+            for corner, (tu, tv) in zip(c, ((0, 0), (1, 0), (1, 1), (0, 1))):
+                verts.append(dota(corner, off, rot))
+                uvs.append((tu, 1 - tv))
+                face.append(len(verts))
+            faces.setdefault(tex, []).append(face)
+            continue
+        u, v = uv0
         x1, y1, z1 = x0 + w + g, y0 + h + g, z0 + d + g
         x0, y0, z0 = x0 - g, y0 - g, z0 - g
         c = [(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0), (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)]
@@ -89,7 +124,7 @@ def mesh(boxes, sizes):
             faces.setdefault(tex, []).append(face[::-1])  # (turned around: the winding flips)
     obj = [f"v {x:.3f} {z:.3f} {-y:.3f}" for x, y, z in verts] + [f"vt {a:.5f} {b:.5f}" for a, b in uvs]
     for tex, fs in faces.items():
-        obj.append(f"usemtl mob_{tex}")
+        obj.append(f"usemtl mob_{tex.replace('item:', '')}")
         obj += ["f " + " ".join(f"{i}/{i}" for i in f) for f in fs]
     return "\n".join(obj) + "\n", list(faces)
 
@@ -130,6 +165,7 @@ sizes = {}
 for tex, path in TEXTURES.items():
     img = png(path)
     sizes[tex] = img.size
+    tex = tex.replace("item:", "")
     big = img.resize((img.width * UP, img.height * UP), Image.NEAREST)
     big.convert("RGB").save(os.path.join(MAT, f"mob_{tex}.png"))
     big.split()[3].save(os.path.join(MAT, f"mob_{tex}_alpha.png"))
@@ -141,6 +177,7 @@ for name, boxes in MOBS.items():
     obj, used = mesh(boxes, sizes)
     with open(os.path.join(MDL, f"mob_{name}.obj"), "w") as f:
         f.write(obj)
+    used = [t.replace("item:", "") for t in used]
     remaps = " ".join(f'{{ from = "mob_{t}.vmat" to = "materials/mc/mob_{t}.vmat" }},' for t in used)
     with open(os.path.join(MDL, f"mob_{name}.vmdl"), "w") as f:
         f.write(VMDL.format(remaps=remaps, name=name))

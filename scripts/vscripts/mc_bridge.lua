@@ -63,6 +63,7 @@ function MCBridge:Tick()
 	end
 	MC:BossBar( self.steve )
 	self:FarBars()
+	MC:AnimateMobs()
 	MCWorld:Think()
 	-- cobwebs hold units like in Minecraft (90% slower while inside)
 	for p in pairs( MC.cobwebs ) do
@@ -407,7 +408,7 @@ end
 -- Dota's disables on Steve's hero, for Minecraft: "cc <stun 0/1> <root 0/1> <speed ratio> <disarmed 0/1>"
 function MCBridge:Control( u )
 	local stun = u:IsStunned() or u:IsFrozen() or u:IsNightmared()
-	local root = stun or u:IsRooted() or u:IsHexed()
+	local root = stun or u:IsRooted()
 	local ratio = math.min( 1, u:GetIdealSpeed() / math.max( 1, u:GetBaseMoveSpeed() ) )
 	local disarmed = stun or u:IsDisarmed() or u:IsHexed()
 	local line = string.format( "cc %d %d %.2f %d", stun and 1 or 0, root and 1 or 0, ratio, disarmed and 1 or 0 )

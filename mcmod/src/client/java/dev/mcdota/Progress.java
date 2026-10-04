@@ -212,6 +212,23 @@ public final class Progress {
 		pl.teleportTo(x, pl.getY(), z);
 	}
 
+	// --- mob sounds -----------------------------------------------------------------------------------------------
+	// Radiant's creeps are Minecraft mobs in Dota (gen_mobs.py): their sounds, played at their stand-in (if it has one:
+	// only units near Steve do)
+	public static void mobSound(MinecraftServer server, String id, String mob, String kind) {
+		Entity e = null;
+		for (Entity c : server.overworld().getAllEntities()) if (c.getTags().contains("dota_" + id)) { e = c; break; }
+		if (e == null) return;
+		String base = mob.startsWith("zombie") ? "zombie" : "skeleton";
+		String sound = switch (kind) {
+			case "attack" -> mob.startsWith("zombie") ? "entity.zombie.ambient" : mob.startsWith("spider") ? "entity.spider.ambient" : "entity.skeleton.shoot";
+			case "hurt" -> "entity." + base + ".hurt";
+			default -> "entity." + base + ".death";
+		};
+		Sync.run(server, String.format(Locale.ROOT, "playsound minecraft:%s hostile @a %.2f %.2f %.2f 0.8 %.2f", sound, e.getX(), e.getY(), e.getZ(),
+			0.9 + server.overworld().getRandom().nextFloat() * 0.2), false);
+	}
+
 	// --- damage numbers ---------------------------------------------------------------------------------------------
 	// Steve's hits on Dota units: the damage in Minecraft's font over the unit (its stand-in), rising and gone in
 	// ~0.9 s; white, a crit yellow, a deny grey

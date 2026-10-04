@@ -34,7 +34,9 @@ require( "mc_block_models" ) -- MCB: every Minecraft block's variants -> Dota mo
 
 
 function Precache( context )
-	for _, m in ipairs( { "zombie", "skeleton", "spider_jockey", "zombie_gold" } ) do PrecacheResource( "model", "models/mc/mob_" .. m .. ".vmdl", context ) end
+	for _, m in ipairs( { "zombie", "skeleton", "spider_jockey", "zombie_gold" } ) do
+		for _, f in ipairs( { "", "_w0", "_w1", "_w2", "_w3", "_a0", "_a1" } ) do PrecacheResource( "model", "models/mc/mob_" .. m .. f .. ".vmdl", context ) end
+	end
 	PrecacheResource( "particle", "particles/mc/steve_model.vpcf", context )
 	PrecacheResource( "model", "models/mc/steve.vmdl", context )
 	PrecacheResource( "particle", "particles/units/heroes/hero_techies/techies_land_mine_explode.vpcf", context )
@@ -220,19 +222,51 @@ end
 
 -- Radiant's creeps are Minecraft's mobs (tools/gen_mobs.py; static models): melee zombies, ranged skeletons, the
 -- siege creep a skeleton riding a spider, the flag bearer a zombie in gold armour. Their Dota cosmetics hidden.
+MC.mobs = {} -- units drawn as mobs: MC:AnimateMobs swaps their pose frames
+function MC:HideAttached( u )
+	if u:IsNull() then return end
+	for _, c in ipairs( u:GetChildren() ) do
+		if c.AddEffects and c:GetClassname() ~= "info_particle_system" then c:AddEffects( EF_NODRAW ) end
+	end
+end
+
+-- walking (4 frames, 8 a second) or attacking (2 frames) or standing: tools/gen_mobs.py's poses
+function MC:MobSound( u, kind )
+	if GameRules:GetGameTime() - ( u.mc_soundAt or 0 ) < 0.4 then return end
+	u.mc_soundAt = GameRules:GetGameTime()
+	MCBridge:Send( string.format( "mobsound %d %s %s", u:entindex(), u.mc_mob, kind ) )
+end
+
+function MC:AnimateMobs()
+	local t = GameRules:GetGameTime()
+	local walk, hit = math.floor( t * 8 ) % 4, math.floor( t * 6 ) % 2
+	for u in pairs( MC.mobs ) do
+		if u:IsNull() or not u:IsAlive() then MC.mobs[ u ] = nil
+		else
+			local frame = u:IsAttacking() and ( "_a" .. hit ) or u:IsMoving() and ( "_w" .. walk ) or ""
+			if frame ~= u.mc_frame then
+				u.mc_frame = frame
+				u:SetModel( "models/mc/mob_" .. u.mc_mob .. frame .. ".vmdl" )
+				u:SetModelScale( 1 )
+			end
+		end
+	end
+end
+
 MOB_MODELS = { { "flagbearer", "zombie_gold" }, { "siege", "spider_jockey" }, { "ranged", "skeleton" }, { "melee", "zombie" } }
 function MC:MobModel( u )
 	local name = u:GetUnitName()
-	if not name:find( "creep_goodguys" ) then return end
+	if not name:find( "goodguys" ) or not ( name:find( "creep" ) or name:find( "siege" ) ) then return end
 	for _, m in ipairs( MOB_MODELS ) do
 		if name:find( m[1] ) then
 			local model = "models/mc/mob_" .. m[2] .. ".vmdl"
 			u:SetOriginalModel( model )
 			u:SetModel( model )
 			u:SetModelScale( 1 )
-			for _, c in ipairs( u:GetChildren() ) do
-				if c:GetClassname() == "dota_item_wearable" then c:AddEffects( EF_NODRAW ) end
-			end
+			u.mc_mob = m[2]
+			MC.mobs[ u ] = true
+			MC:HideAttached( u )
+			u:SetContextThink( "mc_hide", function() MC:HideAttached( u ) end, 0.5 ) -- (the flag comes a moment later)
 			return
 		end
 	end
@@ -547,6 +581,11 @@ SIGN_MODELS = { "fletcher_name", "fletcher_goods", "mason_name", "mason_goods", 
 function MC:Facing( fx, fz ) return fx > 0 and "east" or fx < 0 and "west" or fz > 0 and "south" or "north" end
 local FACING_YAW = { south = 0, west = 90, north = 180, east = 270 } -- Minecraft's clockwise turn from the model's south
 SIGN_TURN = -90 -- the imported model's board runs along Dota y: a quarter turn puts it along the wall
+-- a sign whose text looks along Dota direction d (a model at yaw 0 shows its text toward +X)
+function MC:SignFacing( x, y, z, id, d )
+	MC:Sign( x, y, z, id, -math.deg( math.atan2( d.y, d.x ) ) + SIGN_TURN + GRID_ROT )
+end
+
 function MC:Sign( x, y, z, id, yaw, back )
 	local pos = MC:BlockPos( x, y, z )
 	local p = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/sign_" .. id .. ".vmdl",
@@ -572,22 +611,35 @@ function MC:SpawnTraders()
 	end
 	local cx, cz = MC:CellOf( fountain )
 	-- Dota's own fountain shopkeeper stands where our stalls go: hide him (the shop trigger stays, it's unused here)
+	-- (laid out by hand in the unturned grid: each spot below is that same place on Dota's map, in the turned grid)
+	local a0 = MC.anchor
+	local function oldCell( p ) return math.floor( ( p.x - a0.x ) / GRID ), math.floor( -( p.y - a0.y ) / GRID ) end
+	local function snap( fx, fz ) -- an unturned grid direction -> the turned grid's nearest axis
+		local x, z = MC:DirToMC( Vector( fx, -fz, 0 ) )
+		if math.abs( x ) >= math.abs( z ) then return { x > 0 and 1 or -1, 0 } end
+		return { 0, z > 0 and 1 or -1 }
+	end
 	local shopX, shopZ
 	for _, e in ipairs( Entities:FindAllByClassname( "ent_dota_shop" ) ) do
 		if ( e:GetAbsOrigin() - fountain ):Length2D() < 1600 then
 			e:AddEffects( EF_NODRAW )
-			shopX, shopZ = MC:CellOf( e:GetAbsOrigin() )
+			shopX, shopZ = oldCell( e:GetAbsOrigin() )
 		end
 	end
 	-- The market, laid out by hand on the real map (Radiant; Dire is the same turned 180 degrees): U = the Minecraft axis
 	-- closest to the way toward the map centre, V = U turned 90 degrees. The red stall stands where Dota's shopkeeper
 	-- was (nudged 1 along U, 2 along V), its counter toward U (the open ground); the blue one perpendicular to it, 8 cells along U and 8 along V,
 	-- its counter toward -V. Steve (re)spawns on the square between them.
-	local ox, oz = MC:DirToMC( -fountain:Normalized() ) -- toward the world origin = the map centre, in Minecraft's axes
-	local U = math.abs( ox ) >= math.abs( oz ) and { ox > 0 and 1 or -1, 0 } or { 0, oz > 0 and 1 or -1 }
-	local V = { -U[2], U[1] }
-	local sx, sz = shopX or ( cx + 4 * U[1] ), shopZ or ( cz + 4 * U[2] )
-	local function rel( u, v ) return sx + u * U[1] + v * V[1], sz + u * U[2] + v * V[2] end
+	local out = -fountain:Normalized() -- toward the world origin = the map centre
+	local Uo = math.abs( out.x ) >= math.abs( out.y ) and { out.x > 0 and 1 or -1, 0 } or { 0, out.y > 0 and -1 or 1 } -- (unturned: z runs against Dota y)
+	local Vo = { -Uo[2], Uo[1] }
+	local fcx, fcz = oldCell( fountain )
+	local sx, sz = shopX or ( fcx + 4 * Uo[1] ), shopZ or ( fcz + 4 * Uo[2] )
+	local U, V = snap( Uo[1], Uo[2] ), snap( Vo[1], Vo[2] ) -- the stalls' axes in the turned grid
+	local function rel( u, v )
+		local x, z = sx + u * Uo[1] + v * Vo[1], sz + u * Uo[2] + v * Vo[2]
+		return MC:CellOf( a0 + Vector( ( x + 0.5 ) * GRID, -( z + 0.5 ) * GRID, 0 ) )
+	end
 	local function ground( x, z ) return MC.heights[ x .. "," .. z ] or MC_FLOOR end
 	MC.spawnX, MC.spawnZ = rel( 5, 4 )
 	MC.witchX, MC.witchZ = rel( 10, 3 )
@@ -687,7 +739,9 @@ function MC:SpawnTraders()
 			local w = 1.6
 			local f = side < 0 and 0.6 or 1.6 -- (and a block further back)
 			local x, z = math.floor( tx + f * fx - w * side * fz ), math.floor( tz + f * fz + w * side * fx )
-			MC:Sign( x, MC.heights[ x .. "," .. z ] or MC_FLOOR, z, side < 0 and "secret_1" or "secret_2", -( rot * 22.5 - ( side < 0 and 90 or 0 ) ) + SIGN_TURN )
+			-- the goods sign looks where he looks; the name sign a quarter turned, outward
+			local d = side < 0 and MC:DirToDota( fz, -fx ) or MC:DirToDota( fx, fz )
+			MC:SignFacing( x, MC.heights[ x .. "," .. z ] or MC_FLOOR, z, side < 0 and "secret_1" or "secret_2", d )
 			print( string.format( "[mc] secret sign at %d %d rot %d (trader %.1f %.1f facing %.2f %.2f)", x, z, rot, tx, tz, fx, fz ) )
 		end
 	else
@@ -701,7 +755,7 @@ function MC:SpawnTraders()
 		local fx, fz = MC.witchF[1], MC.witchF[2]
 		local sx, sz = MC.witchX - fz, MC.witchZ + fx
 		local rot = math.floor( ( math.deg( math.atan2( -fx, fz ) ) % 360 ) / 22.5 + 0.5 ) % 16
-		MC:Sign( sx, MC.heights[ sx .. "," .. sz ] or MC_FLOOR, sz, "witch", -( rot * 22.5 + 90 ) + SIGN_TURN ) -- (text the way she looks: checked on screen)
+		MC:SignFacing( sx, MC.heights[ sx .. "," .. sz ] or MC_FLOOR, sz, "witch", MC:DirToDota( fx, fz ) ) -- (text the way she looks)
 		local bx2, bz2 = MC.witchX + fz, MC.witchZ - fx
 		MC:PlaceBlock( bx2, MC.heights[ bx2 .. "," .. bz2 ] or MC_FLOOR, bz2, "brewing_stand" )
 	end
@@ -883,6 +937,9 @@ function MC:DamageFilter( f )
 		attackerUnit.mc_attack = nil
 		return true
 	end
+	-- a mob creep's attack lands: its Minecraft sound (MC:MobSound)
+	if attackerUnit and attackerUnit.mc_mob and not f.entindex_inflictor_const then MC:MobSound( attackerUnit, "attack" ) end
+	if victim.mc_mob and attackerUnit and attackerUnit.mc_player then MC:MobSound( victim, "hurt" ) end
 	local def = victim.mc_block
 	if not def then return true end
 	if attackerUnit and attackerUnit.IsBuilding and attackerUnit:IsBuilding() then return false end -- fountains/towers don't mine
@@ -901,6 +958,7 @@ function MC:OnKilled( e )
 	local dead = EntIndexToHScript( e.entindex_killed )
 	local def = dead and dead.mc_block
 	local killer = e.entindex_attacker and EntIndexToHScript( e.entindex_attacker )
+	if dead and dead.mc_mob then MC:MobSound( dead, "death" ) end
 	if not def then -- Steve's kills give Minecraft experience and loot
 		if killer and killer.mc_player and dead and not dead:IsNull() and dead:GetTeamNumber() == killer:GetTeamNumber() then
 			print( "[mc] Steve denied " .. dead:GetUnitName() ) -- a real attack did it, so Dota shows the "!" and cuts the XP itself
