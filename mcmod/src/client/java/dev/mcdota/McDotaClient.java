@@ -73,11 +73,16 @@ public class McDotaClient implements ClientModInitializer {
 		// no digging into the ground (Hybrid.ground): not even the mining cracks start
 		net.fabricmc.fabric.api.event.player.AttackBlockCallback.EVENT.register((player, level, hand, pos, dir) ->
 			Hybrid.ground(level.getBlockState(pos), pos) && !player.isCreative() ? net.minecraft.world.InteractionResult.FAIL : net.minecraft.world.InteractionResult.PASS);
+		// a tree chopped: the whole column goes, and Dota cuts its tree
+		net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents.AFTER.register((level, player, pos, state, be) -> {
+			if (!Hybrid.tree(state) || level.getServer() == null) return;
+			Sync.untree(level.getServer(), pos.getX(), pos.getZ());
+			Sync.out("chop " + pos.getX() + " " + pos.getZ());
+		});
 		net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents.BEFORE.register((level, player, pos, state, be) ->
 			player.isCreative() || !Hybrid.ground(state, pos));
 		// clicks land on the overlay, never in Minecraft's window, so grab the mouse ourselves once focus arrives
 		ClientTickEvents.END_CLIENT_TICK.register(Sync::tick);
-		ClientTickEvents.END_CLIENT_TICK.register(Trees::tick); // chopping Dota's trees
 		ClockHud.register();
 		ClientTickEvents.END_CLIENT_TICK.register(MouseWheel::tick);
 		MouseWheel.start();

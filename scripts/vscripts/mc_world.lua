@@ -9,7 +9,7 @@ CAPTURE_TIME = { outpost = 3, lantern = 1.5, gate = 3.5 } -- seconds standing by
 CAPTURE_VISION = { outpost = 900, lantern = 1100 } -- what a captured one shows around it
 
 -- Dota's rune effects as Minecraft effects: effect, amplifier (the duration is the Dota modifier's)
--- (double damage is Lua's: MCBridge's swing x2; illusions become Minecraft's resistance: Kunkka's illusions served no one)
+-- (double damage is Lua's: MCBridge's swing x2; the illusion rune does nothing: Kunkka's illusions served no one)
 RUNE_EFFECTS = {
 	modifier_rune_haste = { "speed", 3 }, -- Dota's max speed: ~1.8x
 	modifier_rune_regen = { "regeneration", 3 }, modifier_rune_invis = { "invisibility", 0 },
@@ -70,14 +70,14 @@ function MCWorld:Rune( s, rune )
 		MC.allowOrder = false
 	end
 	if ok and kind == DOTA_RUNE_WATER then MCBridge:Send( "buff instant_health 1 1" ) end
-	-- the illusion rune's Kunkkas (nobody could lead them): gone; Steve gets Minecraft's resistance for as long instead
+	-- the illusion rune's Kunkkas (nobody could lead them): gone, the rune does nothing (and says so)
 	s:SetContextThink( "mc_illusions", function()
 		local any = false
 		for _, u in ipairs( FindUnitsInRadius( s:GetTeamNumber(), s:GetAbsOrigin(), nil, 2000, DOTA_UNIT_TARGET_TEAM_FRIENDLY,
 			DOTA_UNIT_TARGET_HERO, DOTA_UNIT_TARGET_FLAG_NONE, FIND_ANY_ORDER, false ) ) do
 			if u:IsIllusion() and u:GetPlayerOwnerID() == s:GetPlayerOwnerID() then u:RemoveSelf() any = true end
 		end
-		if any then MCBridge:Send( "buff resistance 75 1" ) end
+		if any then MCBridge:Send( "msg Странно, похоже эта руна никак не подействовала..." ) end
 	end, 0.2 )
 end
 
@@ -164,43 +164,42 @@ function MCWorld:GateFxEnd( s )
 	end
 end
 
--- Dota's trees in Minecraft: an invisible hitbox exactly at each tree (Trees.java), chopped like Minecraft wood
--- ("chop <id>" from Minecraft); "tree <id> <x> <y> <z>" in Minecraft's coordinates
-function MCWorld:TreeLine( t )
-	local a, p = MC.anchor, t:GetAbsOrigin()
-	local x, z = ( p.x - a.x ) / GRID, -( p.y - a.y ) / GRID
-	local bx, bz = math.floor( x ), math.floor( z )
-	local h = MC.halfh[ bx .. "," .. bz ]
-	local y = h and MC_FLOOR + h / 2 or ( MC.heights[ bx .. "," .. bz ] or MC_FLOOR )
-	return string.format( "tree %d %.3f %.2f %.3f", t:GetEntityIndex(), x, y, z )
-end
-
+-- Dota's trees in Minecraft: magenta log columns (Sync "tree"), chopped like Minecraft wood ("chop" from Minecraft)
 function MCWorld:SendTrees()
 	self.cut = {}
+	MC.treeAt = {} -- "bx,bz" -> the Dota tree on that column (cracks go on its trunk: MC:Crack)
 	local n = 0
 	for _, t in ipairs( GridNav:GetAllTreesAroundPoint( Vector( 0, 0, 0 ), 30000, true ) ) do
 		if t:IsStanding() then
-			MCBridge:Send( self:TreeLine( t ) )
+			local bx, bz = MC:CellOf( t:GetAbsOrigin() )
+			MCBridge:Send( string.format( "tree %d %d", bx, bz ) )
+			MC.treeAt[ bx .. "," .. bz ] = t
 			n = n + 1
 		end
 	end
 	print( "[mc] trees sent: " .. n )
 	ListenToGameEvent( "tree_cut", function( e ) -- cut in Dota (a tango, a quelling blade...): its logs go too
 		local p = Vector( e.tree_x, e.tree_y, 0 )
-		for _, t in ipairs( GridNav:GetAllTreesAroundPoint( p, 40, true ) ) do
-			MCBridge:Send( "untree " .. t:GetEntityIndex() )
-			self.cut[ t ] = true
-		end
+		local bx, bz = MC:CellOf( p )
+		MCBridge:Send( string.format( "untree %d %d", bx, bz ) )
+		for _, t in ipairs( GridNav:GetAllTreesAroundPoint( p, 40, true ) ) do self.cut[ t ] = true end
 	end, nil )
 end
 
--- Minecraft chopped tree <id>: Dota cuts it
-function MCWorld:Chop( id )
+-- Minecraft chopped the column at x, z: Dota cuts its tree
+function MCWorld:Chop( bx, bz )
 	local s = steve()
-	local t = EntIndexToHScript( id )
-	if t and not t:IsNull() and t:IsStanding() then
-		t:CutDown( s and s:GetTeamNumber() or DOTA_TEAM_GOODGUYS )
-		self.cut[ t ] = true
+	local p = MC:CellPos( bx, bz )
+	local best, bd
+	for _, t in ipairs( GridNav:GetAllTreesAroundPoint( p, GRID, true ) ) do
+		if t:IsStanding() then
+			local d = ( t:GetAbsOrigin() - p ):Length2D()
+			if not bd or d < bd then best, bd = t, d end
+		end
+	end
+	if best then
+		best:CutDown( s and s:GetTeamNumber() or DOTA_TEAM_GOODGUYS )
+		self.cut[ best ] = true
 	end
 end
 
@@ -212,7 +211,9 @@ function MCWorld:TreesBack()
 		if t:IsNull() then self.cut[ t ] = nil
 		elseif t:IsStanding() then
 			self.cut[ t ] = nil
-			MCBridge:Send( self:TreeLine( t ) )
+			local bx, bz = MC:CellOf( t:GetAbsOrigin() )
+			MCBridge:Send( string.format( "tree %d %d", bx, bz ) )
+			MC.treeAt[ bx .. "," .. bz ] = t
 		end
 	end
 end

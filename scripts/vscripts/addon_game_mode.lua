@@ -47,7 +47,9 @@ function Precache( context )
 	for _, m in ipairs({
 		"models/mc/stone.vmdl", "models/mc/cobblestone.vmdl", "models/mc/log.vmdl", "models/mc/coal_ore.vmdl",
 		"models/mc/iron_ore.vmdl", "models/mc/diamond_ore.vmdl", "models/mc/crafting_table.vmdl",
-		"models/mc/sky.vmdl", "models/mc/dirt.vmdl", "models/mc/sign_fletcher_name.vmdl", "models/mc/sign_fletcher_goods.vmdl",
+		"models/mc/sky.vmdl", "models/mc/tree_crack_0.vmdl", "models/mc/tree_crack_1.vmdl", "models/mc/tree_crack_2.vmdl",
+		"models/mc/tree_crack_3.vmdl", "models/mc/tree_crack_4.vmdl", "models/mc/tree_crack_5.vmdl", "models/mc/tree_crack_6.vmdl",
+		"models/mc/tree_crack_7.vmdl", "models/mc/tree_crack_8.vmdl", "models/mc/tree_crack_9.vmdl", "models/mc/dirt.vmdl", "models/mc/sign_fletcher_name.vmdl", "models/mc/sign_fletcher_goods.vmdl",
 		"models/mc/sign_mason_name.vmdl", "models/mc/sign_mason_goods.vmdl", "models/mc/sign_librarian_name.vmdl",
 		"models/mc/sign_librarian_goods.vmdl", "models/mc/sign_toolsmith_name.vmdl", "models/mc/sign_toolsmith_goods.vmdl",
 		"models/mc/sign_secret_1.vmdl", "models/mc/sign_secret_2.vmdl", "models/mc/sign_witch.vmdl", "models/mc/sand.vmdl", "models/mc/planks.vmdl", "models/mc/spruce_planks.vmdl",
@@ -725,7 +727,16 @@ end
 function MC:Crack( bx, by, bz, stage )
 	if MC.crack and not MC.crack:IsNull() then MC.crack:RemoveSelf() end
 	MC.crack = nil
-	if stage < 0 or stage > 9 or not MC.props[ bx .. "," .. by .. "," .. bz ] then return end
+	if stage < 0 or stage > 9 then return end
+	-- a tree's log column being chopped: the cracks wrap the Dota tree's own trunk (tools/gen_tree_crack.py)
+	local tree = MC.treeAt and MC.treeAt[ bx .. "," .. bz ]
+	if tree and not tree:IsNull() and tree:IsStanding() then
+		local p = tree:GetAbsOrigin()
+		MC.crack = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/tree_crack_" .. stage .. ".vmdl",
+			origin = string.format( "%f %f %f", p.x, p.y, GetGroundHeight( p, nil ) ) } )
+		return
+	end
+	if not MC.props[ bx .. "," .. by .. "," .. bz ] then return end
 	local pos = MC:BlockPos( bx, by, bz ) - Vector( 0, 0, 1 )
 	MC.crack = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/crack_" .. stage .. ".vmdl",
 		origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ) } )

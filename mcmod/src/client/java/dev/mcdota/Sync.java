@@ -43,6 +43,7 @@ public final class Sync {
 	// server thread: a block changed somewhere
 	public static void blockChanged(BlockPos p, BlockState s) {
 		if (applying || p.getY() < -60 || p.getY() > 60) return; // Dota decides what to draw / collide by height
+		if (Hybrid.tree(s)) return; // (Dota's own trees)
 		// under the ground it's the terrain changing by itself (the superflat's grass under the built ground turns to
 		// dirt): Dota drew those as dirt blocks hanging in the air wherever its ground is lower
 		int surface = Hybrid.surfaceAt(p.getX(), p.getZ());
@@ -117,6 +118,16 @@ public final class Sync {
 				player.teleportTo(player.getX(), pos.getY() + 1, player.getZ());
 		}
 		return net.minecraft.world.InteractionResult.SUCCESS;
+	}
+
+	// a tree column gone: its logs, and the half step's slab back
+	public static void untree(MinecraftServer server, int x, int z) {
+		int y = Hybrid.surfaceAt(x, z);
+		applying = true;
+		try {
+			run(server, String.format("fill %d %d %d %d %d %d minecraft:air replace minecraft:stripped_oak_log", x, y, z, x, y + 3, z), false);
+			if (Hybrid.slabAt(x, z)) run(server, String.format("setblock %d %d %d minecraft:mud_brick_slab", x, y, z), false);
+		} finally { applying = false; }
 	}
 
 	// blocks Dota built (the market, the fountain's barriers): explosions leave them alone (ExplosionMixin)
@@ -203,7 +214,7 @@ public final class Sync {
 	private static long lastReport;
 	private static int sweep;
 
-	static void column(MinecraftServer server, int x, int z, Runnable build) {
+	private static void column(MinecraftServer server, int x, int z, Runnable build) {
 		Build b = new Build(x, z, build);
 		if (server.overworld().hasChunk(x >> 4, z >> 4)) ready(b);
 		else wait(b);
@@ -331,8 +342,15 @@ public final class Sync {
 					case "buff" -> run(server, String.format("effect give @p minecraft:%s %s %s", p[1], p[2], p[3])); // runes
 					case "shard" -> Progress.shard(server); // Tormentor
 					case "unbuff" -> run(server, "effect clear @p minecraft:" + p[1], false); // a rune ended early in Dota
-					case "tree" -> Trees.place(server, p[1], Double.parseDouble(p[2]), Double.parseDouble(p[3]), Double.parseDouble(p[4]));
-					case "untree" -> Trees.remove(server, p[1]); // cut in Dota
+					case "tree" -> { // Dota's tree on this column: three magenta logs on the ground
+						int x = Integer.parseInt(p[1]), z = Integer.parseInt(p[2]);
+						column(server, x, z, () -> {
+							int y = Hybrid.surfaceAt(x, z);
+							run(server, String.format("fill %d %d %d %d %d %d minecraft:stripped_oak_log replace #minecraft:replaceable", x, y, z, x, y + 2, z), false);
+							if (Hybrid.slabAt(x, z)) run(server, String.format("setblock %d %d %d minecraft:stripped_oak_log", x, y, z), false);
+						});
+					}
+					case "untree" -> untree(server, Integer.parseInt(p[1]), Integer.parseInt(p[2])); // cut in Dota
 					case "spawnat" -> Progress.spawnAt(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
 					case "lvl" -> Progress.level(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
 					case "delay" -> Overlay.dotaDelay(Integer.parseInt(p[1]));

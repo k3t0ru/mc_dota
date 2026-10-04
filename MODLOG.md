@@ -515,11 +515,10 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
   +2 hearts for the match.
 - Round 2: runes follow Dota (Dota's modifier on the hero -> Minecraft effect for as long, cleared when it ends early;
   haste speed IV, regen IV, shield absorption III, DD = swing x2 in Lua, invisibility broken by a swing, illusions
-  removed -> resistance 75 s, water -> instant health); a swing at a rune picks it up. Trees: an invisible Minecraft "interaction"
-  entity exactly at each Dota tree (Trees.java; blocks would sit on the grid, Dota's trees don't), summoned when its
-  chunk loads; holding attack on it chops like an oak log (held item's speed: axe fast, sword/hand ~3 s), wood
-  sounds and chips, 2 oak logs, Dota cuts the tree ("chop <id>"); Dota's cuts remove it ("untree <id>"), regrown
-  trees come back. No collision. Lotus pools are Dota's own: lotuses Kunkka picks up become golden carrots (1/2/3 by tier). Twin gates: no
+  removed -> resistance 75 s, water -> instant health); a swing at a rune picks it up. Trees: Dota's trees are
+  columns of 3 magenta stripped oak logs in Minecraft (blocking, chopped like wood: axe fast, sword slow; wood
+  sounds); a chopped column cuts Dota's tree ("chop"), Dota's cuts remove the logs ("untree"), regrown trees come
+  back. Lotus pools are Dota's own: lotuses Kunkka picks up become golden carrots (1/2/3 by tier). Twin gates: no
   cooldown, 3.5 s with Dota's teleport sound/particles; any Dota teleport of the hero moves Minecraft's player too.
   Captured outposts/watchers give vision (FOW viewer). Torches stand on terrain slabs (TorchMixin), don't sink on a
   player's block; a torch 4+ blocks up sees like a cliff ward. Elytra fireworks 1.5 -> 1.1. Max health in whole hearts.
