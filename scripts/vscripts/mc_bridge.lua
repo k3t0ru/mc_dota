@@ -20,8 +20,8 @@ MCBridge = { out = { "reset" }, inflight = 0, sentAt = 0, seq = 0, applied = 0 }
 
 function MCBridge:Send( line ) table.insert( self.out, line ) end
 
-local function to_mc( p ) return ( p.x - MC.anchor.x ) / GRID, -( p.y - MC.anchor.y ) / GRID end
-local function to_dota( x, z ) return GetGroundPosition( MC.anchor + Vector( x * GRID, -z * GRID, 0 ), nil ) end
+local function to_mc( p ) return MC:ToMC( p ) end
+local function to_dota( x, z ) return GetGroundPosition( MC.anchor + MC:Offset( x, z ), nil ) end
 
 function MCBridge:Tick()
 	if not MC.anchor then return 0.1 end
@@ -32,7 +32,7 @@ function MCBridge:Tick()
 	self.sentAt = GameRules:GetGameTime()
 
 	local a = MC.anchor
-	local lines = { string.format( "anchor %.1f %.1f %.1f", a.x, a.y, a.z ) }
+	local lines = { string.format( "anchor %.1f %.1f %.1f %.3f", a.x, a.y, a.z, GRID_ROT ) } -- (the bridge turns the camera too)
 	-- every living Dota unit near Steve gets a stand-in in Minecraft (heroes, creeps, neutrals)
 	local center = self.steve and self.steve:GetAbsOrigin() or MC.anchor
 	-- (towers and other buildings too, so Minecraft weapons can hit them; invulnerable ones only once Dota opens them up)
@@ -165,7 +165,7 @@ function MCBridge:Apply( body, stale )
 				for _, t in ipairs( Entities:FindAllByClassname( "npc_dota_tower" ) ) do
 					local o = t:GetAbsOrigin()
 					print( string.format( "[mc] tower %s team %d at %d %d (mc %d %d)", t:GetUnitName(), t:GetTeamNumber(), o.x, o.y,
-						math.floor( ( o.x - MC.anchor.x ) / GRID ), math.floor( -( o.y - MC.anchor.y ) / GRID ) ) )
+						MC:CellOf( o ) ) )
 				end
 			elseif dev:match( "^nodraw " ) and self.steve then -- does Dota's AI ignore a hero it doesn't draw?
 				self.nodrawOff = dev == "nodraw 0"
@@ -231,7 +231,7 @@ function MCBridge:Apply( body, stale )
 		-- TNT went off in Minecraft: Dota shows (and plays) the blast, for everyone
 		local tx, ty, tz = line:match( "^boom (%S+) (%S+) (%S+)" )
 		if tx then
-			local p = MC.anchor + Vector( tonumber( tx ) * GRID, -tonumber( tz ) * GRID, ( tonumber( ty ) - MC_FLOOR ) * GRID )
+			local p = MC.anchor + MC:Offset( tonumber( tx ), tonumber( tz ) ) + Vector( 0, 0, ( tonumber( ty ) - MC_FLOOR ) * GRID )
 			local fx = ParticleManager:CreateParticle( "particles/units/heroes/hero_techies/techies_land_mine_explode.vpcf", PATTACH_WORLDORIGIN, nil )
 			ParticleManager:SetParticleControl( fx, 0, p )
 			ParticleManager:SetParticleControl( fx, 1, Vector( 400, 0, 0 ) )
@@ -450,7 +450,8 @@ function MCBridge:MoveSteve( name, pos, frac, yaw )
 	-- pushed, pulled, thrown by a Dota spell: Dota moves him, Minecraft's player follows
 	if u:IsCurrentlyHorizontalMotionControlled() or u:IsCurrentlyVerticalMotionControlled() then
 		local a, p = MC.anchor, u:GetAbsOrigin()
-		self:Send( string.format( "follow %.2f %.2f", ( p.x - a.x ) / GRID, -( p.y - a.y ) / GRID ) )
+		local fx, fz = MC:ToMC( p )
+		self:Send( string.format( "follow %.2f %.2f", fx, fz ) )
 		self.lastSet = p
 		return
 	end
@@ -469,7 +470,7 @@ function MCBridge:MoveSteve( name, pos, frac, yaw )
 	if u:HasModifier( "modifier_fountain_invulnerability" ) then
 		u:RemoveModifierByName( "modifier_fountain_invulnerability" )
 	end
-	u:SetForwardVector( Vector( -math.sin( yaw ), -math.cos( yaw ), 0 ) )
+	u:SetForwardVector( MC:DirToDota( -math.sin( yaw ), math.cos( yaw ) ) ) -- (Minecraft yaw 0 looks +z)
 	u:SetHealth( math.max( 1, frac * u:GetMaxHealth() ) )
 end
 

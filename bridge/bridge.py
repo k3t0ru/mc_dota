@@ -39,6 +39,7 @@ class Relay:
     def __init__(self):
         self.lock = threading.Lock()
         self.anchor = None  # Dota position of MC (0, GROUND_Y, 0)
+        self.rot = 0.0  # Minecraft's grid turned this much (radians, counter-clockwise) on Dota's map
         self.cam = None  # latest MC eye pose
         self.me = None  # latest "steve ..." line for Dota
         self.heroes = {}  # id -> "hero ..." line for MC
@@ -51,8 +52,9 @@ class Relay:
                 p = line.split()
                 if not p:
                     continue
-                if p[0] == "anchor" and len(p) == 4:
-                    self.anchor = tuple(float(v) for v in p[1:])
+                if p[0] == "anchor" and len(p) in (4, 5):
+                    self.anchor = tuple(float(v) for v in p[1:4])
+                    self.rot = math.radians(float(p[4])) if len(p) == 5 else 0.0  # Minecraft's grid turned on Dota's map
                 elif p[0] == "hero":
                     heroes[p[1]] = line
                 elif p[0] in ("dmg", "block", "unblock", "reset", "h", "xp", "void", "border", "loot", "lvl", "delay", "trader", "dead", "respawn", "spawnat", "mcfov", "boss", "fx", "time", "fountain", "sign", "msg", "tp", "buff", "shard", "unbuff", "tree", "untree", "dmgnum", "cc", "follow"):
@@ -92,12 +94,15 @@ class Relay:
             return ""
         x, y, z, yaw, pitch, sent = self.cam
         ax, ay, az = self.anchor
-        ex, ey, ez = ax + x * SCALE, ay - z * SCALE, az + (y - GROUND_Y) * SCALE
+        c, s = math.cos(self.rot), math.sin(self.rot)
+        dx, dy = x * SCALE, -z * SCALE
+        ex, ey, ez = ax + dx * c - dy * s, ay + dx * s + dy * c, az + (y - GROUND_Y) * SCALE
         t, p = math.radians(yaw), math.radians(pitch)
-        hx, hy = -math.sin(t), -math.cos(t)  # MC facing in Dota's x/y
+        hx, hy = -math.sin(t), -math.cos(t)  # MC facing in Dota's x/y (unturned), then the grid's turn
+        hx, hy = hx * c - hy * s, hx * s + hy * c
         lx, ly = ex + CAM_DIST * math.cos(p) * hx, ey + CAM_DIST * math.cos(p) * hy
         lz = ez - CAM_DIST * math.sin(p)
-        return f"{lx:.1f} {ly:.1f} {YAW_OFFSET + YAW_SIGN * yaw:.2f} {max(pitch, MIN_PITCH):.2f} {CAM_DIST} {lz:.1f} {sent:.2f}"
+        return f"{lx:.1f} {ly:.1f} {YAW_OFFSET + YAW_SIGN * yaw + math.degrees(self.rot):.2f} {max(pitch, MIN_PITCH):.2f} {CAM_DIST} {lz:.1f} {sent:.2f}"
 
 
 def main():

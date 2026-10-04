@@ -301,12 +301,33 @@ function MC:SetupHero( hero )
 end
 
 -- Dota position <-> Minecraft block column (bx, bz)
+-- Minecraft's grid is turned GRID_ROT degrees on Dota's map (counter-clockwise): along mid, from fountain to
+-- fountain, so a straight line of blocks runs down the lane. Minecraft x, z (blocks) <-> Dota (units):
+-- unturned, x -> +X and z -> -Y; then the turn.
+GRID_ROT = 42.8
+local COS, SIN = math.cos( math.rad( GRID_ROT ) ), math.sin( math.rad( GRID_ROT ) )
+function MC:Offset( x, z ) -- Minecraft x, z -> a Dota offset from the anchor
+	local dx, dy = x * GRID, -z * GRID
+	return Vector( dx * COS - dy * SIN, dx * SIN + dy * COS, 0 )
+end
+function MC:ToMC( pos ) -- Dota position -> Minecraft x, z (blocks, not rounded)
+	local dx, dy = pos.x - MC.anchor.x, pos.y - MC.anchor.y
+	return ( dx * COS + dy * SIN ) / GRID, -( -dx * SIN + dy * COS ) / GRID
+end
+function MC:DirToDota( fx, fz ) -- a Minecraft direction -> Dota's
+	return Vector( fx * COS + fz * SIN, fx * SIN - fz * COS, 0 )
+end
+function MC:DirToMC( v ) -- a Dota direction -> Minecraft's fx, fz
+	return v.x * COS + v.y * SIN, -( -v.x * SIN + v.y * COS )
+end
+
 function MC:CellOf( pos )
-	return math.floor( ( pos.x - MC.anchor.x ) / GRID ), math.floor( -( pos.y - MC.anchor.y ) / GRID )
+	local x, z = MC:ToMC( pos )
+	return math.floor( x ), math.floor( z )
 end
 
 function MC:CellPos( bx, bz )
-	return GetGroundPosition( MC.anchor + Vector( ( bx + 0.5 ) * GRID, -( bz + 0.5 ) * GRID, 0 ), nil )
+	return GetGroundPosition( MC.anchor + MC:Offset( bx + 0.5, bz + 0.5 ), nil )
 end
 
 MC.cells = {} -- "bx,bz" -> block unit
@@ -321,8 +342,11 @@ function MC:HeightAt( z ) return MC_FLOOR + math.floor( MC:HalfHeightAt( z ) / 2
 function MC:SendTerrain()
 	-- the Dota map in cells; outside it (and wherever Dota reports garbage heights) Minecraft gets bottomless void
 	local a = MC.anchor
-	local x1, x2 = math.floor( ( GetWorldMinX() - a.x ) / GRID ), math.floor( ( GetWorldMaxX() - a.x ) / GRID )
-	local z1, z2 = math.floor( -( GetWorldMaxY() - a.y ) / GRID ), math.floor( -( GetWorldMinY() - a.y ) / GRID )
+	local x1, x2, z1, z2 = 1e9, -1e9, 1e9, -1e9
+	for _, c in ipairs( { { GetWorldMinX(), GetWorldMinY() }, { GetWorldMinX(), GetWorldMaxY() }, { GetWorldMaxX(), GetWorldMinY() }, { GetWorldMaxX(), GetWorldMaxY() } } ) do
+		local x, z = MC:ToMC( Vector( c[1], c[2], 0 ) )
+		x1, x2, z1, z2 = math.min( x1, math.floor( x ) ), math.max( x2, math.floor( x ) ), math.min( z1, math.floor( z ) ), math.max( z2, math.floor( z ) )
+	end
 	-- the map's own box plus a void strip past its edge, then the border. (Not a square around the anchor: the anchor is
 	-- our fountain, in a corner, and a square of 220 left the far corner, the enemy's base, unbuilt behind the border.)
 	local bx1, bx2 = math.max( x1 - 6, -TERRAIN_R ), math.min( x2 + 6, TERRAIN_R )
@@ -332,7 +356,9 @@ function MC:SendTerrain()
 	-- the world bounds are far bigger than the visible map; past its edge (a rim, then no terrain at all) Dota reports
 	-- heights ~16000 below: that is where Minecraft gets its void
 	local function outside( bx, bz )
-		return bx < x1 or bx > x2 or bz < z1 or bz > z2 or math.abs( MC:CellPos( bx, bz ).z - a.z ) > 1500
+		local p = a + MC:Offset( bx + 0.5, bz + 0.5 ) -- (the grid is turned: Dota's own bounds)
+		return p.x < GetWorldMinX() or p.x > GetWorldMaxX() or p.y < GetWorldMinY() or p.y > GetWorldMaxY()
+			or math.abs( MC:CellPos( bx, bz ).z - a.z ) > 1500
 	end
 	local H = {}
 	local function hh( bx, bz )
@@ -405,7 +431,7 @@ MODELS = { spruce_planks = "spruce_planks", red_wool = "red_wool", white_wool = 
 -- walks on. (Drawing each block from Dota's real ground under its cell broke roofs into steps; on a slope a block is
 -- off by at most a quarter block, Minecraft's terrain being half-block steps of Dota's ground.)
 function MC:BlockPos( bx, by, bz )
-	return MC.anchor + Vector( ( bx + 0.5 ) * GRID, -( bz + 0.5 ) * GRID, ( by - MC_FLOOR ) * GRID )
+	return MC.anchor + MC:Offset( bx + 0.5, bz + 0.5 ) + Vector( 0, 0, ( by - MC_FLOOR ) * GRID )
 end
 
 -- which of a block's variants its state picks (all of the variant's properties must be in the state, as in Minecraft)
@@ -435,10 +461,10 @@ function MC:ShowBlock( bx, by, bz, kind, solid, state )
 	local sink = ( solid == false and h and h % 2 == 1 and by == MC_FLOOR + ( h + 1 ) / 2 and not ( under and not under:IsNull() ) ) and GRID / 2 or 0
 	if v then
 		p = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mcb/" .. v[2] .. ".vmdl",
-			origin = string.format( "%f %f %f", pos.x, pos.y, pos.z + GRID / 2 - sink ), angles = string.format( "0 %d %d", -v[4], v[3] ) } )
+			origin = string.format( "%f %f %f", pos.x, pos.y, pos.z + GRID / 2 - sink ), angles = string.format( "0 %f %d", -v[4] + GRID_ROT, v[3] ) } )
 	else -- not a Minecraft block we know: the old cube
 		p = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/" .. ( MODELS[ kind ] or "cobblestone" ) .. ".vmdl",
-			origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ) } )
+			origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ), angles = string.format( "0 %f 0", GRID_ROT ) } )
 	end
 	p:SetModelScale( GRID / 128 ) -- the models are 128 units a block
 	if v and MCB_ANIM[ v[2] ] then MC:Animate( p, v[2] ) end
@@ -524,7 +550,7 @@ SIGN_TURN = -90 -- the imported model's board runs along Dota y: a quarter turn 
 function MC:Sign( x, y, z, id, yaw, back )
 	local pos = MC:BlockPos( x, y, z )
 	local p = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/sign_" .. id .. ".vmdl",
-		origin = string.format( "%f %f %f", pos.x, pos.y, pos.z + GRID / 2 ), angles = string.format( "0 %d 0", -yaw + SIGN_TURN ) } ) -- (checked on screen)
+		origin = string.format( "%f %f %f", pos.x, pos.y, pos.z + GRID / 2 ), angles = string.format( "0 %f 0", -yaw + SIGN_TURN + GRID_ROT ) } ) -- (checked on screen)
 	p:SetModelScale( GRID / 128 )
 end
 
@@ -557,8 +583,8 @@ function MC:SpawnTraders()
 	-- closest to the way toward the map centre, V = U turned 90 degrees. The red stall stands where Dota's shopkeeper
 	-- was (nudged 1 along U, 2 along V), its counter toward U (the open ground); the blue one perpendicular to it, 8 cells along U and 8 along V,
 	-- its counter toward -V. Steve (re)spawns on the square between them.
-	local out = -fountain:Normalized() -- toward the world origin = the map centre
-	local U = math.abs( out.x ) >= math.abs( out.y ) and { out.x > 0 and 1 or -1, 0 } or { 0, out.y > 0 and -1 or 1 } -- MC z runs against Dota y
+	local ox, oz = MC:DirToMC( -fountain:Normalized() ) -- toward the world origin = the map centre, in Minecraft's axes
+	local U = math.abs( ox ) >= math.abs( oz ) and { ox > 0 and 1 or -1, 0 } or { 0, oz > 0 and 1 or -1 }
 	local V = { -U[2], U[1] }
 	local sx, sz = shopX or ( cx + 4 * U[1] ), shopZ or ( cz + 4 * U[2] )
 	local function rel( u, v ) return sx + u * U[1] + v * V[1], sz + u * U[2] + v * V[2] end
@@ -649,9 +675,12 @@ function MC:SpawnTraders()
 	if keeper then
 		keeper:AddEffects( EF_NODRAW )
 		local p, f = keeper:GetAbsOrigin(), keeper:GetForwardVector()
-		table.insert( TRADERS, { ( p.x - a.x ) / GRID, -( p.y - a.y ) / GRID, "weaponsmith", f.x, -f.y } )
+		local kx, kz = MC:ToMC( p )
+		local kfx, kfz = MC:DirToMC( f )
+		table.insert( TRADERS, { kx, kz, "weaponsmith", kfx, kfz } )
 		-- his two standing signs in front of him, left and right, facing where he looks
-		local tx, tz, fx, fz = ( p.x - a.x ) / GRID, -( p.y - a.y ) / GRID, f.x, -f.y
+		local tx, tz = MC:ToMC( p )
+		local fx, fz = MC:DirToMC( f )
 		local rot = math.floor( ( math.deg( math.atan2( -fx, fz ) ) % 360 ) / 22.5 + 0.5 ) % 16
 		for _, side in ipairs( { -1, 1 } ) do
 			-- (the name sign: a block nearer him and turned a quarter, by hand)
@@ -685,10 +714,10 @@ function MC:SpawnTraders()
 	print( "[mc] banners hidden: " .. hidden )
 	for _, t in ipairs( TRADERS ) do
 		print( string.format( "[mc] trader %s at %.1f, %.1f", t[3], t[1], t[2] ) )
-		local pos = t[6] and ( a + Vector( t[1] * GRID, -t[2] * GRID, ( t[6] - MC_FLOOR ) * GRID ) )
-			or GetGroundPosition( a + Vector( t[1] * GRID, -t[2] * GRID, 0 ), nil )
+		local pos = t[6] and ( a + MC:Offset( t[1], t[2] ) + Vector( 0, 0, ( t[6] - MC_FLOOR ) * GRID ) )
+			or GetGroundPosition( a + MC:Offset( t[1], t[2] ), nil )
 		-- facing: given in Minecraft x, z (across the aisle), else toward the spawn
-		local face = t[4] and Vector( t[4], -t[5], 0 ) or ( a - pos ):Normalized()
+		local face = t[4] and MC:DirToDota( t[4], t[5] ) or ( a - pos ):Normalized()
 		t.yaw = math.deg( math.atan2( face.y, face.x ) ) -- where the counter faces
 		t.prop = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/villager_" .. t[3] .. ".vmdl",
 			origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ),
@@ -797,7 +826,7 @@ function MC:Crack( bx, by, bz, stage )
 	if not MC.props[ bx .. "," .. by .. "," .. bz ] then return end
 	local pos = MC:BlockPos( bx, by, bz ) - Vector( 0, 0, 1 )
 	MC.crack = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/crack_" .. stage .. ".vmdl",
-		origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ) } )
+		origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ), angles = string.format( "0 %f 0", GRID_ROT ) } )
 	MC.crack:SetModelScale( GRID / 128 * 1.02 )
 end
 
@@ -916,4 +945,5 @@ end
 _G.CALIBRATE = CALIBRATE
 _G.EMERALD_GOLD, _G.TRADERS, _G.XP_TABLE = EMERALD_GOLD, TRADERS, XP_TABLE
 _G.SIGN_MODELS = SIGN_MODELS
+_G.GRID_ROT = GRID_ROT
 _G.MC, _G.BLOCKS, _G.PICKAXES, _G.GRID, _G.STEVE, _G.FROM_MC, _G.MC_FLOOR = MC, BLOCKS, PICKAXES, GRID, STEVE, FROM_MC, MC_FLOOR
