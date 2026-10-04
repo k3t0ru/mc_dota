@@ -311,7 +311,9 @@ MELEE_REACH = 3.5 -- blocks from Steve to the target's edge (Minecraft's reach i
 -- within a block of the target; never during a deny)
 function MCBridge:Swing( target, amount, crit, sweep, fire )
 	local denying = self.steve and target:GetTeamNumber() == self.steve:GetTeamNumber()
+	self.critNow = crit
 	self:HitUnit( target, amount, true )
+	self.critNow = nil
 	self:Send( string.format( "fx %s %d", crit and "crit" or "hit", target:entindex() ) )
 	if ( fire or 0 ) > 0 and not denying and not target:IsNull() and target:IsAlive() then -- Fire Aspect
 		self:Send( string.format( "fx burn %d %d", target:entindex(), fire ) )
@@ -351,13 +353,19 @@ function MCBridge:HitUnit( hero, amount, direct, kind )
 		-- a deny must be an ATTACK, or Dota doesn't count it (no "!", the enemy keeps full XP); DamageFilter swaps in the hit
 		self.steve.mc_attack = amount * DMG_TO_DOTA
 		self.steve.mc_denying = true -- XP/gold filters: a deny gives the denier nothing
+		local before = hero:GetHealth()
 		self.steve:PerformAttack( hero, true, false, true, true, false, false, true )
+		self:Send( string.format( "dmgnum %d %d deny", hero:entindex(), math.floor( math.max( 0, before - hero:GetHealth() ) + 0.5 ) ) )
 		self.steve.mc_attack, self.steve.mc_denying = nil, nil
 	else
 		-- melee and arrows: physical (armour); TNT, potions, fire: magical (magic resistance)
 		local magic = kind == "boom" or kind == "magic" or kind == "fire"
-		ApplyDamage( { victim = hero, attacker = self.steve or hero, damage = amount * DMG_TO_DOTA * ( kind == "boom" and TNT_MULT or 1 ),
+		local dealt = ApplyDamage( { victim = hero, attacker = self.steve or hero, damage = amount * DMG_TO_DOTA * ( kind == "boom" and TNT_MULT or 1 ),
 			damage_type = magic and DAMAGE_TYPE_MAGICAL or DAMAGE_TYPE_PHYSICAL } )
+		-- the number over it, Minecraft style (Progress.damageNumber)
+		if dealt and dealt >= 1 then
+			self:Send( string.format( "dmgnum %d %d %s", hero:entindex(), math.floor( dealt + 0.5 ), self.critNow and "crit" or "hit" ) )
+		end
 		if hero:IsBuilding() then MC.bossUnit, MC.bossUntil = hero, GameRules:GetGameTime() + 5 end
 	end
 end

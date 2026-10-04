@@ -187,6 +187,40 @@ public final class Progress {
 		}
 	}
 
+	// --- damage numbers ---------------------------------------------------------------------------------------------
+	// Steve's hits on Dota units: the damage in Minecraft's font over the unit (its stand-in), rising and gone in
+	// ~0.9 s; white, a crit yellow, a deny grey
+	private static final List<Object[]> numbers = new ArrayList<>(); // { tag, ticks left }
+	private static int numberCount;
+
+	public static void damageNumber(MinecraftServer server, String id, int amount, String kind) {
+		Entity e = null;
+		for (Entity c : server.overworld().getAllEntities()) if (c.getTags().contains("dota_" + id)) { e = c; break; }
+		if (e == null || amount <= 0) return;
+		var r = server.overworld().getRandom();
+		double x = e.getX() + (r.nextDouble() - 0.5) * 0.6, y = e.getY() + e.getBbHeight() + 0.2, z = e.getZ() + (r.nextDouble() - 0.5) * 0.6;
+		String tag = "dmgnum_" + (++numberCount);
+		String color = kind.equals("crit") ? "yellow" : kind.equals("deny") ? "gray" : "white";
+		Sync.run(server, String.format(Locale.ROOT, "summon minecraft:text_display %.2f %.2f %.2f {billboard:\"center\",background:0,shadow:1b,"
+			+ "Tags:[\"mcdota_dmg\",\"%s\"],text:{text:\"%d\",color:\"%s\",bold:%s},transformation:{left_rotation:[0f,0f,0f,1f],"
+			+ "right_rotation:[0f,0f,0f,1f],translation:[0f,0f,0f],scale:[1.2f,1.2f,1.2f]}}", x, y, z, tag, amount, color,
+			kind.equals("crit") ? "1b" : "0b"), false);
+		numbers.add(new Object[] { tag, 18 });
+	}
+
+	private static void numbersTick(MinecraftServer server) {
+		numbers.removeIf(n -> {
+			int left = (int) n[1];
+			if (left == 17) // a tick after it appeared: float up (the client interpolates)
+				Sync.run(server, "data merge entity @e[tag=" + n[0] + ",limit=1] {start_interpolation:0,interpolation_duration:16,"
+					+ "transformation:{left_rotation:[0f,0f,0f,1f],right_rotation:[0f,0f,0f,1f],translation:[0f,0.9f,0f],scale:[0.8f,0.8f,0.8f]}}", false);
+			n[1] = left - 1;
+			if (left > 0) return false;
+			Sync.discard(server, (String) n[0]);
+			return true;
+		});
+	}
+
 	// --- death ----------------------------------------------------------------------------------------------------
 	// Dota takes gold on death; Steve loses emeralds (2 + level, what he carries at most), his Dota hero dies too (the
 	// killer gets the bounty), and he waits for Dota's respawn timer frozen at the spawn ("respawn" from Dota frees him).
@@ -467,6 +501,7 @@ public final class Progress {
 			a.discard();
 			return true;
 		});
+		numbersTick(server);
 		if (++ticks % 20 == 0) deadTitle(server);
 		if (ticks % 40 != 0 || server.getPlayerList().getPlayers().isEmpty()) return;
 		ServerPlayer me = server.getPlayerList().getPlayers().get(0);

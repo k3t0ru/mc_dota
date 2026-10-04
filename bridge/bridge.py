@@ -55,7 +55,7 @@ class Relay:
                     self.anchor = tuple(float(v) for v in p[1:])
                 elif p[0] == "hero":
                     heroes[p[1]] = line
-                elif p[0] in ("dmg", "block", "unblock", "reset", "h", "xp", "void", "border", "loot", "lvl", "delay", "trader", "dead", "respawn", "spawnat", "mcfov", "boss", "fx", "time", "fountain", "sign", "msg", "tp", "buff", "shard", "unbuff", "tree", "untree"):
+                elif p[0] in ("dmg", "block", "unblock", "reset", "h", "xp", "void", "border", "loot", "lvl", "delay", "trader", "dead", "respawn", "spawnat", "mcfov", "boss", "fx", "time", "fountain", "sign", "msg", "tp", "buff", "shard", "unbuff", "tree", "untree", "dmgnum"):
                     self.to_mc.append(line)
                     if p[0] in ("reset", "border"):
                         print("to mc:", line, flush=True)
