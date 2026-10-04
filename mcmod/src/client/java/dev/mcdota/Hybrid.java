@@ -37,12 +37,8 @@ public final class Hybrid {
 	}
 
 	// render thread (chunk compile): Dota draws this one
-	// Dota's trees in Minecraft: columns of stripped oak logs, magenta (see-through: Dota draws the tree). They block
-	// the way like Dota's trees and are chopped like Minecraft wood (Sync: "chop" tells Dota)
-	public static boolean tree(BlockState s) { return s.is(Blocks.STRIPPED_OAK_LOG); }
-
 	public static boolean drawnByDota(BlockState s, BlockPos p) {
-		return !s.isAir() && !tree(s) && s.getFluidState().isEmpty() && !terrain(s) && !s.is(net.minecraft.tags.BlockTags.ALL_SIGNS) // (signs: their text)
+		return !s.isAir() && s.getFluidState().isEmpty() && !terrain(s) && !s.is(net.minecraft.tags.BlockTags.ALL_SIGNS) // (signs: their text)
 			&& p.getY() >= surface.getOrDefault(key(p.getX(), p.getZ()), 0);
 	}
 }

@@ -224,8 +224,8 @@ function MCBridge:Apply( body, stale )
 		if swing and self.steve and self.steve:HasModifier( "modifier_rune_invis" ) then -- attacking breaks invisibility
 			self.steve:RemoveModifierByName( "modifier_rune_invis" )
 		end
-		local cbx, cbz = line:match( "^chop (%S+) (%S+)" )
-		if cbx then MCWorld:Chop( tonumber( cbx ), tonumber( cbz ) ) end
+		local chop = line:match( "^chop (%d+)" )
+		if chop then MCWorld:Chop( tonumber( chop ) ) end
 
 		local bx, by, bz, kind, solid, state = line:match( "^mcblock (%S+) (%S+) (%S+) (%S+) ?(%S*) ?(%S*)" )
 		if bx then

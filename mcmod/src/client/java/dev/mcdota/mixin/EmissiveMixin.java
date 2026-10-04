@@ -16,6 +16,6 @@ public class EmissiveMixin {
 	@Inject(method = "emissiveRendering", at = @At("HEAD"), cancellable = true)
 	private void mcdota$magentaIsBright(BlockGetter level, BlockPos pos, CallbackInfoReturnable<Boolean> cir) {
 		BlockBehaviour.BlockStateBase s = (BlockBehaviour.BlockStateBase) (Object) this;
-		if (s.is(Blocks.PODZOL) || s.is(Blocks.MUD_BRICKS) || s.is(Blocks.MUD_BRICK_SLAB) || s.is(Blocks.STRIPPED_OAK_LOG)) cir.setReturnValue(true);
+		if (s.is(Blocks.PODZOL) || s.is(Blocks.MUD_BRICKS) || s.is(Blocks.MUD_BRICK_SLAB)) cir.setReturnValue(true);
 	}
 }

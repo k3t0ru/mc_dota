@@ -164,40 +164,43 @@ function MCWorld:GateFxEnd( s )
 	end
 end
 
--- Dota's trees in Minecraft: magenta log columns (Sync "tree"), chopped like Minecraft wood ("chop" from Minecraft)
+-- Dota's trees in Minecraft: an invisible hitbox exactly at each tree (Trees.java), chopped like Minecraft wood
+-- ("chop <id>" from Minecraft); "tree <id> <x> <y> <z>" in Minecraft's coordinates
+function MCWorld:TreeLine( t )
+	local a, p = MC.anchor, t:GetAbsOrigin()
+	local x, z = ( p.x - a.x ) / GRID, -( p.y - a.y ) / GRID
+	local bx, bz = math.floor( x ), math.floor( z )
+	local h = MC.halfh[ bx .. "," .. bz ]
+	local y = h and MC_FLOOR + h / 2 or ( MC.heights[ bx .. "," .. bz ] or MC_FLOOR )
+	return string.format( "tree %d %.3f %.2f %.3f", t:GetEntityIndex(), x, y, z )
+end
+
 function MCWorld:SendTrees()
 	self.cut = {}
 	local n = 0
 	for _, t in ipairs( GridNav:GetAllTreesAroundPoint( Vector( 0, 0, 0 ), 30000, true ) ) do
 		if t:IsStanding() then
-			local bx, bz = MC:CellOf( t:GetAbsOrigin() )
-			MCBridge:Send( string.format( "tree %d %d", bx, bz ) )
+			MCBridge:Send( self:TreeLine( t ) )
 			n = n + 1
 		end
 	end
 	print( "[mc] trees sent: " .. n )
 	ListenToGameEvent( "tree_cut", function( e ) -- cut in Dota (a tango, a quelling blade...): its logs go too
 		local p = Vector( e.tree_x, e.tree_y, 0 )
-		local bx, bz = MC:CellOf( p )
-		MCBridge:Send( string.format( "untree %d %d", bx, bz ) )
-		for _, t in ipairs( GridNav:GetAllTreesAroundPoint( p, 40, true ) ) do self.cut[ t ] = true end
+		for _, t in ipairs( GridNav:GetAllTreesAroundPoint( p, 40, true ) ) do
+			MCBridge:Send( "untree " .. t:GetEntityIndex() )
+			self.cut[ t ] = true
+		end
 	end, nil )
 end
 
--- Minecraft chopped the column at x, z: Dota cuts its tree
-function MCWorld:Chop( bx, bz )
+-- Minecraft chopped tree <id>: Dota cuts it
+function MCWorld:Chop( id )
 	local s = steve()
-	local p = MC:CellPos( bx, bz )
-	local best, bd
-	for _, t in ipairs( GridNav:GetAllTreesAroundPoint( p, GRID, true ) ) do
-		if t:IsStanding() then
-			local d = ( t:GetAbsOrigin() - p ):Length2D()
-			if not bd or d < bd then best, bd = t, d end
-		end
-	end
-	if best then
-		best:CutDown( s and s:GetTeamNumber() or DOTA_TEAM_GOODGUYS )
-		self.cut[ best ] = true
+	local t = EntIndexToHScript( id )
+	if t and not t:IsNull() and t:IsStanding() then
+		t:CutDown( s and s:GetTeamNumber() or DOTA_TEAM_GOODGUYS )
+		self.cut[ t ] = true
 	end
 end
 
@@ -209,8 +212,7 @@ function MCWorld:TreesBack()
 		if t:IsNull() then self.cut[ t ] = nil
 		elseif t:IsStanding() then
 			self.cut[ t ] = nil
-			local bx, bz = MC:CellOf( t:GetAbsOrigin() )
-			MCBridge:Send( string.format( "tree %d %d", bx, bz ) )
+			MCBridge:Send( self:TreeLine( t ) )
 		end
 	end
 end

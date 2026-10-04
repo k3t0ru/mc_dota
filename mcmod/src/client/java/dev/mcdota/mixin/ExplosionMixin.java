@@ -22,8 +22,7 @@ public class ExplosionMixin {
 		var level = ((ServerExplosion) (Object) this).level();
 		List<BlockPos> keep = new ArrayList<>(all.size());
 		for (BlockPos p : all)
-			if (!Sync.protectedBlocks.contains(p) && !dev.mcdota.Hybrid.ground(level.getBlockState(p), p)
-				&& !dev.mcdota.Hybrid.tree(level.getBlockState(p))) keep.add(p); // (trees: Dota's)
+			if (!Sync.protectedBlocks.contains(p) && !dev.mcdota.Hybrid.ground(level.getBlockState(p), p)) keep.add(p);
 		cir.setReturnValue(keep);
 	}
 }
