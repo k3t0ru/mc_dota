@@ -339,6 +339,7 @@ public final class Sync {
 					case "fountain" -> Progress.fountain(server);
 					case "cc" -> Progress.cc(server, p);
 					case "mobsound" -> Progress.mobSound(server, p[1], p[2], p[3]);
+					case "runebreak" -> run(server, "execute at @p run playsound minecraft:block.glass.break player @p ~ ~ ~ 1 1", false);
 					case "follow" -> Progress.follow(server, Double.parseDouble(p[1]), Double.parseDouble(p[2]));
 					case "dmgnum" -> Progress.damageNumber(server, p[1], Integer.parseInt(p[2]), p.length > 3 ? p[3] : "hit");
 					case "msg" -> Progress.say(server, line.substring(4), "yellow"); // Dota's word for the player (captures...)

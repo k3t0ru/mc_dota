@@ -217,8 +217,12 @@ function MCBridge:Apply( body, stale )
 		end
 		local swing, crit, sweep, full, fire, wbase, sharp = line:match( "^swing (%S+) ?(%S*) ?(%S*) ?(%S*) ?(%S*) ?(%S*) ?(%S*)" ) -- a melee swing: whatever Dota highlights under the crosshair
 		if swing and MCWorld:SwingRune() then swing = nil end -- (a rune in front: the swing breaks it)
-		if swing and self.aim and not self.aim:IsNull() and GameRules:GetGameTime() - ( self.aimAt or 0 ) <= 0.6
-			and self.steve and self.steve:IsAlive() then
+		if swing and self.steve and self.steve:IsAlive() then
+			local aimed = self.aim and not self.aim:IsNull() and GameRules:GetGameTime() - ( self.aimAt or 0 ) <= 0.6
+				and ( self.aim:GetAbsOrigin() - self.steve:GetAbsOrigin() ):Length2D() <= MELEE_REACH * GRID + self.aim:GetHullRadius()
+			if not aimed then self.aim = self:InFront() end
+		end
+		if swing and self.aim and not self.aim:IsNull() and self.steve and self.steve:IsAlive() then
 			local reach = MELEE_REACH * GRID + self.aim:GetHullRadius()
 			local d = ( self.aim:GetAbsOrigin() - self.steve:GetAbsOrigin() ):Length2D()
 			if self.aim:GetTeamNumber() == self.steve:GetTeamNumber() then self.denySwingAt = GameRules:GetGameTime() end
@@ -404,6 +408,24 @@ function MCBridge:FarBars()
 			elseif not near[ u ] and not has then u:AddNewModifier( u, nil, "modifier_mc_nobar", {} ) end
 		end
 	end
+end
+
+-- the unit nearest the line Steve looks along, within reach (Dota's aim misses models without a skeleton: the mobs)
+function MCBridge:InFront()
+	local s = self.steve
+	local best, bd
+	for _, u in ipairs( FindUnitsInRadius( s:GetTeamNumber(), s:GetAbsOrigin(), nil, MELEE_REACH * GRID + 80, DOTA_UNIT_TARGET_TEAM_BOTH,
+		DOTA_UNIT_TARGET_HERO + DOTA_UNIT_TARGET_BASIC, DOTA_UNIT_TARGET_FLAG_NONE, FIND_CLOSEST, false ) ) do
+		if u ~= s and not u.mc_block then
+			local d = u:GetAbsOrigin() - s:GetAbsOrigin()
+			d.z = 0
+			local len = d:Length2D()
+			if len < 40 or d:Normalized():Dot( s:GetForwardVector() ) > 0.87 then
+				if not bd or len < bd then best, bd = u, len end
+			end
+		end
+	end
+	return best
 end
 
 -- Dota's disables on Steve's hero, for Minecraft: "cc <stun 0/1> <root 0/1> <speed ratio> <disarmed 0/1>"

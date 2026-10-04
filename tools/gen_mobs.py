@@ -33,7 +33,8 @@ def humanoid(t, arms=FWD, inflate=0.0, legs=True, head=True, body=True, leg=0.0,
 def bow(pivot, turn):
     # the bow in the hand at the end of an arm held forward: an upright picture, its length along the arm's way
     x, y, z = pivot
-    return [("item:bow", None, (0, -8, -8), (0, 16, 16), 0, (x, y + 1, z - 10), (turn, 0, 0))]
+    # (the bow is drawn diagonally in its picture: a quarter turn of that upright, its grip in the hand)
+    return [("item:bow", None, (0, -8, -8), (0, 16, 16), 0, (x, y + 1, z - 10), (turn + 0.785, 0, 0))]
 
 
 def skeleton(leg=0.0, arm=0.0, dy=0, legs_pose=None):
@@ -67,16 +68,16 @@ def spider_jockey(leg=0.0, arm=0.0):
 
 
 MOB_BUILD = {
-    "zombie": lambda leg, arm: humanoid("zombie", leg=leg, arm=arm) + [("zombie", (32, 0), (-4, -8, -4), (8, 8, 8), 0.5, (0, 0, 0), 0)],
+    "zombie": lambda leg, arm: humanoid("zombie", leg=leg, arm=arm + 0.12 * leg) + [("zombie", (32, 0), (-4, -8, -4), (8, 8, 8), 0.5, (0, 0, 0), 0)],
     "skeleton": lambda leg, arm: skeleton(leg, arm / 0.8),
     "spider_jockey": spider_jockey,
-    "zombie_gold": lambda leg, arm: humanoid("zombie", leg=leg, arm=arm) + humanoid("gold", inflate=1.0, legs=False, arm=arm) +
+    "zombie_gold": lambda leg, arm: humanoid("zombie", leg=leg, arm=arm + 0.12 * leg) + humanoid("gold", inflate=1.0, legs=False, arm=arm + 0.12 * leg) +
         [("gold", (0, 16), (-2, 0, -2), (4, 12, 4), 0.6, (-1.9, 12, 0), leg), ("gold", (0, 16), (-2, 0, -2), (4, 12, 4), 0.6, (1.9, 12, 0), -leg)],
 }
 # frames: the model itself (standing), walk w0..w3, attack a0..a1 (MC:AnimateMobs plays them)
 # walk: 8 frames of a sine; attack: 3 frames (zombies: arms swung down and back; skeletons: the bow drawn)
 POSES = {"": (0, 0)}
-POSES.update({f"_w{k}": (0.6 * math.sin(k * math.pi / 4), 0) for k in range(8)})
+POSES.update({f"_w{k}": (0.6 * math.sin(k * math.pi / 6), 0) for k in range(12)})
 POSES.update({"_a0": (0, 0.4), "_a1": (0, 0.8), "_a2": (0, 0.3)})
 MOBS = {name + suffix: build(leg, arm) for name, build in MOB_BUILD.items() for suffix, (leg, arm) in POSES.items()}
 TEXTURES = {"zombie": "zombie/zombie.png", "skeleton": "skeleton/skeleton.png", "spider": "spider/spider.png",

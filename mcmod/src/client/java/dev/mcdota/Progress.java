@@ -227,6 +227,8 @@ public final class Progress {
 		};
 		Sync.run(server, String.format(Locale.ROOT, "playsound minecraft:%s hostile @a %.2f %.2f %.2f 0.8 %.2f", sound, e.getX(), e.getY(), e.getZ(),
 			0.9 + server.overworld().getRandom().nextFloat() * 0.2), false);
+		if (kind.equals("death")) // (after its fall: MC:MobDeath)
+			Sync.run(server, String.format(Locale.ROOT, "particle minecraft:poof %.2f %.2f %.2f 0.3 0.4 0.3 0.04 20 force", e.getX(), e.getY() + 0.6, e.getZ()), false);
 	}
 
 	// --- damage numbers ---------------------------------------------------------------------------------------------

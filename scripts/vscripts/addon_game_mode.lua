@@ -34,8 +34,9 @@ require( "mc_block_models" ) -- MCB: every Minecraft block's variants -> Dota mo
 
 
 function Precache( context )
+	PrecacheResource( "particle", "particles/generic_gameplay/illusion_killed.vpcf", context )
 	for _, m in ipairs( { "zombie", "skeleton", "spider_jockey", "zombie_gold" } ) do
-		for _, f in ipairs( { "", "_w0", "_w1", "_w2", "_w3", "_w4", "_w5", "_w6", "_w7", "_a0", "_a1", "_a2" } ) do
+		for _, f in ipairs( { "", "_w0", "_w1", "_w2", "_w3", "_w4", "_w5", "_w6", "_w7", "_w8", "_w9", "_w10", "_w11", "_a0", "_a1", "_a2" } ) do
 			PrecacheResource( "model", "models/mc/mob_" .. m .. f .. ".vmdl", context )
 		end
 	end
@@ -234,6 +235,26 @@ function MC:HideAttached( u )
 end
 
 -- walking (4 frames, 8 a second) or attacking (2 frames) or standing: tools/gen_mobs.py's poses
+function MC:MobDeath( u )
+	local p, yaw = u:GetAbsOrigin(), u:GetAnglesAsVector().y
+	u:AddEffects( EF_NODRAW )
+	local body = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/mob_" .. u.mc_mob .. ".vmdl",
+		origin = string.format( "%f %f %f", p.x, p.y, p.z ), angles = string.format( "0 %f 0", yaw ) } )
+	body:SetRenderColor( 255, 80, 80 )
+	local t0 = GameRules:GetGameTime()
+	body:SetContextThink( "mc_fall", function()
+		local k = ( GameRules:GetGameTime() - t0 ) / 0.5
+		if k < 1 then
+			body:SetAngles( 0, yaw, 90 * math.min( 1, k * 1.6 ) )
+			return 0.03
+		end
+		local fx = ParticleManager:CreateParticle( "particles/generic_gameplay/illusion_killed.vpcf", PATTACH_WORLDORIGIN, nil )
+		ParticleManager:SetParticleControl( fx, 0, p + Vector( 0, 0, 40 ) )
+		ParticleManager:ReleaseParticleIndex( fx )
+		body:RemoveSelf()
+	end, 0 )
+end
+
 function MC:MobSound( u, kind )
 	if kind == "attack" and ( RandomFloat( 0, 1 ) > 0.35 or GameRules:GetGameTime() - ( u.mc_soundAt or 0 ) < 3 ) then return end
 	if GameRules:GetGameTime() - ( u.mc_soundAt or 0 ) < 0.4 then return end
@@ -243,7 +264,7 @@ end
 
 function MC:AnimateMobs()
 	local t = GameRules:GetGameTime()
-	local walk = math.floor( t * 12 ) % 8
+	local walk = math.floor( t * 18 ) % 12
 	for u in pairs( MC.mobs ) do
 		if u:IsNull() or not u:IsAlive() then MC.mobs[ u ] = nil
 		else
@@ -271,7 +292,10 @@ function MC:MobModel( u )
 			u.mc_mob = m[2]
 			MC.mobs[ u ] = true
 			MC:HideAttached( u )
-			u:SetContextThink( "mc_hide", function() MC:HideAttached( u ) end, 0.5 ) -- (the flag comes a moment later)
+			u:SetContextThink( "mc_hide", function()
+				MC:HideAttached( u )
+				if not u:IsNull() then u:RemoveModifierByName( "modifier_flagbearer_creep_aura_effect" ) end -- (its flag: a particle of it)
+			end, 0.5 )
 			return
 		end
 	end
@@ -310,6 +334,7 @@ function MC:SetupHero( hero )
 		SendToConsole( "dota_camera_edgemove 0; dota_camera_speed 0; dota_camera_lock 0; dota_camera_fov_min 90; dota_camera_fov_max 90; snd_mute_losefocus 0; snd_musicvolume 0" ) -- Dota's sound plays with Minecraft holding focus; music is Minecraft's
 		MC:SendTerrain()
 		MCWorld:SendTrees()
+		MC:StructureWalls()
 		MCWorld:WarmUpWards( hero:GetTeamNumber() )
 		MC:SpawnTraders()
 		MC:Sky()
@@ -433,6 +458,53 @@ function MC:Sky()
 	if MC.sky and not MC.sky:IsNull() then return end
 	MC.sky = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/sky.vmdl", origin = "0 0 0", disableshadows = "1" } )
 	MC.sky:SetModelScale( SKY_R / 100 )
+end
+
+-- Dota's structures as Minecraft walls (barrier columns, 4 high): towers, barracks, ancients, shrines/fillers, outposts,
+-- watchers, twin gates, and Roshan's pit (Dota's blocked ground around him). A building's walls go when it dies.
+STRUCTURE_RADIUS = { tower = 130, barracks = 220, fort = 300, filler = 150, watch_tower = 180, lantern = 90, twin_gate = 180 }
+function MC:WallCells( center, radius, onlyBlocked )
+	local cells = {}
+	local cx, cz = MC:CellOf( center )
+	local r = math.ceil( radius / GRID ) + 1
+	for x = cx - r, cx + r do for z = cz - r, cz + r do
+		local p = MC.anchor + MC:Offset( x + 0.5, z + 0.5 )
+		p.z = 0
+		local c2 = Vector( center.x, center.y, 0 )
+		if ( p - c2 ):Length2D() <= radius and ( not onlyBlocked or not GridNav:IsTraversable( GetGroundPosition( p, nil ) ) ) then
+			table.insert( cells, { x, z } )
+		end
+	end end
+	return cells
+end
+
+function MC:Walls( u, cells )
+	u.mc_walls = u.mc_walls or {}
+	for _, c in ipairs( cells ) do
+		local g = MC.heights[ c[1] .. "," .. c[2] ] or MC_FLOOR
+		for y = g, g + 3 do
+			MCBridge:Send( string.format( "block %d %d %d barrier", c[1], y, c[2] ) )
+			table.insert( u.mc_walls, { c[1], y, c[2] } )
+		end
+	end
+end
+
+function MC:StructureWalls()
+	local n = 0
+	for _, u in ipairs( FindUnitsInRadius( DOTA_TEAM_NEUTRALS, Vector( 0, 0, 0 ), nil, 30000, DOTA_UNIT_TARGET_TEAM_BOTH,
+		DOTA_UNIT_TARGET_ALL, DOTA_UNIT_TARGET_FLAG_INVULNERABLE + DOTA_UNIT_TARGET_FLAG_OUT_OF_WORLD, FIND_ANY_ORDER, false ) ) do
+		local name, r = u:GetUnitName(), nil
+		for k, v in pairs( STRUCTURE_RADIUS ) do if name:find( k ) then r = v end end
+		if not r and u:IsBuilding() and not u:GetUnitName():find( "fountain" ) then r = 150 end
+		if r and not name:find( "fountain" ) then
+			MC:Walls( u, MC:WallCells( u:GetAbsOrigin(), r, false ) )
+			n = n + 1
+		end
+	end
+	for _, r in ipairs( Entities:FindAllByClassname( "npc_dota_roshan" ) ) do -- the pit's walls: Dota's own blocked ground
+		MC:Walls( r, MC:WallCells( r:GetAbsOrigin(), 700, true ) )
+	end
+	print( "[mc] structure walls: " .. n )
 end
 
 -- a fountain shoots any neutral in its range: blocks there are invulnerable (= not a target)
@@ -665,6 +737,7 @@ function MC:SpawnTraders()
 		{ x = bx, z = bz, F = { -V[1], -V[2] }, D = U, awning = "blue_wool", traders = { "librarian", "toolsmith" } },
 	}
 	for _, st in ipairs( STALLS ) do st.D = st.D or { -st.F[2], st.F[1] } end -- (along the counter: F turned a quarter)
+	MC.witchF = STALLS[2].F -- (she, her sign and her stand look the way the blue stall does)
 	local taken = {} -- stall cells: the fountain's barriers must not fill them (a trader inside a barrier can't be clicked)
 	for _, st in ipairs( STALLS ) do
 		for du = -3, 3 do for dv = -1, 2 do
@@ -973,7 +1046,11 @@ function MC:OnKilled( e )
 	local dead = EntIndexToHScript( e.entindex_killed )
 	local def = dead and dead.mc_block
 	local killer = e.entindex_attacker and EntIndexToHScript( e.entindex_attacker )
-	if dead and dead.mc_mob then MC:MobSound( dead, "death" ) end
+	if dead and dead.mc_mob then MC:MobSound( dead, "death" ) MC:MobDeath( dead ) end
+	if dead and dead.mc_walls then -- a destroyed building: its walls go
+		for _, w in ipairs( dead.mc_walls ) do MCBridge:Send( string.format( "unblock %d %d %d", w[1], w[2], w[3] ) ) end
+		dead.mc_walls = nil
+	end
 	if not def then -- Steve's kills give Minecraft experience and loot
 		if killer and killer.mc_player and dead and not dead:IsNull() and dead:GetTeamNumber() == killer:GetTeamNumber() then
 			print( "[mc] Steve denied " .. dead:GetUnitName() ) -- a real attack did it, so Dota shows the "!" and cuts the XP itself

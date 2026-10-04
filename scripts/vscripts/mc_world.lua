@@ -233,12 +233,18 @@ function MCWorld:TreesBack()
 	end
 end
 
--- a swing at a rune in front breaks it: picked up, like a click
+-- a swing at a rune in front breaks it: gone, nobody gets it (a right click picks it up)
 function MCWorld:SwingRune()
 	local s = steve()
 	local rune = s and runeAimed()
-	if rune then self:Rune( s, rune ) return true end
-	return false
+	if not rune then return false end
+	local p = rune:GetAbsOrigin()
+	local fx = ParticleManager:CreateParticle( "particles/generic_gameplay/illusion_killed.vpcf", PATTACH_WORLDORIGIN, nil )
+	ParticleManager:SetParticleControl( fx, 0, p + Vector( 0, 0, 30 ) )
+	ParticleManager:ReleaseParticleIndex( fx )
+	UTIL_Remove( rune )
+	MCBridge:Send( "runebreak" )
+	return true
 end
 
 -- the illusion rune's Kunkkas (nobody could lead them): gone as soon as they appear; the rune does nothing, and says so
