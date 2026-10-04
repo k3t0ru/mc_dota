@@ -34,6 +34,7 @@ require( "mc_block_models" ) -- MCB: every Minecraft block's variants -> Dota mo
 
 
 function Precache( context )
+	for _, m in ipairs( { "zombie", "skeleton", "creeper", "zombie_gold" } ) do PrecacheResource( "model", "models/mc/mob_" .. m .. ".vmdl", context ) end
 	PrecacheResource( "particle", "particles/mc/steve_model.vpcf", context )
 	PrecacheResource( "model", "models/mc/steve.vmdl", context )
 	PrecacheResource( "particle", "particles/units/heroes/hero_techies/techies_land_mine_explode.vpcf", context )
@@ -217,8 +218,29 @@ function MC:OnState()
 	end
 end
 
+-- Radiant's creeps are Minecraft's mobs (tools/gen_mobs.py; static models): melee zombies, ranged skeletons, the
+-- siege creep a creeper (it blows up buildings), the flag bearer a zombie in gold armour. Their Dota cosmetics hidden.
+MOB_MODELS = { { "flagbearer", "zombie_gold" }, { "siege", "creeper" }, { "ranged", "skeleton" }, { "melee", "zombie" } }
+function MC:MobModel( u )
+	local name = u:GetUnitName()
+	if not name:find( "creep_goodguys" ) then return end
+	for _, m in ipairs( MOB_MODELS ) do
+		if name:find( m[1] ) then
+			local model = "models/mc/mob_" .. m[2] .. ".vmdl"
+			u:SetOriginalModel( model )
+			u:SetModel( model )
+			u:SetModelScale( 1 )
+			for _, c in ipairs( u:GetChildren() ) do
+				if c:GetClassname() == "dota_item_wearable" then c:AddEffects( EF_NODRAW ) end
+			end
+			return
+		end
+	end
+end
+
 function MC:OnSpawned( e )
 	local hero = EntIndexToHScript( e.entindex )
+	if hero and not hero:IsNull() and hero.GetUnitName then MC:MobModel( hero ) end
 	if hero.mc_player and hero.mc_dead then -- Dota's respawn timer is over: Minecraft's player may move again
 		hero.mc_dead = nil
 		MCBridge:Send( "respawn" )

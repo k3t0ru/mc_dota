@@ -23,3 +23,7 @@ content/materials/mc/sign_*
 content/models/mc/sky.*
 content/materials/mc/sky.*
 content/models/mc/tree_crack*
+content/models/mc/mob_*
+content/materials/mc/mob_*
+content/models/mc/steve.*
+content/materials/mc/steve*
