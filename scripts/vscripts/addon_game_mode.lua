@@ -36,9 +36,7 @@ require( "mc_block_models" ) -- MCB: every Minecraft block's variants -> Dota mo
 function Precache( context )
 	PrecacheResource( "particle", "particles/generic_gameplay/illusion_killed.vpcf", context )
 	for _, m in ipairs( { "zombie", "skeleton", "spider_jockey", "zombie_gold" } ) do
-		for _, f in ipairs( { "", "_w0", "_w1", "_w2", "_w3", "_w4", "_w5", "_w6", "_w7", "_w8", "_w9", "_w10", "_w11", "_a0", "_a1", "_a2" } ) do
-			PrecacheResource( "model", "models/mc/mob_" .. m .. f .. ".vmdl", context )
-		end
+		PrecacheResource( "model", "models/mc/mob_" .. m .. ".vmdl", context )
 	end
 	PrecacheResource( "particle", "particles/mc/steve_model.vpcf", context )
 	PrecacheResource( "model", "models/mc/steve.vmdl", context )
@@ -157,8 +155,8 @@ function MC:Init()
 	local mode = GameRules:GetGameModeEntity()
 	-- the host goes to Radiant (Steve), whoever joins to Dire. A real game waits in the lobby until the host starts it
 	-- (everyone has time to connect; Minecraft starts only then: its cursor lock left no way to press the button);
-	-- dev runs (sv_cheats) skip the lobby
-	if not ( GameRules:IsCheatMode() or IsInToolsMode() ) then
+	-- (sv_cheats is on in every game: a local custom game, and some launch settings need it; only the tools skip the lobby)
+	if not IsInToolsMode() then
 		GameRules:SetCustomGameSetupTimeout( -1 )
 		GameRules:EnableCustomGameSetupAutoLaunch( false )
 	end
@@ -226,7 +224,7 @@ function MC:OnState()
 	if STATE_NAMES[ GameRules:State_Get() ] then print( "[mc] state " .. STATE_NAMES[ GameRules:State_Get() ] ) end
 	if GameRules:State_Get() == DOTA_GAMERULES_STATE_CUSTOM_GAME_SETUP then
 		for pid = 0, DOTA_MAX_TEAM_PLAYERS - 1 do MC:AssignTeam( pid ) end
-		if GameRules:IsCheatMode() or IsInToolsMode() then GameRules:FinishCustomGameSetup() end -- (dev: no lobby)
+		if IsInToolsMode() then GameRules:FinishCustomGameSetup() end -- (tools: no lobby)
 	end
 	if GameRules:State_Get() >= DOTA_GAMERULES_STATE_PRE_GAME then GameRules:SetTimeOfDay( 0.5 ) end -- the clock starts at dawn
 	local st = GameRules:State_Get()
@@ -242,7 +240,7 @@ end
 
 -- Radiant's creeps are Minecraft's mobs (tools/gen_mobs.py; static models): melee zombies, ranged skeletons, the
 -- siege creep a skeleton riding a spider, the flag bearer a zombie in gold armour. Their Dota cosmetics hidden.
-MC.mobs = {} -- units drawn as mobs: MC:AnimateMobs swaps their pose frames
+MC.mobs = {} -- units drawn as mobs (skinned models: Dota plays their idle/run/attack itself, tools/gen_mobs.py)
 function MC:HideAttached( u )
 	if u:IsNull() then return end
 	for _, c in ipairs( u:GetChildren() ) do
@@ -250,7 +248,6 @@ function MC:HideAttached( u )
 	end
 end
 
--- walking (4 frames, 8 a second) or attacking (2 frames) or standing: tools/gen_mobs.py's poses
 function MC:MobDeath( u )
 	local p, yaw = u:GetAbsOrigin(), u:GetAnglesAsVector().y
 	u:AddEffects( EF_NODRAW )
@@ -276,23 +273,6 @@ function MC:MobSound( u, kind )
 	if GameRules:GetGameTime() - ( u.mc_soundAt or 0 ) < 0.4 then return end
 	u.mc_soundAt = GameRules:GetGameTime()
 	MCBridge:Send( string.format( "mobsound %d %s %s", u:entindex(), u.mc_mob, kind ) )
-end
-
-function MC:AnimateMobs()
-	local t = GameRules:GetGameTime()
-	local walk = math.floor( t * 18 ) % 12
-	for u in pairs( MC.mobs ) do
-		if u:IsNull() or not u:IsAlive() then MC.mobs[ u ] = nil
-		else
-			local since = t - ( u.mc_hitAt or -10 )
-			local frame = since < 0.36 and ( "_a" .. math.floor( since / 0.12 ) ) or u:IsMoving() and ( "_w" .. walk ) or ""
-			if frame ~= u.mc_frame then
-				u.mc_frame = frame
-				u:SetModel( "models/mc/mob_" .. u.mc_mob .. frame .. ".vmdl" )
-				u:SetModelScale( 1 )
-			end
-		end
-	end
 end
 
 MOB_MODELS = { { "flagbearer", "zombie_gold" }, { "siege", "spider_jockey" }, { "ranged", "skeleton" }, { "melee", "zombie" } }
@@ -597,7 +577,21 @@ function MC:ShowBlock( bx, by, bz, kind, solid, state )
 	if v and MCB_ANIM[ v[2] ] then MC:Animate( p, v[2] ) end
 	p.mc_kind = kind
 	if kind == "cobweb" then MC.cobwebs[ p ] = true end
-	if WARD_KINDS[ kind ] then MCWorld:Ward( bx, by, bz, WARD_KINDS[ kind ] ) end
+	if WARD_KINDS[ kind ] then
+		-- a torch is a ward: the ward unit itself wears the torch (a prop is seen by everyone; a ward is invisible to
+		-- the enemy without true sight, like Dota's)
+		MCWorld:Ward( bx, by, bz, WARD_KINDS[ kind ] )
+		local w = MC.wards and MC.wards[ key ]
+		if w and not w.unit:IsNull() then
+			w.unit:SetOriginalModel( p:GetModelName() )
+			w.unit:SetModel( p:GetModelName() )
+			w.unit:SetModelScale( GRID / 128 )
+			w.unit:SetAbsOrigin( p:GetAbsOrigin() )
+			w.unit:SetAngles( p:GetAnglesAsVector().x, p:GetAnglesAsVector().y, p:GetAnglesAsVector().z )
+			w.unit:RemoveNoDraw()
+			p:AddEffects( EF_NODRAW )
+		end
+	end
 	p.mc_solid = solid ~= false -- fire, torches, flowers: drawn, but units neither bump into nor stand on them
 	MC.props[ key ] = p
 end
@@ -1040,7 +1034,6 @@ function MC:DamageFilter( f )
 	end
 	-- a mob creep's attack lands: its Minecraft sound (MC:MobSound)
 	if attackerUnit and attackerUnit.mc_mob and not f.entindex_inflictor_const then
-		attackerUnit.mc_hitAt = GameRules:GetGameTime() -- its attack frames (MC:AnimateMobs)
 		MC:MobSound( attackerUnit, "attack" )
 	end
 	if victim.mc_mob and attackerUnit and attackerUnit.mc_player then MC:MobSound( victim, "hurt" ) end

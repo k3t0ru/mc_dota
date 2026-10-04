@@ -31,9 +31,14 @@ function steveIt( p ) {
 	for ( var i = 0; i < p.GetChildCount(); i++ ) steveIt( p.GetChild( i ) );
 }
 
+// (walking all of Dota's HUD took tens of ms: a hitch every few seconds. Now: the pick screen while picking, then only
+// the top bar, and never on Steve's own client, whose Dota HUD is hidden and whose camera must not stutter)
 function tick() {
-	steveIt( root() );
-	// often during the pick; then now and then (the top bar's portraits)
-	$.Schedule( Game.GetState() > DOTA_GameState.DOTA_GAMERULES_STATE_PRE_GAME ? 3 : 0.3, tick );
+	if ( Players.GetTeam( Players.GetLocalPlayer() ) === DOTATeam_t.DOTA_TEAM_GOODGUYS && Game.GetState() >= DOTA_GameState.DOTA_GAMERULES_STATE_PRE_GAME ) return;
+	var picking = Game.GetState() < DOTA_GameState.DOTA_GAMERULES_STATE_PRE_GAME;
+	var r = root();
+	var where = picking ? r.FindChildTraverse( "PreGame" ) || r : r.FindChildTraverse( "topbar" );
+	if ( where ) steveIt( where );
+	$.Schedule( picking ? 0.5 : 5, tick );
 }
 tick();

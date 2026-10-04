@@ -63,7 +63,6 @@ function MCBridge:Tick()
 	end
 	MC:BossBar( self.steve )
 	self:FarBars()
-	MC:AnimateMobs()
 	MCWorld:Think()
 	-- cobwebs hold units like in Minecraft (90% slower while inside)
 	for p in pairs( MC.cobwebs ) do
@@ -471,13 +470,17 @@ function MCBridge:MoveSteve( name, pos, frac, yaw )
 		self.steve = u
 		u.mc_player = name
 		u:SetCustomHealthLabel( name, 120, 255, 120 )
-		u:AddNoDraw() -- ponytail: the camera sits inside him; for PvP give other players a visible blocky Steve instead
+		-- the camera sits inside him: his own model is see-through for everyone (a hidden entity, AddNoDraw, hid the Steve
+		-- model Dire's players get too: MCBridge:SteveModel). It is Steve's shape, so Dota's players can click him.
+		u:SetOriginalModel( "models/mc/steve.vmdl" )
+		u:SetModel( "models/mc/steve.vmdl" )
 		-- he never attacks on his own (Dota's auto-attack went for the blocks next to him); Minecraft does his fighting
 		u:SetIdleAcquire( false )
 		u:SetAcquisitionRange( 0 )
 	end
 	if not u:IsAlive() then self.lastSet = nil return end -- (a respawn moves him: no teleport for Minecraft)
-	if not self.nodrawOff then u:AddNoDraw() end -- (again every time: a respawn shows the model)
+	u:SetRenderAlpha( self.nodrawOff and 255 or 0 ) -- (again every time: a respawn, an invisibility rune change it)
+	MC:HideAttached( u ) -- (Kunkka's sword and such)
 	self:Control( u )
 	self:SteveModel( u )
 	-- pushed, pulled, thrown by a Dota spell: Dota moves him, Minecraft's player follows

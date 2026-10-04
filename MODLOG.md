@@ -522,3 +522,14 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
   cooldown, 3.5 s with Dota's teleport sound/particles; any Dota teleport of the hero moves Minecraft's player too.
   Captured outposts/watchers give vision (FOW viewer). Torches stand on terrain slabs (TorchMixin), don't sink on a
   player's block; a torch 4+ blocks up sees like a cliff ward. Elytra fireworks 1.5 -> 1.1. Max health in whole hearts.
+
+## 2026-10-04 20:40: multiplayer round 2
+- Mobs: skinned SMD models (tools/gen_mobs.py: bones head/body/arms/legs/spider legs, anims idle/run/attack/stunned as
+  ACT_DOTA_*), played by Dota on each client. The Lua pose-frame swapping (SetModel at 18 Hz on 30 Hz ticks, networked)
+  is gone. Skeleton/jockey get attach_attack1 (projectiles), all attach_hitloc. A root bone got dropped by the compiler
+  and shifted the vertex bones: bones are top level.
+- Steve for Dire: the hero wore AddNoDraw, which (likely) hid the follow particle too. Now the hero model is steve.vmdl
+  (with a hitbox: clickable) at render alpha 0; the particle stays Dire-only.
+- Torch wards: the ward unit wears the torch model (the prop is hidden), so Dota's invisibility applies.
+- Camera hitch: hero_select.js walked the whole HUD every 3 s (max frame 75 ms). Never on Steve's client now.
+- sv_cheats 1 again in the launcher (r_farz etc. need it); only tools mode skips the lobby.

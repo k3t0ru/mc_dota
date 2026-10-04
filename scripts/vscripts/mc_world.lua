@@ -291,7 +291,7 @@ function MCWorld:Ward( bx, by, bz, kind )
 	local pos = MC:BlockPos( bx, by, bz )
 	local u = CreateUnitByName( kind == "sentry" and "npc_dota_sentry_wards" or "npc_dota_observer_wards", pos, false, s, s, s:GetTeamNumber() )
 	if not u then return end
-	u:AddNoDraw() -- the torch is what you see
+	u:AddNoDraw() -- (until MC:ShowBlock dresses it as the torch)
 	u:AddNewModifier( u, nil, "modifier_invisible", {} ) -- (enemies need true sight, like for Dota's wards)
 	u:AddNewModifier( u, nil, "modifier_kill", { duration = kind == "sentry" and 420 or 360 } )
 	if kind == "sentry" then u:AddNewModifier( u, nil, "modifier_mc_truesight", {} ) end

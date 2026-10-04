@@ -279,7 +279,7 @@ def host(cfg, dota):
                       "+fps_max", cfg["host"]["dota_fps"], "+engine_no_focus_sleep", "0", "+fog_enable", "0",
                       "+dota_hud_disable_damage_numbers", "1", "+r_farz", "40000", "+r_texture_stream_mip_bias", "0",
                       "+dota_camera_zfar_zoomed_in", "40000", "+dota_camera_zfar_zoomed_out", "40000", "+snd_mute_losefocus", "0",
-                      "+snd_musicvolume", "0", "+dota_launch_custom_game", ADDON, cfg["host"]["map"]])
+                      "+snd_musicvolume", "0", "+sv_cheats", "1", "+dota_launch_custom_game", ADDON, cfg["host"]["map"]])
     # Minecraft: a fresh world each game (Dota rebuilds it), its first run downloads Minecraft and Fabric
     run = os.path.join(ROOT, "mcmod", "run")
     os.makedirs(os.path.join(run, "saves", "mcdota"), exist_ok=True)

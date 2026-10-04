@@ -21,6 +21,29 @@
 				_class = "RenderMeshList"
 				children = [ { _class = "RenderMeshFile" filename = "models/mc/steve.obj" import_scale = 1.0 } ]
 			},
+			{
+				_class = "HitboxSetList"
+				children =
+				[
+					{
+						_class = "HitboxSet"
+						name = "default"
+						children =
+						[
+							{
+								_class = "Hitbox"
+								name = "body"
+								parent_bone = ""
+								surface_property = ""
+								translation_only = false
+								group_id = 0
+								hitbox_mins = [ -15.0, -48.0, 0.0 ]
+								hitbox_maxs = [ 15.0, 48.0, 195.0 ]
+							},
+						]
+					},
+				]
+			},
 		]
 		model_archetype = ""
 		primary_associated_entity = ""
