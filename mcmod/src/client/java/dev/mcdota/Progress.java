@@ -242,6 +242,7 @@ public final class Progress {
 		if (st.isAir()) return;
 		level.levelEvent(2001, pos, net.minecraft.world.level.block.Block.getId(st));
 		level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 3);
+		Sync.collapse(server, pos); // what stood on it comes down
 	}
 
 	// --- mob sounds -----------------------------------------------------------------------------------------------

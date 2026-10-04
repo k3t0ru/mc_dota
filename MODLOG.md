@@ -533,3 +533,15 @@ The "Minecraft in Elden Ring" method was never published (only chasm's descripti
 - Torch wards: the ward unit wears the torch model (the prop is hidden), so Dota's invisibility applies.
 - Camera hitch: hero_select.js walked the whole HUD every 3 s (max frame 75 ms). Never on Steve's client now.
 - sv_cheats 1 again in the launcher (r_farz etc. need it); only tools mode skips the lobby.
+
+## 2026-10-05 00:30: multiplayer polish (launcher: play_host.bat / play_dota.bat / prepare.bat, settings.ini)
+- Steve for Dota players: stand-in unit npc_mc_steve (invisible clickable ghost; orders/attacks redirected to Steve),
+  Dire-only particle per model (steve[_elytra][__item]) x anim (idle/run/attack/sneak/fly/bow); hexed: pig/chicken.
+  Particles play anims at 30 fps: a 120 fps sequence ran 4x slow.
+- Dota picks (clicks) only models with a skeleton: block units wear block_ghost (SMD), torches are SMD with a hitbox.
+- Sync.collapse: blocks no longer connected to the ground fall (break look, no drops); called straight from
+  Progress.unblock too (Dota's removals come while "applying", which blockChanged ignores).
+- Walls (block at head height) = point_simple_obstruction in Dota's nav squares; block unit hull set AFTER SetModel.
+- Skeleton bow: one stringless picture + a 2-bone string (tips on the bow arm, the end on the left hand).
+- Shift-click: synthetic menu clicks carry GLFW modifiers. Toasts off, autojump off, arrows with gravity.
+- Health bars: Steve's own (Panorama, near units only), Dota's off on his client (dota_hud_healthbars 0).

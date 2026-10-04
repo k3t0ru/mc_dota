@@ -559,12 +559,14 @@ function MC:SpawnBlock( name, pos, fromMC )
 	b.mc_block, b.mc_cell = def, key
 	MC.cells[ key ] = b
 	b:AddNewModifier( b, nil, "modifier_mc_block", {} )
-	b:SetHullRadius( GRID * 0.375 ) -- neighbours' hulls overlap: Dota heroes can't squeeze between blocks
 	if not CALIBRATE then -- Dota draws the blocks as props: this unit is invisible, but clickable (Dota's players attack it)
 		b:SetOriginalModel( "models/mc/block_ghost.vmdl" )
 		b:SetModel( "models/mc/block_ghost.vmdl" )
 		b:SetModelScale( 1 )
+		b:SetAngles( 0, GRID_ROT, 0 ) -- (its hitbox square along the turned Minecraft grid)
 	end
+	-- (after the model: setting one reset the hull, and Dota's heroes walked through the blocks)
+	b:SetHullRadius( GRID * 0.375 ) -- neighbours' hulls overlap: Dota heroes can't squeeze between blocks
 	if not fromMC then MCBridge:Send( string.format( "block %d %d %d %s", bx, MC.heights[ key ] or MC_FLOOR, bz, def.mc ) ) end
 	return b
 end

@@ -166,8 +166,29 @@ def build(name, frame=0):
     with open(os.path.join(MDL, fname + ".obj"), "w") as f:
         f.write("\n".join(obj) + "\n")
     remaps = "".join(f'\t\t\t\t\t\t\t{{ from = "{mat}.vmat" to = "materials/mcb/{mat}.vmat" }},\n' for mat in faces)
+    mesh = f"models/mcb/{fname}.obj"
+    if "torch" in fname:
+        # a torch is a ward unit's model (MC:ShowBlock), clicked to attack it: Dota picks only models with a skeleton,
+        # so torches are SMDs (one bone) with a hitbox. (The same vertices: Dota's import turns an SMD like an OBJ.)
+        smd = ["version 1", "nodes", '0 "root" -1', "end", "skeleton", "time 0", "0 0 0 0 0 0 0", "end", "triangles"]
+        for mat, quads in faces.items():
+            for q in quads:
+                a0, b0, c0 = (verts[q[k] - 1] for k in range(3))
+                n = ((b0[1] - a0[1]) * (c0[2] - a0[2]) - (b0[2] - a0[2]) * (c0[1] - a0[1]),
+                     (b0[2] - a0[2]) * (c0[0] - a0[0]) - (b0[0] - a0[0]) * (c0[2] - a0[2]),
+                     (b0[0] - a0[0]) * (c0[1] - a0[1]) - (b0[1] - a0[1]) * (c0[0] - a0[0]))
+                ln = math.sqrt(sum(x * x for x in n)) or 1
+                for tri in ((q[0], q[1], q[2]), (q[0], q[2], q[3])):
+                    smd.append(f"{mat}.vmat")
+                    for i in tri:
+                        x, y, z = verts[i - 1]
+                        smd.append(f"0 {x:.4f} {y:.4f} {z:.4f} {n[0] / ln:.4f} {n[1] / ln:.4f} {n[2] / ln:.4f} {uvs[i - 1][0]:.5f} {uvs[i - 1][1]:.5f}")
+        smd.append("end")
+        with open(os.path.join(MDL, fname + ".smd"), "w") as f:
+            f.write(chr(10).join(smd) + chr(10))
+        mesh = f"models/mcb/{fname}.smd"
     with open(os.path.join(MDL, fname + ".vmdl"), "w") as f:
-        f.write(VMDL.replace("@REMAPS@", remaps).replace("@OBJ@", f"models/mcb/{fname}.obj").replace("@HITBOX@", HITBOX if "torch" in fname else ""))
+        f.write(VMDL.replace("@REMAPS@", remaps).replace("@OBJ@", mesh).replace("@HITBOX@", HITBOX if "torch" in fname else ""))
     return fname
 
 

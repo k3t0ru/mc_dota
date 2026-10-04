@@ -35,29 +35,27 @@ def humanoid(t, arms=FWD, inflate=0.0, legs=True, head=True, body=True, leg=0.0,
     return b
 
 
-def bow(pivot, turn, draw=0.0):
-    # the bow in the hand at the end of an arm held forward: an upright picture, its length along the arm's way
-    # (the bow is drawn diagonally in its picture: a quarter turn of that upright, its grip in the hand). Four pictures,
-    # Minecraft's: the bow, then its string pulled in 3 steps; the ones not shown sit far under the ground (a bone
-    # can't hide its part, it can move it away)
+def bow(pivot, turn, hand):
+    # the bow in the right hand at the end of an arm held forward: an upright picture, its length along the arm's way
+    # (the bow is drawn diagonally in its picture: a quarter turn of that upright, its grip in the hand). Its string is
+    # its own: two threads from the bow's tips to the left hand (hand = the left arm's pivot and turn), stretched as the
+    # hand pulls back. (Minecraft's bow_pulling pictures swapped by moving the unshown ones away: the swaps showed.)
     x, y, z = pivot
-    stage = 0 if draw < 0.1 else 1 if draw < 0.4 else 2 if draw < 0.7 else 3
-    out = []
-    for i, tex in enumerate(("item:bow", "item:bow_pulling_0", "item:bow_pulling_1", "item:bow_pulling_2")):
-        out.append((tex, None, (0, -8, -8), (0, 16, 16), 0, (x, y + 1 + (0 if i == stage else 400), z - 10), (turn + 0.785, 0, 0), f"bow{i}"))
-    return out
+    off, rot = (x, y + 1, z - 10), (turn + 0.785, 0, 0)
+    return [("item:bow_nostring", None, (0, -8, -8), (0, 16, 16), 0, off, rot, "arm_r"),
+            ("@string", None, STRING_TIPS[0], STRING_TIPS[1], hand, off, rot, "arm_r")]
 
 
 def skeleton(leg=0.0, arm=0.0, dy=0, legs_pose=None):
     # arm: the bow's draw, 0 = held, 1 = the string pulled: both arms forward like Minecraft's aiming skeleton, the left
     # hand on the string, pulling it back toward the chin
     a = min(1, arm)
-    left = (FWD + 0.1 * a, 0.5 - 0.45 * a, 0)
+    left, lz = (FWD, 0.5, 0), 3.5 * a  # (the left shoulder draws back: a straight arm can't bend at the elbow)
     b = [("skeleton", (0, 0), (-4, -8, -4), (8, 8, 8), 0, (0, dy, 0), 0, "head"),
          ("skeleton", (16, 16), (-4, 0, -2), (8, 12, 4), 0, (0, dy, 0), 0, "body"),
          ("skeleton", (40, 16), (-1, -2, -1), (2, 12, 2), 0, (-5, 2 + dy, 0), FWD, "arm_r"),
-         ("skeleton", (40, 16), (-1, -2, -1), (2, 12, 2), 0, (5, 2 + dy, 0), left, "arm_l")]
-    b += bow((-5, 2 + dy, 0), 0, a)
+         ("skeleton", (40, 16), (-1, -2, -1), (2, 12, 2), 0, (5, 2 + dy, lz), left, "arm_l")]
+    b += bow((-5, 2 + dy, 0), 0, ((5, 2 + dy, lz), left))
     if legs_pose: b += legs_pose
     else:
         b += [("skeleton", (0, 16), (-1, 0, -1), (2, 12, 2), 0, (-2, 12 + dy, 0), leg, "leg_r"),
@@ -148,7 +146,7 @@ def steve(leg, arm, mode="stand", elytra=False, item=None):
          (t, (16, 48), (-2, 0, -2), (4, 12, 4), 0, (1.9, ly, lz), -leg, "leg_l"),
          (t, (0, 48), (-2, 0, -2), (4, 12, 4), 0.25, (1.9, ly, lz), -leg, "leg_l")]
     if item:  # the item in his right hand: its picture upright along the arm's side, the handle in the hand, pointing forward
-        b.append(("item:" + item, None, (0, -8.5, -1.5), (0, 10, 10), 0, (-6, ay + 9.5, -1 + rx), 3 * math.pi / 4, "arm_r"))
+        b.append(("item:" + item, None, (0, -7.6, -1.4), (0, 9, 9), 0, (-6, ay + 10, -0.5 + rx), math.pi / 2, "arm_r"))
     if elytra:  # Minecraft's ElytraModel, on the back (2 px behind the body)
         x, z = (0.349, -math.pi / 2) if mode == "fly" else (0.2618 + bend, -0.2618)
         b += [("elytra", (22, 0), (-10, 0, 0), (10, 20, 2), 1.0, (5, by, 2), (x, 0, z), "wing_l"),
@@ -272,6 +270,25 @@ def mesh_smd(boxes, sizes, order):
     lines += ["end", "triangles"]
     lo, hi = [1e9] * 3, [-1e9] * 3
     for tex, uv0, (x0, y0, z0), (w, h, d), g, off, rot, bone in boxes:
+        if tex == "@string":
+            hoff, hrot = g
+            hand = dota_point((0, 10, 0), hoff, hrot)
+            hb, bb = order.index("arm_l"), order.index(bone)
+            for tip_local in ((x0, y0, z0), (w, h, d)):
+                tip = dota_point(tip_local, off, rot)
+                dvec = [q - p for p, q in zip(tip, hand)]
+                for axis in ((0, 0, 1), (1, 0, 0)):
+                    wv = (dvec[1] * axis[2] - dvec[2] * axis[1], dvec[2] * axis[0] - dvec[0] * axis[2], dvec[0] * axis[1] - dvec[1] * axis[0])
+                    ln = math.sqrt(sum(c * c for c in wv)) or 1
+                    wv = [c / ln * 0.25 * PX for c in wv]
+                    quad = [([tip[k] - wv[k] for k in range(3)], bb), ([tip[k] + wv[k] for k in range(3)], bb),
+                            ([hand[k] + wv[k] for k in range(3)], hb), ([hand[k] - wv[k] for k in range(3)], hb)]
+                    for tri in ((0, 1, 2), (0, 2, 3)):
+                        lines.append("materials/mc/mob_string.vmat")
+                        for k in tri:
+                            (vx, vy, vz), vb = quad[k]
+                            lines.append(f"{vb} {vx:.4f} {vy:.4f} {vz:.4f} 0 0 1 0.5 0.5")
+            continue
         tw, th = sizes[tex]
         bi = order.index(bone)
         quads = []
@@ -356,7 +373,7 @@ def anim_smd(build, order, rest, pose, seconds, looping):
     return "\n".join(lines) + "\n"
 
 
-def anim_fps(seconds, looping): return 30 if looping else 120
+def anim_fps(seconds, looping): return FPS
 
 
 def kv_vec(v): return "[ " + ", ".join(f"{x:.2f}" for x in v) + " ]"
@@ -472,8 +489,20 @@ os.makedirs(MAT, exist_ok=True); os.makedirs(MDL, exist_ok=True)
 for old in set(glob.glob(os.path.join(MDL, "mob_*_[wa][0-9]*.*")) + glob.glob(os.path.join(MDL, "mob_*.obj"))):
     os.remove(old)  # (the pose-frame models)
 sizes, IMAGES = {}, {}
+_bow = png("../item/bow.png")
+_px = _bow.load()
+_string = [(i, j) for j in range(_bow.height) for i in range(_bow.width)
+           if _px[i, j][3] > 127 and 50 <= min(_px[i, j][:3]) and max(_px[i, j][:3]) <= 90 and max(_px[i, j][:3]) - min(_px[i, j][:3]) < 8]
+_nostring = _bow.copy()
+for i, j in _string: _nostring.putpixel((i, j), (0, 0, 0, 0))
+_string.sort(key=lambda q: q[1])  # (top tip first)
+# the tips: the string's ends, in the bow picture's own place (its box: (0, -8, -8), 16 x 16; x across, z = u, y = v)
+STRING_TIPS = [(0, -8 + (j + 0.5), -8 + (i + 0.5)) for i, j in (_string[0], _string[-1])] if _string else [(0, -7, -7), (0, 7, 7)]
+for tex, img in (("item:bow_nostring", _nostring), ("string", Image.new("RGBA", (4, 4), (215, 215, 215, 255)))):
+    TEXTURES[tex] = None
+    IMAGES[tex] = img
 for tex, path in TEXTURES.items():
-    img = png(path)
+    img = IMAGES[tex] if path is None else png(path)
     sizes[tex] = img.size
     IMAGES[tex] = img
     tex = tex.replace("item:", "")
@@ -498,7 +527,7 @@ for name, build in MOB_BUILD.items():
     used = []
     for b in rest:
         t = b[0].replace("item:", "")
-        if t not in used: used.append(t)
+        if t not in used and not t.startswith("@"): used.append(t)
     # attachments: where a ranged attack leaves (the bow) and where attacks hit (the chest), relative to their bones
     def rel(bone, point_mc):
         p, q = dota_pivot(point_mc), dota_pivot(first[bone][5])
@@ -604,7 +633,7 @@ with open(os.path.join(MDL, "block_ghost.vmdl"), "w") as f:
 						_class = "HitboxSet"
 						name = "default"
 						children = [ {{ _class = "Hitbox" name = "body" parent_bone = "" surface_property = "" translation_only = false group_id = 0
-							hitbox_mins = [ -48.0, -48.0, 0.0 ] hitbox_maxs = [ 48.0, 48.0, {2 * H}.0 ] }}, ]
+							hitbox_mins = [ -48.0, -48.0, -48.0 ] hitbox_maxs = [ 48.0, 48.0, {2 * H + 48}.0 ] }}, ]
 					}},
 				]
 			}},

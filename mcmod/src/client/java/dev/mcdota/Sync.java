@@ -69,7 +69,8 @@ public final class Sync {
 	// tower or a bridge: they break its foot.) Each neighbour's connected blocks, searched up to MAX_HANGING of them.
 	private static boolean collapsing;
 	private static final int MAX_HANGING = 2048;
-	private static void collapse(net.minecraft.server.MinecraftServer server, BlockPos gone) {
+	// (also called straight from Progress.unblock: blocks Dota removes come while "applying", which blockChanged ignores)
+	static void collapse(net.minecraft.server.MinecraftServer server, BlockPos gone) {
 		var level = server.overworld();
 		Set<BlockPos> done = new HashSet<>();
 		for (var d : net.minecraft.core.Direction.values()) {
@@ -104,6 +105,7 @@ public final class Sync {
 					var st = level.getBlockState(q);
 					level.levelEvent(2001, q, net.minecraft.world.level.block.Block.getId(st));
 					level.setBlock(q, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 2 | 16);
+					out.add(String.format("break %d %d %d", q.getX(), q.getY(), q.getZ())); // (Dota hears of each, even while applying)
 				}
 			} finally {
 				collapsing = false;
