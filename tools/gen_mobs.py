@@ -83,28 +83,48 @@ def zombie_gold(leg, arm):
          ("gold", (0, 16), (-2, 0, -2), (4, 12, 4), 0.6, (1.9, 12, 0), -leg, "leg_l")]
 
 
-def steve(leg, arm):
-    # Minecraft's PlayerModel (wide arms) with its outer layers; arms swing against the legs when walking, the right arm
-    # swings up and down for a hit (the Dota players' view of Steve, MCBridge:SteveModel)
+def steve(leg, arm, mode="stand", elytra=False):
+    # Minecraft's PlayerModel (wide arms) with its outer layers, in its poses (the Dota players' view of Steve,
+    # MCBridge:Puppet): walking (arms swing against the legs), a hit (the right arm swings), sneaking (bent forward,
+    # Minecraft's crouch offsets), drawing a bow (both arms forward), elytra flight (lying forward, wings spread).
+    # elytra: worn (folded on his back, spread in flight)
     t = "steve"
-    return [(t, (0, 0), (-4, -8, -4), (8, 8, 8), 0, (0, 0, 0), 0, "head"),
-            (t, (32, 0), (-4, -8, -4), (8, 8, 8), 0.5, (0, 0, 0), 0, "head"),
-            (t, (16, 16), (-4, 0, -2), (8, 12, 4), 0, (0, 0, 0), 0, "body"),
-            (t, (16, 32), (-4, 0, -2), (8, 12, 4), 0.25, (0, 0, 0), 0, "body"),
-            (t, (40, 16), (-3, -2, -2), (4, 12, 4), 0, (-5, 2, 0), -0.8 * leg - 1.8 * arm, "arm_r"),
-            (t, (40, 32), (-3, -2, -2), (4, 12, 4), 0.25, (-5, 2, 0), -0.8 * leg - 1.8 * arm, "arm_r"),
-            (t, (32, 48), (-1, -2, -2), (4, 12, 4), 0, (5, 2, 0), 0.8 * leg, "arm_l"),
-            (t, (48, 48), (-1, -2, -2), (4, 12, 4), 0.25, (5, 2, 0), 0.8 * leg, "arm_l"),
-            (t, (0, 16), (-2, 0, -2), (4, 12, 4), 0, (-1.9, 12, 0), leg, "leg_r"),
-            (t, (0, 32), (-2, 0, -2), (4, 12, 4), 0.25, (-1.9, 12, 0), leg, "leg_r"),
-            (t, (16, 48), (-2, 0, -2), (4, 12, 4), 0, (1.9, 12, 0), -leg, "leg_l"),
-            (t, (0, 48), (-2, 0, -2), (4, 12, 4), 0.25, (1.9, 12, 0), -leg, "leg_l")]
+    hy, by, ay, ly, lz, bend, lift = 0, 0, 2, 12, 0, 0, 0
+    if mode == "sneak": hy, by, ay, ly, lz, bend, lift = 4.2, 3.2, 5.2, 12.2, 4, 0.5, 0.4
+    rarm, larm = -0.8 * leg - 1.8 * arm + lift, 0.8 * leg + lift
+    if mode == "bow": rarm, larm = (FWD, -0.1, 0), (FWD, 0.5, 0)
+    if mode == "fly": rarm, larm = 0.0, 0.0
+    b = [(t, (0, 0), (-4, -8, -4), (8, 8, 8), 0, (0, hy, 0), 0, "head"),
+         (t, (32, 0), (-4, -8, -4), (8, 8, 8), 0.5, (0, hy, 0), 0, "head"),
+         (t, (16, 16), (-4, 0, -2), (8, 12, 4), 0, (0, by, 0), bend, "body"),
+         (t, (16, 32), (-4, 0, -2), (8, 12, 4), 0.25, (0, by, 0), bend, "body"),
+         (t, (40, 16), (-3, -2, -2), (4, 12, 4), 0, (-5, ay, 0), rarm, "arm_r"),
+         (t, (40, 32), (-3, -2, -2), (4, 12, 4), 0.25, (-5, ay, 0), rarm, "arm_r"),
+         (t, (32, 48), (-1, -2, -2), (4, 12, 4), 0, (5, ay, 0), larm, "arm_l"),
+         (t, (48, 48), (-1, -2, -2), (4, 12, 4), 0.25, (5, ay, 0), larm, "arm_l"),
+         (t, (0, 16), (-2, 0, -2), (4, 12, 4), 0, (-1.9, ly, lz), leg, "leg_r"),
+         (t, (0, 32), (-2, 0, -2), (4, 12, 4), 0.25, (-1.9, ly, lz), leg, "leg_r"),
+         (t, (16, 48), (-2, 0, -2), (4, 12, 4), 0, (1.9, ly, lz), -leg, "leg_l"),
+         (t, (0, 48), (-2, 0, -2), (4, 12, 4), 0.25, (1.9, ly, lz), -leg, "leg_l")]
+    if elytra:  # Minecraft's ElytraModel, on the back (2 px behind the body)
+        x, z = (0.349, -math.pi / 2) if mode == "fly" else (0.2618 + bend, -0.2618)
+        b += [("elytra", (22, 0), (-10, 0, 0), (10, 20, 2), 1.0, (5, by, 2), (x, 0, z), "wing_l"),
+              ("elytra", (22, 0), (0, 0, 0), (10, 20, 2), 1.0, (-5, by, 2), (x, 0, -z), "wing_r")]
+    if mode == "fly":  # the whole body lying forward, head first, turned about its middle
+        g, c = mc_rot(math.pi / 2), (0, 12, 0)
+        out = []
+        for tex, uv, mn, size, inf, piv, rot, bone in b:
+            d = mat_vec(g, tuple(q - o for q, o in zip(piv, c)))
+            out.append((tex, uv, mn, size, inf, tuple(o + q for o, q in zip(c, d)), mat_mul(g, mc_rot(rot)), bone))
+        b = out
+    return b
 
 
-MOB_BUILD = {"steve": steve, "zombie": zombie, "skeleton": lambda leg, arm: skeleton(leg, arm / 0.8), "spider_jockey": spider_jockey,
+MOB_BUILD = {"steve": steve, "steve_elytra": lambda leg, arm, mode="stand": steve(leg, arm, mode, True), "zombie": zombie, "skeleton": lambda leg, arm: skeleton(leg, arm / 0.8), "spider_jockey": spider_jockey,
              "zombie_gold": zombie_gold}
 TEXTURES = {"zombie": "zombie/zombie.png", "skeleton": "skeleton/skeleton.png", "spider": "spider/spider.png",
-            "gold": "equipment/humanoid/gold.png", "item:bow": "../item/bow.png", "steve": "player/wide/steve.png"}
+            "gold": "equipment/humanoid/gold.png", "item:bow": "../item/bow.png", "steve": "player/wide/steve.png",
+            "elytra": "equipment/wings/elytra.png"}
 
 # animations: (activity, seconds, looping, pose at a moment 0..1) -- like Minecraft's: a walk is a sine of the legs (arms
 # swaying with them for zombies), idle arms bob slowly, an attack swings the arms down (zombies) or draws the bow
@@ -115,6 +135,14 @@ ANIMS = [
     ("attack", "ACT_DOTA_ATTACK", 0.6, False, lambda k: (0, 0.9 * math.sin(math.pi * min(1, k / 0.8)))),
     ("stunned", "ACT_DOTA_DISABLED", 3.0, True, lambda k: (0, 0.06 * math.sin(2 * math.pi * k))),
 ]
+# Steve's own: what Minecraft's player does (the pose in Minecraft's "me" line, MCBridge:Puppet)
+STEVE_ANIMS = [
+    ("sneak_idle", "", 3.0, True, lambda k: (0, 0, "sneak")),
+    ("sneak_run", "", 1.2, True, lambda k: (0.5 * math.sin(2 * math.pi * k), 0, "sneak")),
+    ("fly", "", 1.0, True, lambda k: (0.08 * math.sin(2 * math.pi * k), 0, "fly")),
+    ("bow", "", 1.0, True, lambda k: (0, 0, "bow")),
+]
+def anims_for(name): return ANIMS + (STEVE_ANIMS if name.startswith("steve") else [])
 
 
 # --- space: Minecraft model pixels (y down, face -z) -> Dota units (z up, face +X) ---
@@ -125,6 +153,7 @@ def mat_vec(a, v): return tuple(sum(a[i][k] * v[k] for k in range(3)) for i in r
 
 def mc_rot(rot):
     """rot: an x turn, or (x, y, z) turns applied like Minecraft's ModelPart (Rz * Ry * Rx), as a matrix."""
+    if isinstance(rot, list): return rot
     rx, ry, rz = rot if isinstance(rot, tuple) else (rot, 0, 0)
     c, s = math.cos(rx), math.sin(rx); X = [[1, 0, 0], [0, c, -s], [0, s, c]]
     c, s = math.cos(ry), math.sin(ry); Y = [[c, 0, s], [0, 1, 0], [-s, 0, c]]
@@ -245,7 +274,7 @@ def kv_vec(v): return "[ " + ", ".join(f"{x:.2f}" for x in v) + " ]"
 def vmdl(name, used, lo, hi, attachments, material=None):
     remaps = " ".join(f'{{ from = "materials/mc/mob_{t}.vmat" to = "{material or f"materials/mc/mob_{t}.vmat"}" }},' for t in used)
     anims = ""
-    for an, act, seconds, looping, _ in ANIMS:
+    for an, act, seconds, looping, _ in anims_for(name):
         anims += f"""					{{
 						_class = "AnimFile"
 						name = "{an}"
@@ -371,7 +400,7 @@ for name, build in MOB_BUILD.items():
     lo, hi = tuple(min(x, y) for x, y in zip(a, b)), tuple(max(x, y) for x, y in zip(a, b))
     with open(os.path.join(MDL, f"mob_{name}.smd"), "w") as f:
         f.write(smd)
-    for an, act, seconds, looping, pose in ANIMS:
+    for an, act, seconds, looping, pose in anims_for(name):
         with open(os.path.join(MDL, f"mob_{name}_{an}.smd"), "w") as f:
             f.write(anim_smd(build, order, rest, pose, seconds, looping))
     used = []
@@ -395,9 +424,58 @@ for name, build in MOB_BUILD.items():
         feet = tuple(a - b for a, b in zip(dota_pivot((0, 24, 0)), dota_pivot(first["body"][5])))
         with open(os.path.join(MDL, "steve_ghost.vmdl"), "w") as f:
             f.write(vmdl(name, used, lo, hi, att + [("attach_feet", "body", feet)], "materials/mc/ghost.vmat"))
+PARTICLE = """<!-- kv3 encoding:text:version{{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d}} format:generic:version{{7412167c-06e9-4698-aff2-e63eb59037e7}} -->
+{{
+	_class = "CParticleSystemDefinition"
+	m_bShouldHitboxesFallbackToRenderBounds = false
+	m_nMaxParticles = 1
+	m_flConstantRadius = 1.0
+	m_flConstantLifespan = 100000.0
+	m_Renderers =
+	[
+		{{
+			_class = "C_OP_RenderModels"
+			m_bOrientZ = true
+			m_bSuppressTint = true
+			m_ModelList = [ {{ m_model = resource:"models/mc/mob_{model}.vmdl" }} ]
+			m_bAnimated = true
+			m_bForceLoopingAnimation = {loop}
+			m_nLOD = 1
+		}},
+	]
+	m_Operators =
+	[
+		{{ _class = "C_OP_RemapCPOrientationToYaw" m_nCP = 0 m_flRotOffset = 90.0 }},
+		{{ _class = "C_OP_SetToCP" m_nControlPointNumber = 0 }},
+	]
+	m_Initializers =
+	[
+		{{ _class = "C_INIT_CreateWithinSphere" m_nControlPointNumber = 0 }},
+		{{ _class = "C_INIT_RandomNamedModelSequence" m_bModelFromRenderer = true m_names = [ "{anim}" ] m_nFieldOutput = 13 }},
+	]
+	m_Emitters = [ {{ _class = "C_OP_InstantaneousEmitter" m_nParticlesToEmit = 1 }} ]
+}}
+"""
+PDIR = os.path.join(ROOT, "particles", "mc", "steve")
+os.makedirs(PDIR, exist_ok=True)
+for model in ("steve", "steve_elytra"):
+    for an, act, seconds, looping, _ in anims_for(model):
+        with open(os.path.join(PDIR, f"{model}_{an}.vpcf"), "w") as f:
+            f.write(PARTICLE.format(model=model, anim=an, loop="true" if looping else "false"))
 Image.new("RGB", (4, 4), (0, 0, 0)).save(os.path.join(MAT, "ghost.png"))
 Image.new("L", (4, 4), 0).save(os.path.join(MAT, "ghost_alpha.png"))
 with open(os.path.join(MAT, "ghost.vmat"), "w") as f:
     f.write("\n".join(['Layer0', '{', '\tshader "global_lit_simple.vfx"', '\tF_ALPHA_TEST 1', '\tg_flAlphaTestReference "0.500"',
                        '\tTextureColor "materials/mc/ghost.png"', '\tTextureTranslucency "materials/mc/ghost_alpha.png"', '}', '']))
 print("mobs:", ", ".join(MOB_BUILD), "anims:", ", ".join(a[0] for a in ANIMS))
+
+# Minecraft's effect icons for Dota's buff bar (modifier_mc_potion, modifier_mc_burning: GetTexture "mc/<name>"),
+# referenced by hero_select.xml so they get compiled
+ICONS = os.path.join(ROOT, "panorama", "images", "spellicons", "mc")
+os.makedirs(ICONS, exist_ok=True)
+for name, path in (("slowness", "mob_effect/slowness.png"), ("weakness", "mob_effect/weakness.png"), ("fire", "block/fire_0.png")):
+    icon = Image.open(io.BytesIO(jar.read("assets/minecraft/textures/" + path))).convert("RGBA")
+    icon = icon.crop((0, 0, icon.width, icon.width))  # (fire: the first frame of its strip)
+    back = Image.new("RGBA", icon.size, (40, 40, 40, 255))
+    back.alpha_composite(icon)
+    back.resize((128, 128), Image.NEAREST).convert("RGB").save(os.path.join(ICONS, name + ".png"))

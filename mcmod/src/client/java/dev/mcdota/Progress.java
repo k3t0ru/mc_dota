@@ -209,7 +209,15 @@ public final class Progress {
 	public static void follow(MinecraftServer server, double x, double z) {
 		if (server.getPlayerList().getPlayers().isEmpty()) return;
 		ServerPlayer pl = server.getPlayerList().getPlayers().get(0);
-		pl.teleportTo(x, pl.getY(), z);
+		// blocks in the way (a force staff toward stairs, a wall): up on top of them, like Dota's heroes slide up a
+		// slope; a drop below is left to gravity (off a pillar he flies on, then falls)
+		double y = pl.getY();
+		net.minecraft.world.phys.AABB box = pl.getBoundingBox().move(x - pl.getX(), 0, z - pl.getZ());
+		for (int i = 0; i < 8 && !pl.level().noCollision(pl, box); i++) {
+			box = box.move(0, 0.5, 0);
+			y += 0.5;
+		}
+		pl.teleportTo(x, y, z);
 	}
 
 	// --- mob sounds -----------------------------------------------------------------------------------------------

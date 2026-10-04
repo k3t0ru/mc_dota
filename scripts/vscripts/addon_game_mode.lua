@@ -38,7 +38,12 @@ function Precache( context )
 	for _, m in ipairs( { "zombie", "skeleton", "spider_jockey", "zombie_gold" } ) do -- (Steve's: below)
 		PrecacheResource( "model", "models/mc/mob_" .. m .. ".vmdl", context )
 	end
-	for _, a in ipairs( { "idle", "run", "attack" } ) do PrecacheResource( "particle", "particles/mc/steve_" .. a .. ".vpcf", context ) end
+	for _, m in ipairs( { "steve", "steve_elytra" } ) do
+		PrecacheResource( "model", "models/mc/mob_" .. m .. ".vmdl", context )
+		for _, a in ipairs( { "idle", "run", "attack", "sneak_idle", "sneak_run", "fly", "bow" } ) do
+			PrecacheResource( "particle", "particles/mc/steve/" .. m .. "_" .. a .. ".vpcf", context )
+		end
+	end
 	PrecacheResource( "model", "models/mc/mob_steve.vmdl", context )
 	PrecacheResource( "model", "models/mc/steve_ghost.vmdl", context )
 	PrecacheResource( "particle", "particles/units/heroes/hero_techies/techies_land_mine_explode.vpcf", context )
@@ -165,7 +170,12 @@ function MC:Init()
 	mode:SetDaynightCycleDisabled( true )
 	GameRules:SetTimeOfDay( 0.5 )
 	mode:SetDamageFilter( Dynamic_Wrap( MC, "DamageFilter" ), MC )
-	mode:SetBotThinkingEnabled( true ) -- (Dire bots, for testing without a second player, walk and fight)
+	-- (Dire bots, for testing without a second player, walk and fight; only in the tools: in a real game Dota's team AI
+	-- then pressed the glyph over and over, "buildings fortified" for one team, then the other)
+	if IsInToolsMode() then mode:SetBotThinkingEnabled( true ) end
+	mode:SetCustomGlyphCooldown( 300 ) -- (Dota's own 5 minutes: a custom game's glyph had none)
+	mode:SetCustomScanCooldown( 210 )
+	mode:SetFreeCourierModeEnabled( true ) -- a courier for each Dota player (Dire had none); Steve's goes (MC:OnSpawned)
 	-- a deny gives the denier nothing (Dota hands out XP for the killing attack)
 	-- Steve's hero XP is counted by us (MC:SteveXP), not given: a Dota level-up plays its sound and Steve's level is
 	-- only his Minecraft max health. A deny gives the denier nothing.
@@ -310,6 +320,15 @@ end
 
 function MC:OnSpawned( e )
 	local hero = EntIndexToHScript( e.entindex )
+	if hero and not hero:IsNull() and hero.IsCourier and hero:IsCourier() and hero:GetTeamNumber() == DOTA_TEAM_GOODGUYS then
+		hero:SetContextThink( "mc_nocourier", function() -- (a dead courier comes back: hidden and left alone instead)
+			if hero:IsNull() then return end
+			hero:AddNoDraw()
+			hero:AddNewModifier( hero, nil, "modifier_invulnerable", {} )
+			hero:AddNewModifier( hero, nil, "modifier_mc_nobar", {} )
+		end, 0.1 )
+		return
+	end
 	if hero and not hero:IsNull() and hero.GetUnitName then MC:MobModel( hero ) end
 	if hero.mc_player and hero.mc_dead then -- Dota's respawn timer is over: Minecraft's player may move again
 		hero.mc_dead = nil
@@ -338,7 +357,7 @@ function MC:SetupHero( hero )
 		end
 		MC.anchor = GetGroundPosition( Vector( math.floor( f.x / GRID + 0.5 ) * GRID, math.floor( f.y / GRID + 0.5 ) * GRID, 0 ), nil )
 		-- Dota's own camera controls would fight Minecraft's (launch args alone get overridden by the user's config)
-		SendToConsole( "dota_disable_unit_ring 1; dota_hero_indicators_max_distance 0; dota_hero_indicators_max_radius 0; dota_camera_edgemove 0; dota_camera_speed 0; dota_camera_lock 0; dota_camera_fov_min 90; dota_camera_fov_max 90; dota_hud_disable_damage_numbers 1; snd_mute_losefocus 0; snd_musicvolume 0" ) -- Dota's sound plays with Minecraft holding focus; music is Minecraft's
+		SendToConsole( "dota_hud_healthbars 0; dota_disable_unit_ring 1; dota_hero_indicators_max_distance 0; dota_hero_indicators_max_radius 0; dota_camera_edgemove 0; dota_camera_speed 0; dota_camera_lock 0; dota_camera_fov_min 90; dota_camera_fov_max 90; dota_hud_disable_damage_numbers 1; snd_mute_losefocus 0; snd_musicvolume 0" ) -- Dota's sound plays with Minecraft holding focus; music is Minecraft's
 		MC:SendTerrain()
 		MCWorld:SendTrees()
 		MC:StructureWalls()
@@ -1020,6 +1039,8 @@ end
 
 -- remember what each unit was explicitly told to attack (to tell clicks from auto-attacks)
 function MC:OrderFilter( f )
+	-- a glyph only from a real player (Dota's team AI spammed it)
+	if f.order_type == DOTA_UNIT_ORDER_GLYPH and ( f.issuer_player_id_const < 0 or PlayerResource:IsFakeClient( f.issuer_player_id_const ) ) then return false end
 	for _, idx in pairs( f.units ) do
 		local u = EntIndexToHScript( idx )
 		if u and u.mc_player and not MC.allowOrder then return false end -- Steve moves and attacks from Minecraft only

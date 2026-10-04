@@ -36,3 +36,5 @@ content/models/mc/steve_ghost.vmdl
 content/materials/mc/ghost*
 scripts/vscripts/mc_version.lua
 content/panorama/scripts/custom_game/version.js
+content/panorama/images/spellicons/mc/
+content/particles/mc/steve/

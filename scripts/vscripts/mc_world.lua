@@ -158,6 +158,7 @@ function MCWorld:Think()
 	end
 	if s then self:Lotuses( s ) self:RuneEffects( s ) self:NoIllusions( s ) end
 	self:TreesBack()
+	self:SentrySight()
 	-- wards whose Dota unit died (an enemy killed it): their torch goes too
 	for key, w in pairs( MC.wards or {} ) do
 		if w.unit:IsNull() or not w.unit:IsAlive() then
@@ -303,7 +304,7 @@ function MCWorld:Ward( bx, by, bz, kind )
 	local u = CreateUnitByName( kind == "sentry" and "npc_dota_sentry_wards" or "npc_dota_observer_wards", pos, false, s, s, s:GetTeamNumber() )
 	if not u then return end
 	u:AddNoDraw() -- (until MC:ShowBlock dresses it as the torch)
-	u:AddNewModifier( u, nil, "modifier_invisible", {} ) -- (enemies need true sight, like for Dota's wards)
+	u:AddNewModifier( u, nil, "modifier_mc_ward", {} ) -- invisible: enemies need true sight, like for Dota's wards
 	u:AddNewModifier( u, nil, "modifier_kill", { duration = kind == "sentry" and 420 or 360 } )
 	if kind == "sentry" then u:AddNewModifier( u, nil, "modifier_mc_truesight", {} ) end
 	-- on a tower of 4+ blocks it sees like a ward on a cliff
@@ -320,6 +321,24 @@ function MCWorld:Unward( bx, by, bz )
 	if not w.unit:IsNull() and w.unit:IsAlive() then w.unit:ForceKill( false ) end
 end
 
+-- soul torches (sentries) reveal the invisible around them: every enemy unit within 900, wards too. (The true sight
+-- aura alone found nothing: an aura's search doesn't see invisible units.) Entities in the sphere, vision or not.
+function MCWorld:SentrySight()
+	if GameRules:GetGameTime() - ( self.sightAt or 0 ) < 0.25 then return end
+	self.sightAt = GameRules:GetGameTime()
+	for _, w in pairs( MC.wards or {} ) do
+		local s = w.unit
+		if s and not s:IsNull() and s:IsAlive() and s:HasModifier( "modifier_mc_truesight" ) then
+			for _, e in ipairs( Entities:FindAllInSphere( s:GetAbsOrigin(), 900 ) ) do
+				if e.IsBaseNPC and e:IsBaseNPC() and e:IsAlive() and e:GetTeamNumber() ~= s:GetTeamNumber()
+					and e:GetTeamNumber() ~= DOTA_TEAM_NEUTRALS then
+					e:AddNewModifier( s, nil, "modifier_truesight", { duration = 0.5 } )
+				end
+			end
+		end
+	end
+end
+
 -- the first ward froze Dota for ~0.2 s (its effects loading): one of each, invisible, at game start, gone a second later
 function MCWorld:WarmUpWards( team )
 	local spot = Vector( 0, 0, 0 )
@@ -327,7 +346,7 @@ function MCWorld:WarmUpWards( team )
 		local u = CreateUnitByName( name, spot, false, nil, nil, team )
 		if u then
 			u:AddNoDraw()
-			u:AddNewModifier( u, nil, "modifier_invisible", {} )
+			u:AddNewModifier( u, nil, "modifier_mc_ward", {} )
 			u:AddNewModifier( u, nil, "modifier_mc_truesight", {} )
 			u:AddNewModifier( u, nil, "modifier_mc_highground", {} )
 			u:AddNewModifier( u, nil, "modifier_kill", { duration = 1 } )

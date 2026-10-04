@@ -149,9 +149,16 @@ public final class Sync {
 	public static void tick(Minecraft mc) {
 		MinecraftServer server = mc.getSingleplayerServer();
 		if (busy || mc.player == null || server == null) return;
-		StringBuilder body = new StringBuilder(String.format(Locale.ROOT, "me %s %.2f %.2f %.2f %.1f %.1f %.1f\n",
-			mc.player.getName().getString(), mc.player.getX(), mc.player.getY(), mc.player.getZ(),
-			mc.player.getYRot(), mc.player.getHealth(), mc.player.getMaxHealth()));
+		// how Dota's players see him (MCBridge:Puppet): his pose (elytra flight, drawing a bow, sneaking), an elytra worn,
+		// the item in his hand
+		var p = mc.player;
+		var use = p.isUsingItem() ? p.getUseItem().getItem() : null;
+		String pose = p.isFallFlying() ? "fly" : use instanceof net.minecraft.world.item.BowItem || use instanceof net.minecraft.world.item.CrossbowItem
+			? "bow" : p.isCrouching() ? "sneak" : "stand";
+		boolean elytra = p.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST).getItem() == net.minecraft.world.item.Items.ELYTRA;
+		String held = p.getMainHandItem().isEmpty() ? "air" : BuiltInRegistries.ITEM.getKey(p.getMainHandItem().getItem()).getPath();
+		StringBuilder body = new StringBuilder(String.format(Locale.ROOT, "me %s %.2f %.2f %.2f %.1f %.1f %.1f %s %d %s\n",
+			p.getName().getString(), p.getX(), p.getY(), p.getZ(), p.getYRot(), p.getHealth(), p.getMaxHealth(), pose, elytra ? 1 : 0, held));
 		for (String l; (l = out.poll()) != null; ) body.append(l).append('\n');
 		busy = true;
 		HTTP.sendAsync(HttpRequest.newBuilder(BRIDGE).POST(HttpRequest.BodyPublishers.ofString(body.toString())).build(),

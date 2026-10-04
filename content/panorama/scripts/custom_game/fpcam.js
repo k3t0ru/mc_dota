@@ -208,6 +208,57 @@ function hideTooltips() {
 	if ( t ) t.style.opacity = "0";
 	$.Schedule( 1, hideTooltips );
 }
+// Steve's health bars: Dota's own are off on his screen (dota_hud_healthbars 0: drawn at a fixed size, the far ones
+// covered his view), these show the units near him only. (Dota's players keep Dota's bars, at any distance.)
+var BAR_RANGE = 1600, bars = {}, barUnits = [], barListAt = 0;
+function nearBars() {
+	var root = $( "#Bars" );
+	var me = Players.GetPlayerHeroEntityIndex( Players.GetLocalPlayer() );
+	var myTeam = Players.GetTeam( Players.GetLocalPlayer() );
+	if ( Date.now() - barListAt > 250 ) { // (the units near him: a few times a second)
+		barListAt = Date.now();
+		barUnits = [];
+		var at = Entities.GetAbsOrigin( me ), all = Entities.GetAllEntities();
+		for ( var i = 0; i < all.length; i++ ) {
+			var e = all[i];
+			if ( e === me || !Entities.IsValidEntity( e ) || !Entities.IsAlive( e ) || !( Entities.GetMaxHealth( e ) > 0 ) ) continue;
+			var name = Entities.GetUnitName( e ) || "";
+			if ( name === "" || name.indexOf( "npc_mc_" ) === 0 || Entities.NoHealthBar( e ) ) continue; // (blocks, his stand-in)
+			var p = Entities.GetAbsOrigin( e );
+			if ( at && p && Math.pow( p[0] - at[0], 2 ) + Math.pow( p[1] - at[1], 2 ) < BAR_RANGE * BAR_RANGE ) barUnits.push( e );
+		}
+	}
+	var k = 1080 / Game.GetScreenHeight(), shown = {};
+	for ( var j = 0; j < barUnits.length; j++ ) {
+		var u = barUnits[j];
+		if ( !Entities.IsValidEntity( u ) || !Entities.IsAlive( u ) ) continue;
+		var o = Entities.GetAbsOrigin( u ), off = Entities.GetHealthBarOffset( u ) || 200;
+		var x = Game.WorldToScreenX( o[0], o[1], o[2] + off ), y = Game.WorldToScreenY( o[0], o[1], o[2] + off );
+		if ( !( x >= 0 && y >= 0 ) ) continue; // (behind the camera)
+		var b = bars[u];
+		if ( !b ) {
+			b = $.CreatePanel( "Panel", root, "" );
+			b.hittest = false;
+			b.style.backgroundColor = "#000000cc";
+			b.style.border = "1px solid #000000";
+			b.fill = $.CreatePanel( "Panel", b, "" );
+			b.fill.style.height = "100%";
+			bars[u] = b;
+		}
+		var w = Entities.IsHero( u ) ? 96 : 64;
+		b.style.width = w + "px";
+		b.style.height = ( Entities.IsHero( u ) ? 9 : 6 ) + "px";
+		b.style.x = ( x * k - w / 2 ) + "px";
+		b.style.y = ( y * k ) + "px";
+		b.fill.style.width = ( 100 * Entities.GetHealth( u ) / Math.max( 1, Entities.GetMaxHealth( u ) ) ) + "%";
+		b.fill.style.backgroundColor = Entities.GetTeamNumber( u ) === myTeam ? "#3fbf3f" : "#d23c32";
+		b.visible = true;
+		shown[u] = true;
+	}
+	for ( var id in bars ) if ( !shown[id] ) bars[id].visible = false;
+	$.Schedule( 0, nearBars );
+}
+
 // Only Steve's client (the Minecraft player, Radiant's only player) is steered from Minecraft; Dire's Dota players keep
 // Dota as it is
 function start() {
@@ -218,5 +269,6 @@ function start() {
 	// Steve's screen is Minecraft's: hide Dota's HUD (top bar, minimap, abilities, inventory, shop, chat...)
 	for ( var k in DotaDefaultUIElement_t ) GameUI.SetDefaultUIEnabled( DotaDefaultUIElement_t[k], false );
 	frame();
+	nearBars();
 }
 start();

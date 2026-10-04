@@ -7,3 +7,5 @@ LinkLuaModifier( "modifier_mc_potion", "modifier_mc_potion", LUA_MODIFIER_MOTION
 LinkLuaModifier( "modifier_mc_nobar", "modifier_mc_nobar", LUA_MODIFIER_MOTION_NONE )
 LinkLuaModifier( "modifier_mc_truesight", "modifier_mc_truesight", LUA_MODIFIER_MOTION_NONE )
 LinkLuaModifier( "modifier_mc_puppet", "modifier_mc_puppet", LUA_MODIFIER_MOTION_NONE )
+LinkLuaModifier( "modifier_mc_ward", "modifier_mc_ward", LUA_MODIFIER_MOTION_NONE )
+LinkLuaModifier( "modifier_mc_burning", "modifier_mc_burning", LUA_MODIFIER_MOTION_NONE )

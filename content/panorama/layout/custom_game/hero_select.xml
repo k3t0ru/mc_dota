@@ -6,5 +6,9 @@
 	<Panel hittest="false" style="width: 100%; height: 100%;">
 		<!-- (referenced here so the face gets compiled; the script puts it over Kunkka's portraits) -->
 		<Image id="SteveFace" src="file://{images}/custom_game/steve_face.png" style="visibility: collapse;" />
+		<!-- (Minecraft's effect icons for Dota's buff bar: compiled because they are referenced here) -->
+		<Image src="file://{images}/spellicons/mc/slowness.png" style="visibility: collapse;" />
+		<Image src="file://{images}/spellicons/mc/weakness.png" style="visibility: collapse;" />
+		<Image src="file://{images}/spellicons/mc/fire.png" style="visibility: collapse;" />
 	</Panel>
 </root>

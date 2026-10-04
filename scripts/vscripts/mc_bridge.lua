@@ -62,7 +62,6 @@ function MCBridge:Tick()
 		end
 	end
 	MC:BossBar( self.steve )
-	self:FarBars()
 	MCWorld:Think()
 	-- cobwebs hold units like in Minecraft (90% slower while inside)
 	for p in pairs( MC.cobwebs ) do
@@ -70,7 +69,7 @@ function MCBridge:Tick()
 		else
 			for _, u in ipairs( FindUnitsInRadius( DOTA_TEAM_NEUTRALS, p:GetAbsOrigin(), nil, GRID * 0.6, DOTA_UNIT_TARGET_TEAM_BOTH,
 				DOTA_UNIT_TARGET_HERO + DOTA_UNIT_TARGET_BASIC, DOTA_UNIT_TARGET_FLAG_NONE, FIND_ANY_ORDER, false ) ) do
-				if not u.mc_player and not u.mc_puppet and not u.mc_block then u:AddNewModifier( u, nil, "modifier_mc_potion", { duration = 0.3, kind = "slow", level = 6 } ) end
+				if not u.mc_player and not u.mc_puppet and not u.mc_block then u:AddNewModifier( u, nil, "modifier_mc_potion", { duration = 0.3, kind = "web", level = 6 } ) end
 			end
 		end
 	end
@@ -118,8 +117,10 @@ function MCBridge:Apply( body, stale )
 	if body:find( "swing " ) and self.aim and not self.aim:IsNull() and self.steve
 		and self.aim:GetTeamNumber() == self.steve:GetTeamNumber() then self.denySwingAt = GameRules:GetGameTime() end
 	for line in body:gmatch( "[^\n]+" ) do
-		local name, x, z, hp, max, yaw, my = line:match( "^steve (%S+) (%S+) (%S+) (%S+) (%S+) (%S+) ?(%S*)" )
+		local name, x, z, hp, max, yaw, my, pose, elytra, held = line:match( "^steve (%S+) (%S+) (%S+) (%S+) (%S+) (%S+) ?(%S*) ?(%S*) ?(%S*) ?(%S*)" )
 		if name and not stale then
+			-- how Dota's players see him (MCBridge:Puppet): Minecraft's pose, an elytra worn, the item in his hand
+			self.pose, self.elytra, self.held = pose ~= "" and pose or "stand", elytra == "1", held
 			self:MoveSteve( name, to_dota( tonumber( x ), tonumber( z ) ), tonumber( hp ) / tonumber( max ), math.rad( tonumber( yaw ) ), tonumber( my ) )
 			self:HighGround( tonumber( x ), tonumber( z ), tonumber( my ) )
 		end
@@ -127,7 +128,7 @@ function MCBridge:Apply( body, stale )
 		local id, amount, direct, kind = line:match( "^hit (%d+) (%S+) ?(%S*) ?(%S*)" ) -- arrows, sweeps: through the stand-ins
 		if id and kind == "fire" then -- burning: a neutral dying now drops cooked meat
 			local u = EntIndexToHScript( tonumber( id ) )
-			if u and not u:IsNull() then u.mc_burnUntil = GameRules:GetGameTime() + 1.5 end
+			if u and not u:IsNull() then self:Burn( u, 1.5 ) end
 		end
 		-- (no splash right after a swing at an ally: a deny is a single hit, the sword's sweep must not hit the enemies around)
 		local denying = GameRules:GetGameTime() - ( self.denySwingAt or -1 ) < 0.4
@@ -213,7 +214,7 @@ function MCBridge:Apply( body, stale )
 			and GameRules:GetGameTime() - ( self.aimAt or 0 ) <= 0.6
 			and ( self.aim:GetAbsOrigin() - self.steve:GetAbsOrigin() ):Length2D() <= MELEE_REACH * GRID + self.aim:GetHullRadius() then
 			self:Send( string.format( "fx burn %d 8", self.aim:entindex() ) ) -- flint and steel on a unit: 8 s of fire
-			self.aim.mc_burnUntil = GameRules:GetGameTime() + 8
+			self:Burn( self.aim, 8 )
 		end
 		local swing, crit, sweep, full, fire, wbase, sharp = line:match( "^swing (%S+) ?(%S*) ?(%S*) ?(%S*) ?(%S*) ?(%S*) ?(%S*)" ) -- a melee swing: whatever Dota highlights under the crosshair
 		if swing and MCWorld:SwingRune() then swing = nil end -- (a rune in front: the swing breaks it)
@@ -336,7 +337,7 @@ function MCBridge:Swing( target, amount, crit, sweep, fire )
 	self:Send( string.format( "fx %s %d", crit and "crit" or "hit", target:entindex() ) )
 	if ( fire or 0 ) > 0 and not denying and not target:IsNull() and target:IsAlive() then -- Fire Aspect
 		self:Send( string.format( "fx burn %d %d", target:entindex(), fire ) )
-		target.mc_burnUntil = GameRules:GetGameTime() + fire
+		self:Burn( target, fire )
 	end
 	if sweep > 0 and not denying and self.steve then
 		local around = FindUnitsInRadius( self.steve:GetTeamNumber(), target:GetAbsOrigin(), nil, GRID + target:GetHullRadius(),
@@ -373,7 +374,9 @@ function MCBridge:HitUnit( hero, amount, direct, kind )
 		self.steve.mc_attack = amount * DMG_TO_DOTA
 		self.steve.mc_denying = true -- XP/gold filters: a deny gives the denier nothing
 		local before = hero:GetHealth()
+		self.steve:SetAttackCapability( DOTA_UNIT_CAP_MELEE_ATTACK ) -- (lent for this one attack: MCBridge:MoveSteve)
 		self.steve:PerformAttack( hero, true, false, true, true, false, false, true )
+		self.steve:SetAttackCapability( DOTA_UNIT_CAP_NO_ATTACK )
 		self:Send( string.format( "dmgnum %d %d deny", hero:entindex(), math.floor( math.max( 0, before - hero:GetHealth() ) + 0.5 ) ) )
 		self.steve.mc_attack, self.steve.mc_denying = nil, nil
 	else
@@ -389,26 +392,11 @@ function MCBridge:HitUnit( hero, amount, direct, kind )
 	end
 end
 
--- Dota draws health bars at a fixed size on screen: far away they covered the view. Units beyond FAR_BARS from Steve
--- get none (modifier_mc_nobar), checked a few times a second.
-FAR_BARS = 1600
-function MCBridge:FarBars()
-	local s = self.steve
-	if not s or s:IsNull() or GameRules:GetGameTime() - ( self.barsAt or 0 ) < 0.3 then return end
-	self.barsAt = GameRules:GetGameTime()
-	local near = {}
-	for _, u in ipairs( FindUnitsInRadius( s:GetTeamNumber(), s:GetAbsOrigin(), nil, FAR_BARS, DOTA_UNIT_TARGET_TEAM_BOTH,
-		DOTA_UNIT_TARGET_ALL, DOTA_UNIT_TARGET_FLAG_INVULNERABLE + DOTA_UNIT_TARGET_FLAG_MAGIC_IMMUNE_ENEMIES, FIND_ANY_ORDER, false ) ) do
-		near[ u ] = true
-	end
-	for _, u in ipairs( FindUnitsInRadius( s:GetTeamNumber(), Vector( 0, 0, 0 ), nil, 30000, DOTA_UNIT_TARGET_TEAM_BOTH,
-		DOTA_UNIT_TARGET_ALL, DOTA_UNIT_TARGET_FLAG_INVULNERABLE + DOTA_UNIT_TARGET_FLAG_MAGIC_IMMUNE_ENEMIES, FIND_ANY_ORDER, false ) ) do
-		if not u.mc_block and not u.mc_player and not u.mc_puppet then
-			local has = u:HasModifier( "modifier_mc_nobar" )
-			if near[ u ] and has then u:RemoveModifierByName( "modifier_mc_nobar" )
-			elseif not near[ u ] and not has then u:AddNewModifier( u, nil, "modifier_mc_nobar", {} ) end
-		end
-	end
+-- on fire from Minecraft (fire aspect, flint and steel, lava, a burning arrow): the cooked-meat drop, and Dota's look
+function MCBridge:Burn( u, seconds )
+	if not u or u:IsNull() or not u:IsAlive() then return end
+	u.mc_burnUntil = math.max( u.mc_burnUntil or 0, GameRules:GetGameTime() + seconds )
+	if not u.mc_block then u:AddNewModifier( self.steve or u, nil, "modifier_mc_burning", { duration = seconds } ) end
 end
 
 -- a unit Steve's swing does something to: an enemy, or an ally he may deny
@@ -451,8 +439,8 @@ end
 -- Steve as Dire's players see him: a stand-in unit (npc_mc_steve: invisible, Steve's hitbox) following his hero, which
 -- draws nothing (his camera sits inside it; NoDraw also hides his selection ring and his buffs' effects from himself).
 -- Minecraft's Steve (models/mc/mob_steve.vmdl: idle, run, a swing) is a particle on it shown to Dire only, gone when
--- Dire can't see him (fog of war, invisibility). It stands at his feet's real height (pillars, bridges) and turns like
--- Minecraft's body: after the head only once it is 50 degrees off, or when walking (the head's every twitch shook it).
+-- Dire can't see him (fog of war, invisibility). It stands at his feet's real height (pillars, bridges); the body
+-- follows where he looks, smoothed.
 function MCBridge:Puppet( u, pos, feetY, yaw, moved )
 	local now = GameRules:GetGameTime()
 	local p = self.puppet
@@ -470,17 +458,18 @@ function MCBridge:Puppet( u, pos, feetY, yaw, moved )
 		if feetY and MC.anchor then z = MC.anchor.z + ( feetY - MC_FLOOR ) * GRID end
 		p:SetAbsOrigin( Vector( pos.x, pos.y, z ) )
 		local d = ( ( yaw - ( self.bodyYaw or yaw ) + math.pi ) % ( 2 * math.pi ) ) - math.pi
-		if moved or math.abs( d ) > math.rad( 50 ) or not self.bodyYaw then
-			self.bodyYaw = ( self.bodyYaw or yaw ) + d * ( self.bodyYaw and 0.25 or 1 )
-		end
+		self.bodyYaw = ( self.bodyYaw or yaw ) + d * ( self.bodyYaw and 0.3 or 1 )
 		p:SetForwardVector( MC:DirToDota( -math.sin( self.bodyYaw ), math.cos( self.bodyYaw ) ) )
 		p:RemoveNoDraw()
 	else
 		p:AddNoDraw()
 	end
 	-- (run until it has stood still a moment: poses come in bursts, a flicker between run and idle restarted the model)
-	local kind = not ( alive and u:CanBeSeenByAnyOpposingTeam() ) and "" or
-		now - ( self.swingAt or -10 ) < 0.35 and "attack" or now - ( self.movedAt or -10 ) < 0.4 and "run" or "idle"
+	local walking = now - ( self.movedAt or -10 ) < 0.4
+	local kind = not ( alive and u:CanBeSeenByAnyOpposingTeam() ) and "" or self.pose == "fly" and "fly" or self.pose == "bow" and "bow"
+		or self.pose == "sneak" and ( walking and "sneak_run" or "sneak_idle" )
+		or now - ( self.swingAt or -10 ) < 0.35 and "attack" or walking and "run" or "idle"
+	if kind ~= "" then kind = ( self.elytra and "steve_elytra_" or "steve_" ) .. kind end
 	if kind == self.modelKind then return end
 	self.modelKind = kind
 	if self.modelFx then
@@ -489,7 +478,7 @@ function MCBridge:Puppet( u, pos, feetY, yaw, moved )
 		self.modelFx = nil
 	end
 	if kind == "" then return end
-	local name = "particles/mc/steve_" .. kind .. ".vpcf"
+	local name = "particles/mc/steve/" .. kind .. ".vpcf"
 	self.modelFx = self.steveForAll and ParticleManager:CreateParticle( name, PATTACH_ABSORIGIN_FOLLOW, p ) -- (dev: "lua MCBridge.steveForAll = true")
 		or ParticleManager:CreateParticleForTeam( name, PATTACH_ABSORIGIN_FOLLOW, p, DOTA_TEAM_BADGUYS )
 end
@@ -509,6 +498,7 @@ function MCBridge:MoveSteve( name, pos, frac, yaw, feetY )
 		-- he never attacks on his own (Dota's auto-attack went for the blocks next to him); Minecraft does his fighting
 		u:SetIdleAcquire( false )
 		u:SetAcquisitionRange( 0 )
+		u:SetAttackCapability( DOTA_UNIT_CAP_NO_ATTACK ) -- (Dota's auto attack kept hitting things around him)
 	end
 	if not u:IsAlive() then self.lastSet = nil self:Puppet( u, pos, feetY, yaw ) return end -- (a respawn moves him: no teleport for Minecraft)
 	if not self.nodrawOff then u:AddNoDraw() end -- (again every time: a respawn shows the model)

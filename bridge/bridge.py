@@ -75,9 +75,10 @@ class Relay:
                 p = line.split()
                 if not p:
                     continue
-                if p[0] == "me" and len(p) == 8:
-                    name, x, y, z, yaw, hp, mx = p[1:]
-                    self.me = f"steve {name} {x} {z} {hp} {mx} {yaw} {y}"
+                if p[0] == "me" and len(p) >= 8:
+                    name, x, y, z, yaw, hp, mx = p[1:8]
+                    pose = " ".join(p[8:11])  # pose, elytra worn, held item (MCBridge:Puppet)
+                    self.me = f"steve {name} {x} {z} {hp} {mx} {yaw} {y} {pose}".rstrip()
                 elif p[0] in ("hit", "crack", "died", "swing", "eff", "light", "use", "chop", "boom"):
                     self.to_dota.append(line)
                 elif p[0] == "set":
