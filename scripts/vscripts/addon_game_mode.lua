@@ -34,6 +34,10 @@ require( "mc_block_models" ) -- MCB: every Minecraft block's variants -> Dota mo
 
 
 function Precache( context )
+	-- wards (torches): loading them at the first torch froze Dota for ~0.2 s (the camera jerked)
+	PrecacheUnitByNameSync( "npc_dota_observer_wards", context )
+	PrecacheUnitByNameSync( "npc_dota_sentry_wards", context )
+	PrecacheResource( "particle", "particles/items2_fx/teleport_start.vpcf", context )
 	local seen = {}
 	for _, vs in pairs( MCB ) do
 		for _, v in ipairs( vs ) do
