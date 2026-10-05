@@ -29,6 +29,9 @@ function MCBridge:PuppetGlide()
 	if not p or p:IsNull() or not g then return end
 	local at = p:GetAbsOrigin()
 	if ( g - at ):Length() > 400 then p:SetAbsOrigin( g ) else p:SetAbsOrigin( at + ( g - at ) * 0.5 ) end
+	if self.modelFx and self.puppetYaw then
+		ParticleManager:SetParticleControlForward( self.modelFx, 1, MC:DirToDota( -math.sin( self.puppetYaw ), math.cos( self.puppetYaw ) ) )
+	end
 end
 
 function MCBridge:Projectile( id, kind, x, y, z, vx, vz )
@@ -40,15 +43,28 @@ function MCBridge:Projectile( id, kind, x, y, z, vx, vz )
 	if not fx then
 		fx = ParticleManager:CreateParticleForTeam( "particles/mc/steve/proj_" .. kind .. ".vpcf", PATTACH_WORLDORIGIN, nil, DOTA_TEAM_BADGUYS )
 		self.projs[ id ] = fx
+		self.projKind = self.projKind or {}
+		self.projKind[ id ] = kind
+		print( "[mc] projectile " .. kind .. " " .. id )
+		MC:DireSound( kind == "wind_charge" and "MC.entity.wind_charge.throw" or kind == "ender_pearl" and "MC.entity.ender_pearl.throw"
+			or "MC.entity.arrow.shoot", p )
 	end
 	ParticleManager:SetParticleControl( fx, 0, p )
-	if math.abs( vx ) + math.abs( vz ) > 0.01 then ParticleManager:SetParticleControlForward( fx, 0, MC:DirToDota( vx, vz ) ) end
+	ParticleManager:SetParticleControl( fx, 1, p )
+	if math.abs( vx ) + math.abs( vz ) > 0.01 then
+		ParticleManager:SetParticleControlForward( fx, 0, MC:DirToDota( vx, vz ) )
+		ParticleManager:SetParticleControlForward( fx, 1, MC:DirToDota( vx, vz ) )
+	end
+	self.projAt = self.projAt or {}
+	self.projAt[ id ] = p
 end
 
 function MCBridge:Blast( kind, x, y, z )
 	if not MC.anchor then return end
 	local p = to_dota( x, z )
 	p.z = MC.anchor.z + ( y - MC_FLOOR ) * GRID
+	print( "[mc] " .. kind .. " at " .. tostring( p ) )
+	MC:DireSound( kind == "smash" and "MC.item.mace.smash_ground_heavy" or "MC.entity.wind_charge.wind_burst", p )
 	local fx = ParticleManager:CreateParticle( kind == "smash" and "particles/units/heroes/hero_earthshaker/earthshaker_aftershock.vpcf"
 		or "particles/units/heroes/hero_brewmaster/brewmaster_cyclone.vpcf", PATTACH_WORLDORIGIN, nil )
 	ParticleManager:SetParticleControl( fx, 0, p )
@@ -267,6 +283,10 @@ function MCBridge:Apply( body, stale )
 			self:Burn( self.aim, 8 )
 		end
 		local swing, crit, sweep, full, fire, wbase, sharp = line:match( "^swing (%S+) ?(%S*) ?(%S*) ?(%S*) ?(%S*) ?(%S*) ?(%S*)" ) -- a melee swing: whatever Dota highlights under the crosshair
+		if swing and self.steve then
+			MC:DireSound( crit == "1" and "MC.entity.player.attack.crit" or ( tonumber( sweep ) or 0 ) > 0 and "MC.entity.player.attack.sweep"
+				or "MC.entity.player.attack.strong", self.steve:GetAbsOrigin() )
+		end
 		if swing and MCWorld:SwingRune() then swing = nil end -- (a rune in front: the swing breaks it)
 		if swing and self.steve and self.steve:IsAlive() then
 			local a = self.aim
@@ -336,6 +356,9 @@ function MCBridge:Apply( body, stale )
 		if pid then self:Projectile( pid, pkind, tonumber( px_ ), tonumber( py_ ), tonumber( pz_ ), tonumber( pvx ), tonumber( pvz ) ) end
 		local pend = line:match( "^projend (%d+)" )
 		if pend and self.projs and self.projs[ pend ] then
+			local k, at = self.projKind and self.projKind[ pend ], self.projAt and self.projAt[ pend ]
+			if at and k == "ender_pearl" then MC:DireSound( "MC.entity.player.teleport", at )
+			elseif at and k == "arrow" then MC:DireSound( "MC.entity.arrow.hit", at ) end
 			ParticleManager:DestroyParticle( self.projs[ pend ], true )
 			ParticleManager:ReleaseParticleIndex( self.projs[ pend ] )
 			self.projs[ pend ] = nil
@@ -522,7 +545,7 @@ function MCBridge:Puppet( u, pos, feetY, yaw, moved )
 	local now = GameRules:GetGameTime()
 	local p = self.puppet
 	if not p or p:IsNull() then
-		p = CreateUnitByName( "npc_dota_hero_target_dummy", u:GetAbsOrigin(), false, u, u, u:GetTeamNumber() )
+		p = CreateUnitByName( "npc_dota_hero_wisp", u:GetAbsOrigin(), false, u, u, u:GetTeamNumber() )
 		if not p then return end
 		p.mc_puppet = true
 		p:SetOriginalModel( "models/mc/steve_ghost.vmdl" )
@@ -546,7 +569,7 @@ function MCBridge:Puppet( u, pos, feetY, yaw, moved )
 		end
 		local d = ( ( yaw - ( self.bodyYaw or yaw ) + math.pi ) % ( 2 * math.pi ) ) - math.pi
 		self.bodyYaw = ( self.bodyYaw or yaw ) + d * ( self.bodyYaw and 0.3 or 1 )
-		p:SetForwardVector( MC:DirToDota( -math.sin( self.bodyYaw ), math.cos( self.bodyYaw ) ) )
+		self.puppetYaw = self.bodyYaw
 		p:RemoveNoDraw()
 	else
 		p:AddNoDraw()
@@ -582,6 +605,9 @@ function MCBridge:Puppet( u, pos, feetY, yaw, moved )
 	local name = "particles/mc/steve/" .. kind .. ".vpcf"
 	self.modelFx = self.steveForAll and ParticleManager:CreateParticle( name, PATTACH_ABSORIGIN_FOLLOW, p ) -- (dev: "lua MCBridge.steveForAll = true")
 		or ParticleManager:CreateParticleForTeam( name, PATTACH_ABSORIGIN_FOLLOW, p, DOTA_TEAM_BADGUYS )
+	if self.puppetYaw then
+		ParticleManager:SetParticleControlForward( self.modelFx, 1, MC:DirToDota( -math.sin( self.puppetYaw ), math.cos( self.puppetYaw ) ) )
+	end
 end
 
 -- the Minecraft player drives the first Steve hero; Minecraft owns its health
@@ -639,5 +665,9 @@ function MCBridge:OnSteveDamaged( victim, damage, attacker )
 	if unit and unit.GetUnitName then self.lastAttacker = unit end -- credited if Steve dies
 	local amount = damage * DOTA_TO_MC
 	if amount < 0.01 then return end
+	if GameRules:GetGameTime() - ( self.hurtSoundAt or 0 ) > 0.4 and self.steve then
+		self.hurtSoundAt = GameRules:GetGameTime()
+		MC:DireSound( "MC.entity.player.hurt", self.steve:GetAbsOrigin() )
+	end
 	self:Send( string.format( "dmg %.2f %d", amount, attacker or -1 ) )
 end

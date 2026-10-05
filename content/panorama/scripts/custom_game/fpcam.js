@@ -172,14 +172,18 @@ function frame() {
 			// the next pose is late (now and then it arrives after its moment): keep moving the way the last two did,
 			// up to 60 ms, instead of stopping dead and then jumping when it comes
 			var p0 = poses[poses.length - 2], p1 = poses[poses.length - 1];
-			var k2 = Math.min( t - p1.t, 60 ) / Math.max( 1, p1.t - p0.t );
+			// (two poses a hair apart in time made this a huge step: the camera flew at the floor and back. At most one
+			// step's worth, from poses at least 8 ms apart)
+			var span = p1.t - p0.t;
+			var k2 = span >= 8 ? Math.min( Math.min( t - p1.t, 60 ) / span, 1 ) : 0;
 			if ( k2 > 0 ) v = p1.v.map( function( x, j ) { return j === 6 ? x : x + ( x - p0.v[j] ) * k2; } );
 		}
 		GameUI.SetCameraTarget( -1 );
 		GameUI.SetCameraTargetPosition( [ v[0], v[1], 0 ], 0.001 ); // (Dota ignores the z: its camera ground decides) // lerp = transition seconds; called every frame, anything bigger makes the camera trail ("float")
 		GameUI.SetCameraYaw( v[2] );
-		// looking up: Dota's camera takes 360 - x (a negative pitch is a top-down view)
-		var pitch = v[3] < 0 ? v[3] + 360 : v[3];
+		// looking up: Dota's camera takes 360 - x (a negative pitch is a top-down view); never past straight up/down
+		var raw = Math.max( -89.9, Math.min( 89.9, v[3] ) );
+		var pitch = raw < 0 ? raw + 360 : raw;
 		GameUI.SetCameraPitchMin( pitch );
 		GameUI.SetCameraPitchMax( pitch );
 		GameUI.SetCameraDistance( v[4] );

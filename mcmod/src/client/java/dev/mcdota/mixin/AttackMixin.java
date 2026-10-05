@@ -53,6 +53,8 @@ public class AttackMixin {
 			// a mace falling on its target: Minecraft's smash bonus (fall distance, Density), its sound and dust, his fall
 			// forgiven (he hit nothing in Minecraft: the hit is Dota's); Lua knocks back the units around ("smash")
 			var held = sp.getMainHandItem();
+			if (held.getItem() instanceof net.minecraft.world.item.MaceItem) // (diagnostics: a mace's smash showed nothing)
+				org.slf4j.LoggerFactory.getLogger("mcdota").info("mace swing: client fall {}, server fall {}, flying {}", clientFall, sp.fallDistance, clientFlying);
 			if (held.getItem() instanceof net.minecraft.world.item.MaceItem mace && clientFall > 1.5f && !clientFlying) {
 				sp.fallDistance = Math.max(sp.fallDistance, clientFall);
 				float bonus = mace.getAttackDamageBonus(sp, base, source);

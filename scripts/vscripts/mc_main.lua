@@ -53,7 +53,8 @@ function Precache( context )
 	PrecacheResource( "model", "models/mc/mob_steve.vmdl", context )
 	PrecacheResource( "model", "models/mc/steve_ghost.vmdl", context )
 	PrecacheResource( "model", "models/mc/block_ghost.vmdl", context )
-	PrecacheUnitByNameSync( "npc_dota_hero_target_dummy", context ) -- (Steve's stand-in, MCBridge:Puppet)
+	PrecacheUnitByNameSync( "npc_dota_hero_wisp", context ) -- (Steve's stand-in, MCBridge:Puppet)
+	PrecacheResource( "soundfile", "soundevents/mc_sounds.vsndevts", context ) -- Minecraft's sounds (tools/gen_sounds.py)
 	PrecacheResource( "particle", "particles/units/heroes/hero_earthshaker/earthshaker_aftershock.vpcf", context ) -- a mace's smash
 	PrecacheResource( "particle", "particles/units/heroes/hero_brewmaster/brewmaster_cyclone.vpcf", context ) -- a wind charge
 	for _, k in ipairs( { "wind_charge", "ender_pearl", "arrow" } ) do -- Steve's projectiles in flight (MCBridge:Projectile)
@@ -307,11 +308,28 @@ function MC:MobDeath( u )
 	end, 0 )
 end
 
+-- a Minecraft sound (soundevents/mc_sounds.vsndevts: "MC.<event>") at a point, for Dota's players only (Steve hears
+-- Minecraft's own)
+function MC:DireSound( name, pos )
+	for pid = 0, DOTA_MAX_TEAM_PLAYERS - 1 do
+		if PlayerResource:IsValidPlayerID( pid ) and PlayerResource:GetTeam( pid ) == DOTA_TEAM_BADGUYS then
+			EmitSoundOnLocationForPlayer( name, pos, pid )
+		end
+	end
+end
+
+local MOB_SOUNDS = { attack = { zombie = "zombie.ambient", skeleton = "skeleton.shoot", spider = "spider.ambient" },
+	hurt = { zombie = "zombie.hurt", skeleton = "skeleton.hurt", spider = "spider.hurt" },
+	death = { zombie = "zombie.death", skeleton = "skeleton.death", spider = "spider.death" } }
+
 function MC:MobSound( u, kind )
 	if kind == "attack" and ( RandomFloat( 0, 1 ) > 0.35 or GameRules:GetGameTime() - ( u.mc_soundAt or 0 ) < 3 ) then return end
 	if GameRules:GetGameTime() - ( u.mc_soundAt or 0 ) < 0.4 then return end
 	u.mc_soundAt = GameRules:GetGameTime()
 	MCBridge:Send( string.format( "mobsound %d %s %s", u:entindex(), u.mc_mob, kind ) )
+	local base = u.mc_mob:find( "^zombie" ) and "zombie" or u.mc_mob:find( "^spider" ) and "spider" or "skeleton"
+	local ev = MOB_SOUNDS[ kind ] and MOB_SOUNDS[ kind ][ base ]
+	if ev then MC:DireSound( "MC.entity." .. ev, u:GetAbsOrigin() ) end
 end
 
 MOB_MODELS = { { "flagbearer", "zombie_gold" }, { "siege", "spider_jockey" }, { "ranged", "skeleton" }, { "melee", "zombie" } }
@@ -576,6 +594,11 @@ function MC:SpawnBlock( name, pos, fromMC )
 		b:SetModelScale( 1 )
 		b:SetAngles( 0, GRID_ROT, 0 ) -- (its hitbox square along the turned Minecraft grid)
 	end
+	-- health by material (BLOCKS' hits x 80: stone ~7 hero blows, a spell more), any damage type
+	b:SetBaseMaxHealth( def.hp * 80 )
+	b:SetMaxHealth( def.hp * 80 )
+	b:SetHealth( def.hp * 80 )
+	b:SetBaseMagicalResistanceValue( 0 )
 	-- (after the model: setting one reset the hull, and Dota's heroes walked through the blocks)
 	b:SetHullRadius( GRID * 0.375 ) -- neighbours' hulls overlap: Dota heroes can't squeeze between blocks
 	if not fromMC then MCBridge:Send( string.format( "block %d %d %d %s", bx, MC.heights[ key ] or MC_FLOOR, bz, def.mc ) ) end
@@ -1177,13 +1200,13 @@ function MC:DamageFilter( f )
 	local owner = attacker.GetOwner and attacker:GetOwner()
 	local hero = attacker:IsRealHero() and attacker or ( owner and owner.IsRealHero and owner:IsRealHero() and owner ) or nil
 	if not hero and not attacker:IsHero() and attacker:GetTeamNumber() ~= DOTA_TEAM_BADGUYS then return false end -- (lane creeps don't)
-	f.damage = 1 -- a hit per blow, attack or spell, whatever its damage
+	-- (real damage: the block's health is its material's, MC:SpawnBlock; a blow took 1 whatever it was)
 	victim.mc_mined = true
 	local m = victim:FindModifierByName( "modifier_mc_block" )
 	if m and m:GetStackCount() < 2 then m:SetStackCount( m:GetStackCount() + 2 ) end -- (its bar shows the breaking)
 	local bx, bz = victim.mc_cell:match( "^(%-?%d+),(%-?%d+)$" )
 	local by = victim.mc_y or MC.heights[ victim.mc_cell ] or MC_FLOOR
-	local stage = math.min( 9, math.floor( 10 * ( 1 - ( victim:GetHealth() - 1 ) / math.max( 1, victim:GetMaxHealth() ) ) ) )
+	local stage = math.min( 9, math.floor( 10 * ( 1 - math.max( 0, victim:GetHealth() - f.damage ) / math.max( 1, victim:GetMaxHealth() ) ) ) )
 	MC:CrackAt( tonumber( bx ), by, tonumber( bz ), stage )
 	MCBridge:Send( string.format( "crack %s %d %s %d", bx, by, bz, stage ) )
 	return true
@@ -1219,7 +1242,8 @@ function MC:OnKilled( e )
 			local emeralds = tonumber( loot:match( "^loot (%d+)" ) ) or 0
 			if emeralds > 0 then
 				MC:Popup( dead:GetAbsOrigin(), emeralds )
-				EmitSoundOnLocationWithCaster( dead:GetAbsOrigin(), "General.Coins", killer ) -- Dota's gold sound
+				local pl = PlayerResource:GetPlayer( killer:GetPlayerOwnerID() )
+				if pl then EmitSoundOnClient( "General.Coins", pl ) end -- Dota's gold sound, for Steve only
 			end
 		end
 		return

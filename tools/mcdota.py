@@ -157,7 +157,7 @@ def link_addon(dota):
 
 # ---------------------------------------------------------------- assets ------------------------------------------
 GENERATORS = ["gen_blocks.py", "gen_mcblocks.py", "gen_villager.py", "gen_signs.py", "gen_mobs.py", "gen_steve.py",
-              "gen_sky.py", "gen_tree_crack.py"]
+              "gen_sky.py", "gen_tree_crack.py", "gen_sounds.py"]
 
 
 def assets(dota):
@@ -212,7 +212,8 @@ def assets(dota):
                     stale += 1
         if stale: say(f"  пересоберу из-за изменившихся текстур/мешей: {stale}")
     say("компилирую ресурсы для Dota (первый раз ~15-20 минут)...")
-    for pat in ("models\\mcb\\*.vmdl", "models\\*.vmdl", "particles\\*.vpcf", "panorama\\*.xml", "panorama\\*.js"):
+    for pat in ("models\\mcb\\*.vmdl", "models\\*.vmdl", "particles\\*.vpcf", "panorama\\*.xml", "panorama\\*.js", "sounds\\*.wav",
+                "soundevents\\*.vsndevts"):
         r = subprocess.run([rc, "-r", "-i", os.path.join(content, pat)], capture_output=True, text=True, errors="ignore")
         bad = [l for l in r.stdout.splitlines() if "failed" in l or "rror" in l]
         if bad: say("  " + pat + ": " + " | ".join(l.strip() for l in bad[-3:]))
@@ -237,7 +238,8 @@ def version(rc, content):
 # what Dota draws from this addon, compiled: missing = error models, an invisible Steve, no HUD
 COMPILED = ["models/mc/mob_zombie.vmdl_c", "models/mc/steve.vmdl_c", "models/mc/sky.vmdl_c", "particles/mc/steve/steve_idle.vpcf_c", "models/mc/steve_ghost.vmdl_c", "models/mc/block_ghost.vmdl_c",
             "panorama/layout/custom_game/custom_ui_manifest.vxml_c", "panorama/scripts/custom_game/fpcam.vjs_c",
-            "panorama/layout/custom_game/hero_select.vxml_c", "panorama/images/custom_game/steve_face_png.vtex_c"]
+            "panorama/layout/custom_game/hero_select.vxml_c", "panorama/images/custom_game/steve_face_png.vtex_c",
+            "soundevents/mc_sounds.vsndevts_c"]
 
 
 def missing_compiled():
@@ -432,7 +434,7 @@ def main():
     if sys.version_info < (3, 10): fail("нужен Python 3.10+")
     if not shutil.which("git"): say("git не найден: обновления пропущены (https://git-scm.com)")
     git_update(cfg)
-    pip_needs([("PIL", "pillow")])
+    pip_needs([("PIL", "pillow"), ("soundfile", "soundfile")])
     dota = find_dota(cfg)
     say("Dota: " + dota)
     check_tools(dota)

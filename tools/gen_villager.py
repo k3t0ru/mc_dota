@@ -10,7 +10,7 @@ MAT, MDL = os.path.join(ROOT, "materials", "mc"), os.path.join(ROOT, "models", "
 os.makedirs(MAT, exist_ok=True); os.makedirs(MDL, exist_ok=True)
 PX = 96 / 16  # Dota units per Minecraft model pixel (one block = GRID 96)
 TEX, UP = 64, 8  # villager texture size, nearest upscale (crisp pixels)
-PROFESSIONS = ("fletcher", "librarian", "toolsmith", "mason", "weaponsmith", "cleric")  # cleric = our witch (witch.png)  # TRADERS in addon_game_mode.lua
+PROFESSIONS = ("fletcher", "librarian", "toolsmith", "mason", "weaponsmith", "armorer", "cleric")  # cleric = our witch (witch.png)  # TRADERS in addon_game_mode.lua
 
 # (texture u, v), box min (x, y, z) and size (w, h, d) in model pixels (y points DOWN, the face looks to -z),
 # inflation, and the part pose: offset and x rotation (radians)

@@ -584,7 +584,7 @@ PARTICLE = """<!-- kv3 encoding:text:version{{e21c7f3c-8a33-41c5-9977-a76d3a32aa
 	]
 	m_Operators =
 	[
-		{{ _class = "C_OP_RemapCPOrientationToYaw" m_nCP = 0 m_flRotOffset = 90.0 }},
+		{{ _class = "C_OP_RemapCPOrientationToYaw" m_nCP = 1 m_flRotOffset = 90.0 }},
 		{{ _class = "C_OP_SetToCP" m_nControlPointNumber = 0 }},
 	]
 	m_Initializers =

@@ -40,3 +40,5 @@ content/panorama/images/spellicons/mc/
 content/particles/mc/steve/
 scripts/vscripts/mc_held.lua
 content/models/mc/block_ghost*
+content/sounds/mc/
+content/soundevents/mc_sounds.vsndevts
