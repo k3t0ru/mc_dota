@@ -116,7 +116,7 @@ function reportAim() {
 		for ( var i = 0; i < hits.length; i++ ) {
 			var e = hits[i].entityIndex;
 			// (not his own stand-in, owned by him, in front of the camera in third person; not the blocks' units)
-			if ( e !== me && Entities.IsAlive( e ) && !Entities.IsInvulnerable( e ) && Entities.GetPlayerOwnerID( e ) !== Players.GetLocalPlayer()
+			if ( e !== me && e !== puppetEnt && Entities.IsAlive( e ) && !Entities.IsInvulnerable( e ) && Entities.GetPlayerOwnerID( e ) !== Players.GetLocalPlayer()
 				&& ( Entities.GetUnitName( e ) || "" ).indexOf( "npc_mc_" ) !== 0 ) { aim = e; break; }
 		}
 	}
@@ -227,6 +227,9 @@ function hideTooltips() {
 // Steve's health bars: Dota's own are off on his screen (dota_hud_healthbars 0: drawn at a fixed size, the far ones
 // covered his view), these show the units near him only. (Dota's players keep Dota's bars, at any distance.)
 var BAR_RANGE = 1600, bars = {}, barUnits = [], barListAt = 0;
+// Steve's own stand-in (MCBridge:Puppet tells which): his crosshair and bars skip it
+var puppetEnt = -1;
+GameEvents.Subscribe( "mc_puppet", function( e ) { puppetEnt = e.e; } );
 function nearBars() {
 	var root = $( "#Bars" );
 	var me = Players.GetPlayerHeroEntityIndex( Players.GetLocalPlayer() );
@@ -237,7 +240,7 @@ function nearBars() {
 		var at = Entities.GetAbsOrigin( me ), all = Entities.GetAllEntities();
 		for ( var i = 0; i < all.length; i++ ) {
 			var e = all[i];
-			if ( e === me || !Entities.IsValidEntity( e ) || !Entities.IsAlive( e ) || !( Entities.GetMaxHealth( e ) > 0 ) ) continue;
+			if ( e === me || e === puppetEnt || !Entities.IsValidEntity( e ) || !Entities.IsAlive( e ) || !( Entities.GetMaxHealth( e ) > 0 ) ) continue;
 			var name = Entities.GetUnitName( e ) || "";
 			if ( name === "" || name.indexOf( "npc_mc_" ) === 0 || Entities.NoHealthBar( e ) ) continue; // (blocks, his stand-in)
 			var p = Entities.GetAbsOrigin( e );

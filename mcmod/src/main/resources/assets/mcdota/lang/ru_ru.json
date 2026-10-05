@@ -4,5 +4,6 @@
  "effect.mcdota.rune_regen": "Руна регенерации",
  "effect.mcdota.rune_invis": "Руна невидимости",
  "effect.mcdota.rune_arcane": "Руна волшебства",
- "effect.mcdota.rune_shield": "Руна щита"
+ "effect.mcdota.rune_shield": "Руна щита",
+ "enchantment.mcdota.spell_block": "Блокировка заклинаний"
 }

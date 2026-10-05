@@ -53,6 +53,7 @@ function Precache( context )
 	PrecacheResource( "model", "models/mc/mob_steve.vmdl", context )
 	PrecacheResource( "model", "models/mc/steve_ghost.vmdl", context )
 	PrecacheResource( "model", "models/mc/block_ghost.vmdl", context )
+	PrecacheResource( "particle", "particles/items_fx/immunity_sphere.vpcf", context ) -- (Steve's spell block)
 	PrecacheUnitByNameSync( "npc_dota_hero_axe", context ) -- (Steve's stand-in, MCBridge:Puppet)
 	PrecacheResource( "soundfile", "soundevents/mc_sounds.vsndevts", context ) -- Minecraft's sounds (tools/gen_sounds.py)
 	PrecacheResource( "particle", "particles/units/heroes/hero_earthshaker/earthshaker_echoslam_start.vpcf", context ) -- a mace's smash
@@ -660,7 +661,20 @@ function MC:ShowBlock( bx, by, bz, kind, solid, state )
 	p:SetModelScale( GRID / 128 ) -- the models are 128 units a block
 	if v and MCB_ANIM[ v[2] ] then MC:Animate( p, v[2] ) end
 	p.mc_kind = kind
-	if kind == "cobweb" then MC.cobwebs[ p ] = true end
+	if kind == "cobweb" then
+		MC.cobwebs[ p ] = true
+		local w = CreateUnitByName( "npc_mc_block_log", MC:CellPos( bx, bz ), false, nil, nil, DOTA_TEAM_NEUTRALS )
+		if w then
+			w.mc_web = { bx, by, bz }
+			w:SetOriginalModel( "models/mc/block_ghost.vmdl" )
+			w:SetModel( "models/mc/block_ghost.vmdl" )
+			w:SetAngles( 0, GRID_ROT, 0 )
+			w:AddNewModifier( w, nil, "modifier_mc_block", {} ):SetStackCount( 1 )
+			w:SetBaseMaxHealth( 120 ) w:SetMaxHealth( 120 ) w:SetHealth( 120 )
+			w:SetBaseMagicalResistanceValue( 0 )
+			p.mc_webUnit = w
+		end
+	end
 	if WARD_KINDS[ kind ] then
 		-- a torch is a ward: the ward unit itself wears the torch (a prop is seen by everyone; a ward is invisible to
 		-- the enemy without true sight, like Dota's)
@@ -1129,6 +1143,8 @@ end
 
 function MC:HideBlock( bx, by, bz )
 	local key = bx .. "," .. by .. "," .. bz
+	local old = MC.props[ key ]
+	if old and not old:IsNull() and old.mc_webUnit and not old.mc_webUnit:IsNull() then old.mc_webUnit:RemoveSelf() end
 	MC:CrackAt( bx, by, bz, -1 )
 	MCWorld:Unward( bx, by, bz )
 	local p = MC.props[ key ]
@@ -1177,13 +1193,13 @@ function MC:DamageFilter( f )
 	if not f.entindex_victim_const or not f.entindex_attacker_const then return true end
 	local victim = EntIndexToHScript( f.entindex_victim_const )
 	if victim.mc_player then
-		MCBridge:OnSteveDamaged( victim, f.damage, f.entindex_attacker_const )
+		MCBridge:OnSteveDamaged( victim, f.damage, f.entindex_attacker_const, f.entindex_inflictor_const and "spell" or "attack" )
 		return false
 	end
 	-- Steve's stand-in: an attack on it hits Steve (spells' splash reaches Steve himself, so that is dropped)
 	if victim.mc_puppet then
 		if not f.entindex_inflictor_const and MCBridge.steve and not MCBridge.steve:IsNull() then
-			MCBridge:OnSteveDamaged( MCBridge.steve, f.damage, f.entindex_attacker_const )
+			MCBridge:OnSteveDamaged( MCBridge.steve, f.damage, f.entindex_attacker_const, "attack" )
 		end
 		return false
 	end
@@ -1221,6 +1237,13 @@ end
 
 function MC:OnKilled( e )
 	local dead = EntIndexToHScript( e.entindex_killed )
+	if dead and dead.mc_web then -- a cobweb a Dota hero broke: gone in both games, nothing dropped
+		local w = dead.mc_web
+		MC:HideBlock( w[1], w[2], w[3] )
+		MCBridge:Send( string.format( "unblock %d %d %d", w[1], w[2], w[3] ) )
+		dead:AddNoDraw()
+		return
+	end
 	local def = dead and dead.mc_block
 	local killer = e.entindex_attacker and EntIndexToHScript( e.entindex_attacker )
 	if dead and dead.mc_mob then MC:MobSound( dead, "death" ) MC:MobDeath( dead ) end

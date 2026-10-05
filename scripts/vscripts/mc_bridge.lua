@@ -28,14 +28,25 @@ function MCBridge:PuppetGlide()
 	local p, g = self.puppet, self.puppetGoal
 	if not p or p:IsNull() or not g then return end
 	local at = p:GetAbsOrigin()
+	local s = self.steve
+	if s and not s:IsNull() then -- his health on its bar (Dota's players see it; Steve's own client shows no Dota bars)
+		if p:GetMaxHealth() ~= s:GetMaxHealth() then p:SetBaseMaxHealth( s:GetMaxHealth() ) p:SetMaxHealth( s:GetMaxHealth() ) end
+		p:SetHealth( math.max( 1, s:GetHealth() ) )
+	end
 	if ( g - at ):Length() > 400 then p:SetAbsOrigin( g ) else p:SetAbsOrigin( at + ( g - at ) * 0.5 ) end
 	if GameRules:GetGameTime() - ( self.puppetHidAt or 0 ) > 1 then -- (its wearables, whenever they show up)
 		self.puppetHidAt = GameRules:GetGameTime()
 		MC:HideAttached( p )
-		for _, w in ipairs( Entities:FindAllByClassname( "dota_item_wearable" ) ) do
-			if w:GetMoveParent() == p or w:GetOwnerEntity() == p then w:RemoveSelf() end
+		for _, w in ipairs( Entities:FindAllInSphere( p:GetAbsOrigin(), 400 ) ) do
+			if w ~= p and ( w:GetMoveParent() == p or ( w.GetOwnerEntity and w:GetOwnerEntity() == p ) ) and w:GetClassname() ~= "info_particle_system" then
+				w:RemoveSelf()
+			end
 		end
 		if p:GetModelName() ~= "models/mc/steve_ghost.vmdl" then p:SetModel( "models/mc/steve_ghost.vmdl" ) end
+		-- Steve's client is told which unit it is (its crosshair and bars skip it: fpcam.js), again now and then
+		local s = self.steve
+		local pl = s and not s:IsNull() and PlayerResource:GetPlayer( s:GetPlayerOwnerID() )
+		if pl then CustomGameEventManager:Send_ServerToPlayer( pl, "mc_puppet", { e = p:entindex() } ) end
 	end
 	if self.modelFx and self.puppetYaw then
 		ParticleManager:SetParticleControlForward( self.modelFx, 1, MC:DirToDota( -math.sin( self.puppetYaw ), math.cos( self.puppetYaw ) ) )
@@ -115,7 +126,7 @@ function MCBridge:Tick()
 	-- (towers and other buildings too, so Minecraft weapons can hit them; invulnerable ones only once Dota opens them up)
 	for _, h in ipairs( FindUnitsInRadius( DOTA_TEAM_GOODGUYS, center, nil, 2500, DOTA_UNIT_TARGET_TEAM_BOTH,
 		DOTA_UNIT_TARGET_HERO + DOTA_UNIT_TARGET_BASIC + DOTA_UNIT_TARGET_BUILDING, DOTA_UNIT_TARGET_FLAG_NONE, FIND_ANY_ORDER, false ) ) do
-		if h:IsAlive() and not h.mc_player and not h.mc_puppet and not h.mc_block and not h:IsInvulnerable() then
+		if h:IsAlive() and not h.mc_player and not h.mc_puppet and not h.mc_block and not h.mc_web and not h:IsInvulnerable() then
 			local p = h:GetAbsOrigin()
 			local x, z = to_mc( p )
 			local lift = h:IsBuilding() and 0 or MC:LiftUnit( h ) -- standing on a 1-high Minecraft block
@@ -367,6 +378,8 @@ function MCBridge:Apply( body, stale )
 		-- Steve's projectiles in flight (wind charges, ender pearls, arrows): their Minecraft look for Dire's players
 		local pid, pkind, px_, py_, pz_, pvx, pvz = line:match( "^proj (%d+) (%S+) (%S+) (%S+) (%S+) (%S+) (%S+)" )
 		if pid then self:Projectile( pid, pkind, tonumber( px_ ), tonumber( py_ ), tonumber( pz_ ), tonumber( pvx ), tonumber( pvz ) ) end
+		local sb = line:match( "^sb (%d)" )
+		if sb then self.spellBlockReady = sb == "1" end
 		local pend = line:match( "^projend (%d+)" )
 		if pend and self.projs and self.projs[ pend ] then
 			local k, at = self.projKind and self.projKind[ pend ], self.projAt and self.projAt[ pend ]
@@ -558,12 +571,14 @@ end
 function MCBridge:Puppet( u, pos, feetY, yaw, moved )
 	local now = GameRules:GetGameTime()
 	local p = self.puppet
-	if not p or p:IsNull() then
+	if not p or p:IsNull() or not p:IsAlive() then
+		if p and not p:IsNull() then p:RemoveSelf() end
 		-- (a hero with nothing drawn of its own: Io's glow is the hero's, not its model's, and showed)
-		p = CreateUnitByName( "npc_dota_hero_axe", u:GetAbsOrigin(), false, u, u, u:GetTeamNumber() )
+		p = CreateUnitByName( "npc_dota_hero_axe", u:GetAbsOrigin(), false, nil, nil, u:GetTeamNumber() )
 		if not p then return end
 		p.mc_puppet = true
-		p:SetControllableByPlayer( u:GetPlayerOwnerID(), true ) -- (owned by Steve's player: his crosshair skips it, fpcam.js)
+		p:MakeIllusion()
+		self.puppetSaidAt = nil
 		p:SetOriginalModel( "models/mc/steve_ghost.vmdl" )
 		p:SetModel( "models/mc/steve_ghost.vmdl" )
 		p:SetModelScale( 1 )
@@ -642,6 +657,7 @@ function MCBridge:MoveSteve( name, pos, frac, yaw, feetY )
 		u:SetIdleAcquire( false )
 		u:SetAcquisitionRange( 0 )
 		u:SetAttackCapability( DOTA_UNIT_CAP_NO_ATTACK ) -- (Dota's auto attack kept hitting things around him)
+		u:AddNewModifier( u, nil, "modifier_mc_spellblock", {} ) -- (a shield enchanted against spells, Minecraft's side)
 	end
 	if not u:IsAlive() then self.lastSet = nil self:Puppet( u, pos, feetY, yaw ) return end -- (a respawn moves him: no teleport for Minecraft)
 	if not self.nodrawOff then u:AddNoDraw() end -- (again every time: a respawn shows the model)
@@ -676,7 +692,7 @@ end
 
 -- Dota hits Steve: Minecraft owns his health, so the hit goes there
 -- (the attacker's stand-in is named, so a raised Minecraft shield facing it blocks the hit)
-function MCBridge:OnSteveDamaged( victim, damage, attacker )
+function MCBridge:OnSteveDamaged( victim, damage, attacker, kind )
 	local unit = attacker and EntIndexToHScript( attacker )
 	if unit and unit.GetUnitName then self.lastAttacker = unit end -- credited if Steve dies
 	local amount = damage * DOTA_TO_MC
@@ -685,5 +701,5 @@ function MCBridge:OnSteveDamaged( victim, damage, attacker )
 		self.hurtSoundAt = GameRules:GetGameTime()
 		MC:DireSound( "MC.entity.player.hurt", self.steve:GetAbsOrigin() )
 	end
-	self:Send( string.format( "dmg %.2f %d", amount, attacker or -1 ) )
+	self:Send( string.format( "dmg %.2f %d %s", amount, attacker or -1, kind or "attack" ) )
 end

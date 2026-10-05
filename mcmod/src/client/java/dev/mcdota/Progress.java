@@ -126,22 +126,56 @@ public final class Progress {
 	}
 
 	// --- Dota's hits ----------------------------------------------------------------------------------------------
+	private static final float SHIELD_BLOCKS = 0.6f;
+
+	// --- the spell block: a shield enchanted with mcdota:spell_block (data/mcdota/enchantment) in either hand stops one
+	// targeted Dota spell, like Linken's Sphere, then cools down 14 s (on the shield's icon: ShieldCooldownMixin); Dota's
+	// modifier_mc_spellblock does the stopping ("sb 0/1": ready or not, "sbused": it stopped one)
+	private static final long SPELL_BLOCK_MS = 14000;
+	private static volatile long spellBlockUntil;
+	private static boolean spellBlockSaid;
+
+	static boolean spellBlocks(ItemStack st) {
+		if (!st.is(Items.SHIELD)) return false;
+		for (var e : st.getEnchantments().entrySet()) if (e.getKey().getRegisteredName().equals("mcdota:spell_block")) return true;
+		return false;
+	}
+
+	// 0..1 of the cooldown left on this item's icon (client, any thread)
+	public static float spellBlockLeft(ItemStack st) {
+		long left = spellBlockUntil - System.currentTimeMillis();
+		return left > 0 && spellBlocks(st) ? (float) left / SPELL_BLOCK_MS : 0;
+	}
+
+	public static void spellBlockUsed(MinecraftServer server) {
+		spellBlockUntil = System.currentTimeMillis() + SPELL_BLOCK_MS;
+		say(server, "Заклинание заблокировано", "aqua");
+		Sync.run(server, "playsound minecraft:block.amethyst_block.resonate player @p ~ ~ ~ 1 1.4", false);
+	}
+
+	private static void spellBlockTick(ServerPlayer pl) {
+		boolean ready = (spellBlocks(pl.getMainHandItem()) || spellBlocks(pl.getOffhandItem())) && System.currentTimeMillis() >= spellBlockUntil;
+		if (ready != spellBlockSaid) {
+			spellBlockSaid = ready;
+			Sync.out("sb " + (ready ? 1 : 0));
+		}
+	}
 	// A raised shield facing the attacker's stand-in (within 90 degrees) blocks the whole hit and takes the wear, like a
 	// melee hit in Minecraft; the damage otherwise comes from that stand-in (armour applies as usual).
-	public static void damage(MinecraftServer server, float amount, String attacker) {
+	public static void damage(MinecraftServer server, float amount, String attacker, boolean spell) {
 		ServerPlayer player = server.getPlayerList().getPlayers().isEmpty() ? null : server.getPlayerList().getPlayers().get(0);
 		if (player == null || dead) return;
 		Entity from = null;
 		for (Entity e : server.overworld().getAllEntities()) if (e.getTags().contains("dota_" + attacker)) { from = e; break; }
-		if (from != null && player.isBlocking()) {
+		if (from != null && player.isBlocking() && !spell) {
 			net.minecraft.world.phys.Vec3 to = from.position().subtract(player.position()).multiply(1, 0, 1).normalize();
 			net.minecraft.world.phys.Vec3 look = player.getViewVector(1).multiply(1, 0, 1).normalize();
 			if (to.dot(look) > 0) {
 				ItemStack shield = player.getUseItem();
-				shield.hurtAndBreak(Math.max(1, (int) Math.ceil(amount)), player, player.getUsedItemHand());
+				shield.hurtAndBreak(Math.max(1, (int) Math.ceil(amount * SHIELD_BLOCKS)), player, player.getUsedItemHand());
 				player.level().playSound(null, player.blockPosition(), net.minecraft.sounds.SoundEvents.SHIELD_BLOCK.value(),
 					net.minecraft.sounds.SoundSource.PLAYERS, 1, 1);
-				return;
+				amount *= 1 - SHIELD_BLOCKS; // (a shield takes most of a hit, not all: Dota's damage block)
 			}
 		}
 		// (Dota's hits come one after another, several creeps at once: Minecraft's half second of immunity after a hit
@@ -591,7 +625,8 @@ public final class Progress {
 			buy(60, "elytra"), buy(1, "firework_rocket", 4), buy(8, "golden_apple"), buy(2, "ender_pearl"),
 			buy(40, "mace"), buy(1, "wind_charge", 4),
 			book(25, "mending", 1), book(40, "sharpness", 5), book(30, "protection", 4), book(30, "power", 5),
-			book(15, "density", 3), book(15, "breach", 3), book(20, "wind_burst", 1));
+			book(15, "density", 3), book(15, "breach", 3), book(20, "wind_burst", 1),
+			offer(45, "enchanted_book", 1, "\"minecraft:stored_enchantments\":{\"mcdota:spell_block\":1}"));
 		TRADERS.add(new Trader("Тайная лавка", "weaponsmith", secret));
 		TRADERS.add(new Trader("Тайная лавка", "armorer", secret)); // (Dire's side)
 	}
@@ -612,6 +647,7 @@ public final class Progress {
 		if (!server.getPlayerList().getPlayers().isEmpty()) {
 			ServerPlayer pl = server.getPlayerList().getPlayers().get(0);
 			if (noFly && pl.isFallFlying()) pl.stopFallFlying(); // (stunned, hexed: down he comes)
+			spellBlockTick(pl);
 			if (pl.getY() < -62 && pl.isAlive()) {
 				int sx = (int) Math.floor(pl.getX()), sz = (int) Math.floor(pl.getZ());
 				pl.teleportTo(pl.getX(), Math.max(Hybrid.surfaceAt(sx, sz) + 1, server.overworld().getHeight(Heightmap.Types.MOTION_BLOCKING, sx, sz)), pl.getZ());

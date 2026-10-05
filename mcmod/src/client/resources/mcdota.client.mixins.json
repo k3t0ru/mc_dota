@@ -2,6 +2,6 @@
 	"required": true,
 	"package": "dev.mcdota.mixin",
 	"compatibilityLevel": "JAVA_21",
-	"client": [ "WindowMixin", "LevelRendererMixin", "MinecraftMixin", "InputConstantsMixin", "MouseHandlerAccessor", "LevelMixin", "OutlineMixin", "SectionCompilerMixin", "EmissiveMixin", "MouseHandlerInvoker", "ClientLevelMixin", "TotemMixin", "AttackMixin", "ExplosionMixin", "FireMixin", "FlameMixin", "StandInMixin", "CrosshairMixin", "TorchMixin", "FireworkMixin", "NoLightMixin", "ToastMixin", "DisableMixin" ],
+	"client": [ "WindowMixin", "LevelRendererMixin", "MinecraftMixin", "InputConstantsMixin", "MouseHandlerAccessor", "LevelMixin", "OutlineMixin", "SectionCompilerMixin", "EmissiveMixin", "MouseHandlerInvoker", "ClientLevelMixin", "TotemMixin", "AttackMixin", "ExplosionMixin", "FireMixin", "FlameMixin", "StandInMixin", "CrosshairMixin", "TorchMixin", "FireworkMixin", "NoLightMixin", "ToastMixin", "DisableMixin", "ShieldCooldownMixin" ],
 	"injectors": { "defaultRequire": 1 }
 }

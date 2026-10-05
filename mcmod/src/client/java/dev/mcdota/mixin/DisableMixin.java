@@ -16,6 +16,14 @@ public class DisableMixin {
 		if (dev.mcdota.Progress.noAttack) cir.setReturnValue(false);
 	}
 
+	// every swing spends the attack's strength, after Minecraft's own (a swing at a block - a building's barrier - was
+	// mining: never spent, every hit on a tower was full)
+	@Inject(method = "startAttack", at = @At("RETURN"))
+	private void mcdota$spendStrength(CallbackInfoReturnable<Boolean> cir) {
+		var p = ((Minecraft) (Object) this).player;
+		if (p != null && ((Minecraft) (Object) this).screen == null) p.resetAttackStrengthTicker();
+	}
+
 	@Inject(method = "continueAttack", at = @At("HEAD"), cancellable = true)
 	private void mcdota$noMining(boolean leftClick, CallbackInfo ci) {
 		if (dev.mcdota.Progress.noAttack) ci.cancel();

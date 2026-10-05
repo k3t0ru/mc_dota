@@ -57,7 +57,7 @@ class Relay:
                     self.rot = math.radians(float(p[4])) if len(p) == 5 else 0.0  # Minecraft's grid turned on Dota's map
                 elif p[0] == "hero":
                     heroes[p[1]] = line
-                elif p[0] in ("dmg", "block", "unblock", "reset", "h", "xp", "void", "border", "loot", "lvl", "delay", "trader", "dead", "respawn", "spawnat", "mcfov", "boss", "fx", "time", "fountain", "sign", "msg", "tp", "buff", "shard", "unbuff", "tree", "untree", "dmgnum", "cc", "follow", "mobsound", "runebreak", "crack"):
+                elif p[0] in ("dmg", "block", "unblock", "reset", "h", "xp", "void", "border", "loot", "lvl", "delay", "trader", "dead", "respawn", "spawnat", "mcfov", "boss", "fx", "time", "fountain", "sign", "msg", "tp", "buff", "shard", "unbuff", "tree", "untree", "dmgnum", "cc", "follow", "mobsound", "runebreak", "crack", "sbused"):
                     self.to_mc.append(line)
                     if p[0] in ("reset", "border"):
                         print("to mc:", line, flush=True)
@@ -79,7 +79,7 @@ class Relay:
                     name, x, y, z, yaw, hp, mx = p[1:8]
                     pose = " ".join(p[8:11])  # pose, elytra worn, held item (MCBridge:Puppet)
                     self.me = f"steve {name} {x} {z} {hp} {mx} {yaw} {y} {pose}".rstrip()
-                elif p[0] in ("hit", "crack", "fcrack", "died", "swing", "eff", "light", "use", "chop", "boom", "wind", "smash", "proj", "projend"):
+                elif p[0] in ("hit", "crack", "fcrack", "died", "swing", "eff", "light", "use", "chop", "boom", "wind", "smash", "proj", "projend", "sb"):
                     self.to_dota.append(line)
                 elif p[0] == "set":
                     self.to_dota.append("mcblock " + " ".join(p[1:]))
