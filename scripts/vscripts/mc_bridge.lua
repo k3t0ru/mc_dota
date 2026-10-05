@@ -31,15 +31,35 @@ function MCBridge:PuppetGlide()
 	if ( g - at ):Length() > 400 then p:SetAbsOrigin( g ) else p:SetAbsOrigin( at + ( g - at ) * 0.5 ) end
 end
 
+function MCBridge:Projectile( id, kind, x, y, z, vx, vz )
+	if not MC.anchor then return end
+	self.projs = self.projs or {}
+	local p = MC.anchor + MC:Offset( x, z )
+	p.z = MC.anchor.z + ( y - MC_FLOOR ) * GRID
+	local fx = self.projs[ id ]
+	if not fx then
+		fx = ParticleManager:CreateParticleForTeam( "particles/mc/steve/proj_" .. kind .. ".vpcf", PATTACH_WORLDORIGIN, nil, DOTA_TEAM_BADGUYS )
+		self.projs[ id ] = fx
+	end
+	ParticleManager:SetParticleControl( fx, 0, p )
+	if math.abs( vx ) + math.abs( vz ) > 0.01 then ParticleManager:SetParticleControlForward( fx, 0, MC:DirToDota( vx, vz ) ) end
+end
+
 function MCBridge:Blast( kind, x, y, z )
 	if not MC.anchor then return end
 	local p = to_dota( x, z )
 	p.z = MC.anchor.z + ( y - MC_FLOOR ) * GRID
 	local fx = ParticleManager:CreateParticle( kind == "smash" and "particles/units/heroes/hero_earthshaker/earthshaker_aftershock.vpcf"
-		or "particles/units/heroes/hero_windrunner/windrunner_windrun_burst.vpcf", PATTACH_WORLDORIGIN, nil )
+		or "particles/units/heroes/hero_brewmaster/brewmaster_cyclone.vpcf", PATTACH_WORLDORIGIN, nil )
 	ParticleManager:SetParticleControl( fx, 0, p )
 	ParticleManager:SetParticleControl( fx, 1, Vector( 350, 350, 350 ) )
-	ParticleManager:ReleaseParticleIndex( fx )
+	-- (a wind charge's gust: a cyclone for a moment)
+	local timer = Entities:FindByName( nil, "mc_timer" )
+	if kind == "wind" and timer then
+		timer:SetContextThink( "mc_gust" .. fx, function() ParticleManager:DestroyParticle( fx, false ) ParticleManager:ReleaseParticleIndex( fx ) end, 0.6 )
+	else
+		ParticleManager:ReleaseParticleIndex( fx )
+	end
 	local radius, dist = kind == "smash" and 3.5 * GRID or 2.5 * GRID, kind == "smash" and 160 or 280
 	for _, u in ipairs( FindUnitsInRadius( DOTA_TEAM_GOODGUYS, p, nil, radius, DOTA_UNIT_TARGET_TEAM_BOTH,
 		DOTA_UNIT_TARGET_HERO + DOTA_UNIT_TARGET_BASIC, DOTA_UNIT_TARGET_FLAG_NONE, FIND_ANY_ORDER, false ) ) do
@@ -311,6 +331,15 @@ function MCBridge:Apply( body, stale )
 		if cx then MC:Crack( tonumber( cx ), tonumber( cy ), tonumber( cz ), tonumber( stage ) ) end
 		-- a mace's smash, a wind charge's burst: Dota's look of it, and the units around knocked away (Minecraft's own
 		-- knockback, on Dota's side)
+		-- Steve's projectiles in flight (wind charges, ender pearls, arrows): their Minecraft look for Dire's players
+		local pid, pkind, px_, py_, pz_, pvx, pvz = line:match( "^proj (%d+) (%S+) (%S+) (%S+) (%S+) (%S+) (%S+)" )
+		if pid then self:Projectile( pid, pkind, tonumber( px_ ), tonumber( py_ ), tonumber( pz_ ), tonumber( pvx ), tonumber( pvz ) ) end
+		local pend = line:match( "^projend (%d+)" )
+		if pend and self.projs and self.projs[ pend ] then
+			ParticleManager:DestroyParticle( self.projs[ pend ], true )
+			ParticleManager:ReleaseParticleIndex( self.projs[ pend ] )
+			self.projs[ pend ] = nil
+		end
 		local kk, kx, ky, kz = line:match( "^(%a+) (%S+) (%S+) (%S+)" )
 		if kk == "smash" or kk == "wind" then self:Blast( kk, tonumber( kx ), tonumber( ky ), tonumber( kz ) ) end
 		local fx_, fy_, fz_, fs_ = line:match( "^fcrack (%S+) (%S+) (%S+) (%S+)" ) -- a falling build's block cracking (Sync.fallTick)

@@ -55,7 +55,11 @@ function Precache( context )
 	PrecacheResource( "model", "models/mc/block_ghost.vmdl", context )
 	PrecacheUnitByNameSync( "npc_dota_hero_target_dummy", context ) -- (Steve's stand-in, MCBridge:Puppet)
 	PrecacheResource( "particle", "particles/units/heroes/hero_earthshaker/earthshaker_aftershock.vpcf", context ) -- a mace's smash
-	PrecacheResource( "particle", "particles/units/heroes/hero_windrunner/windrunner_windrun_burst.vpcf", context ) -- a wind charge
+	PrecacheResource( "particle", "particles/units/heroes/hero_brewmaster/brewmaster_cyclone.vpcf", context ) -- a wind charge
+	for _, k in ipairs( { "wind_charge", "ender_pearl", "arrow" } ) do -- Steve's projectiles in flight (MCBridge:Projectile)
+		PrecacheResource( "particle", "particles/mc/steve/proj_" .. k .. ".vpcf", context )
+		PrecacheResource( "model", "models/mc/item_" .. k .. ".vmdl", context )
+	end
 	PrecacheResource( "model", "models/mc/villager_armorer.vmdl", context ) -- (Dire's secret trader)
 	PrecacheResource( "particle", "particles/units/heroes/hero_techies/techies_land_mine_explode.vpcf", context )
 	PrecacheResource( "soundfile", "soundevents/game_sounds_heroes/game_sounds_techies.vsndevts", context )

@@ -16,14 +16,20 @@ import java.util.List;
 // stalls, the fountain's barriers: Sync.protectedBlocks) - Dota keeps drawing those, so they'd be ghosts.
 @Mixin(ServerExplosion.class)
 public class ExplosionMixin {
+	// every explosion as it goes off: Dota's look of it ("boom": TNT; "wind": a wind charge's burst, a gust)
+	@Inject(method = "explode", at = @At("HEAD"))
+	private void mcdota$report(CallbackInfoReturnable<Integer> cir) {
+		var c = ((ServerExplosion) (Object) this).center();
+		var src = ((ServerExplosion) (Object) this).getDirectSourceEntity();
+		boolean wind = src != null && src.getClass().getSimpleName().contains("WindCharge");
+		Sync.out(String.format(java.util.Locale.ROOT, "%s %.2f %.2f %.2f", wind ? "wind" : "boom", c.x, c.y, c.z));
+	}
+
 	@Inject(method = "calculateExplodedPositions", at = @At("RETURN"), cancellable = true)
 	private void mcdota$spareDotaBlocks(CallbackInfoReturnable<List<BlockPos>> cir) {
 		List<BlockPos> all = cir.getReturnValue();
 		var level = ((ServerExplosion) (Object) this).level();
 		var c = ((ServerExplosion) (Object) this).center();
-		var src = ((ServerExplosion) (Object) this).getDirectSourceEntity();
-		boolean wind = src != null && src.getClass().getSimpleName().contains("WindCharge");
-		Sync.out(String.format(java.util.Locale.ROOT, "%s %.2f %.2f %.2f", wind ? "wind" : "boom", c.x, c.y, c.z)); // Dota's blast for everyone
 		if (all.isEmpty()) return;
 		List<BlockPos> keep = new ArrayList<>(all.size());
 		for (BlockPos p : all)

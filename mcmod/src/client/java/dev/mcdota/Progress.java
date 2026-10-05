@@ -383,6 +383,24 @@ public final class Progress {
 			Sync.run(server, c);
 	}
 
+	// --- Steve's projectiles, seen in Dota --------------------------------------------------------------------------
+	private static final java.util.Set<Integer> flying = new java.util.HashSet<>();
+	private static void projectiles(MinecraftServer server) {
+		java.util.Set<Integer> now = new java.util.HashSet<>();
+		for (Entity e : server.overworld().getAllEntities()) {
+			String n = e.getClass().getSimpleName();
+			String kind = n.equals("WindCharge") ? "wind_charge" : n.equals("ThrownEnderpearl") ? "ender_pearl"
+				: e instanceof AbstractArrow a && !a.onGround() && a.getOwner() instanceof Player ? "arrow" : null;
+			if (kind == null || !(e instanceof net.minecraft.world.entity.projectile.Projectile pr && pr.getOwner() instanceof Player)) continue;
+			now.add(e.getId());
+			var v = e.getDeltaMovement();
+			Sync.out(String.format(Locale.ROOT, "proj %d %s %.2f %.2f %.2f %.2f %.2f", e.getId(), kind, e.getX(), e.getY(), e.getZ(), v.x, v.z));
+		}
+		for (Integer id : flying) if (!now.contains(id)) Sync.out("projend " + id);
+		flying.clear();
+		flying.addAll(now);
+	}
+
 	// --- arrows ---------------------------------------------------------------------------------------------------
 	private static final List<AbstractArrow> arrows = new ArrayList<>();
 
@@ -587,6 +605,7 @@ public final class Progress {
 		});
 		numbersTick(server);
 		Sync.fallTick(server);
+		projectiles(server);
 		if (!server.getPlayerList().getPlayers().isEmpty()) {
 			ServerPlayer pl = server.getPlayerList().getPlayers().get(0);
 			if (noFly && pl.isFallFlying()) pl.stopFallFlying(); // (stunned, hexed: down he comes)

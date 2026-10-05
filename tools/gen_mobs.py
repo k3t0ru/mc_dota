@@ -219,7 +219,8 @@ STEVE_ANIMS = [
     ("sneak_run", "", 1.2, True, lambda k: (0.5 * math.sin(2 * math.pi * k), 0, "sneak")),
     ("fly", "", 1.0, True, lambda k: (0.08 * math.sin(2 * math.pi * k), 0, "fly")),
     ("bow", "", 1.0, True, lambda k: (0, 0, "bow")),
-    ("attack", "ACT_DOTA_ATTACK", 0.3, False, lambda k: (0, k, "swing")),
+    # (Minecraft's swing takes 0.3 s; then it holds still: Dota's particle ran it twice in the time Lua shows it)
+    ("attack", "ACT_DOTA_ATTACK", 0.6, False, lambda k: (0, min(1, 2 * k), "swing")),
 ]
 def anims_for(name):
     if not name.startswith("steve"): return ANIMS
@@ -661,3 +662,28 @@ with open(os.path.join(MDL, "block_ghost.vmdl"), "w") as f:
 	}}
 }}
 """)
+
+
+# Steve's projectiles in flight, for Dota's players (MCBridge "proj"): Minecraft's item pictures, extruded, 8 px, centred;
+# the arrow turned to point along its flight (the particle's forward)
+for name, turn in (("wind_charge", 0), ("ender_pearl", 0), ("arrow", 3 * math.pi / 4)):
+    boxes = [("item:" + name, None, (0, -4, -4), (0, 8, 8), 0, (0, 24, 0), turn, "root")]
+    smd, _ = mesh_smd(boxes, sizes, ["root"])
+    with open(os.path.join(MDL, f"item_{name}.smd"), "w") as f:
+        f.write(smd)
+    with open(os.path.join(MDL, f"item_{name}.vmdl"), "w") as f:
+        f.write(f"""<!-- kv3 encoding:text:version{{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d}} format:modeldoc32:version{{c5dcef98-b629-46ab-88e3-a17c005c935e}} -->
+{{
+	rootNode =
+	{{
+		_class = "RootNode"
+		children = [ {{ _class = "RenderMeshList" children = [ {{ _class = "RenderMeshFile" filename = "models/mc/item_{name}.smd" import_scale = 1.0 }} ] }}, ]
+		model_archetype = ""
+		primary_associated_entity = ""
+		anim_graph_name = ""
+	}}
+}}
+""")
+    with open(os.path.join(PDIR, f"proj_{name}.vpcf"), "w") as f:
+        f.write(PARTICLE.format(model="item_" + name, anim="", loop="false").replace("models/mc/mob_item_", "models/mc/item_")
+                .replace('{ _class = "C_INIT_RandomNamedModelSequence" m_bModelFromRenderer = true m_names = [ "" ] m_nFieldOutput = 13 },', ""))

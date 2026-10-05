@@ -29,6 +29,8 @@ public class AttackMixin {
 		boolean sweep = s > 0.9f && !crit && p.onGround() && !p.isSprinting()
 			&& p.getMainHandItem().is(net.minecraft.tags.ItemTags.SWORDS);
 		java.util.UUID id = p.getUUID();
+		float clientFall = (float) p.fallDistance; // (the server's was 0 at the swing: a mace never smashed)
+		boolean clientFlying = p.isFallFlying();
 		server.execute(() -> {
 			var sp = server.getPlayerList().getPlayer(id);
 			if (sp == null) return;
@@ -51,10 +53,11 @@ public class AttackMixin {
 			// a mace falling on its target: Minecraft's smash bonus (fall distance, Density), its sound and dust, his fall
 			// forgiven (he hit nothing in Minecraft: the hit is Dota's); Lua knocks back the units around ("smash")
 			var held = sp.getMainHandItem();
-			if (held.getItem() instanceof net.minecraft.world.item.MaceItem mace && net.minecraft.world.item.MaceItem.canSmashAttack(sp)) {
+			if (held.getItem() instanceof net.minecraft.world.item.MaceItem mace && clientFall > 1.5f && !clientFlying) {
+				sp.fallDistance = Math.max(sp.fallDistance, clientFall);
 				float bonus = mace.getAttackDamageBonus(sp, base, source);
 				dmg += bonus * s;
-				boolean heavy = sp.fallDistance > 5;
+				boolean heavy = clientFall > 5;
 				var lv = sp.level();
 				lv.levelEvent(2013, sp.blockPosition(), 750);
 				lv.playSound(null, sp.getX(), sp.getY(), sp.getZ(), heavy ? net.minecraft.sounds.SoundEvents.MACE_SMASH_GROUND_HEAVY
