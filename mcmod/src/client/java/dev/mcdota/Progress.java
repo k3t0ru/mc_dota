@@ -190,7 +190,7 @@ public final class Progress {
 	// --- Dota's disables ----------------------------------------------------------------------------------------------
 	// "cc <stun> <root> <speed ratio> <disarmed>": stunned/rooted -> no walking or jumping; slowed -> slower; stunned or
 	// disarmed -> no swinging (AttackMixin asks noAttack)
-	public static volatile boolean noAttack;
+	public static volatile boolean noAttack, noUse, noFly;
 	private static String ccNow = "";
 
 	public static void cc(MinecraftServer server, String[] p) {
@@ -199,7 +199,9 @@ public final class Progress {
 		ccNow = now;
 		boolean stun = p[1].equals("1"), root = p[2].equals("1");
 		double ratio = Double.parseDouble(p[3]);
-		noAttack = stun || p[4].equals("1");
+		boolean hexed = p.length > 5 && p[5].equals("1");
+		noAttack = stun || hexed || p[4].equals("1");
+		noUse = noFly = stun || hexed;
 		Sync.run(server, String.format(Locale.ROOT, "attribute @p minecraft:movement_speed base set %.4f", root ? 0 : 0.1 * ratio), false);
 		Sync.run(server, "attribute @p minecraft:jump_strength base set " + (root ? 0 : 0.42), false);
 		if (stun) say(server, "Оглушён", "red");
@@ -579,8 +581,10 @@ public final class Progress {
 			return true;
 		});
 		numbersTick(server);
+		Sync.fallTick(server);
 		if (!server.getPlayerList().getPlayers().isEmpty()) {
 			ServerPlayer pl = server.getPlayerList().getPlayers().get(0);
+			if (noFly && pl.isFallFlying()) pl.stopFallFlying(); // (stunned, hexed: down he comes)
 			if (pl.getY() < -62 && pl.isAlive()) {
 				int sx = (int) Math.floor(pl.getX()), sz = (int) Math.floor(pl.getZ());
 				pl.teleportTo(pl.getX(), Math.max(Hybrid.surfaceAt(sx, sz) + 1, server.overworld().getHeight(Heightmap.Types.MOTION_BLOCKING, sx, sz)), pl.getZ());

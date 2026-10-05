@@ -279,6 +279,8 @@ function MCBridge:Apply( body, stale )
 
 		local cx, cy, cz, stage = line:match( "^crack (%S+) (%S+) (%S+) (%S+)" )
 		if cx then MC:Crack( tonumber( cx ), tonumber( cy ), tonumber( cz ), tonumber( stage ) ) end
+		local fx_, fy_, fz_, fs_ = line:match( "^fcrack (%S+) (%S+) (%S+) (%S+)" ) -- a falling build's block cracking (Sync.fallTick)
+		if fx_ then MC:CrackAt( tonumber( fx_ ), tonumber( fy_ ), tonumber( fz_ ), tonumber( fs_ ) ) end
 
 		local lx, ly, yawc, pitch, dist, lz, sent = line:match( "^cam (%S+) (%S+) (%S+) (%S+) (%S+) (%S+) (%S+)" )
 		if lx and self.steve and GameRules:GetGameTime() - ( self.eyeLog or 0 ) > 2 then -- debug: eye height over real ground
@@ -326,7 +328,7 @@ end
 
 -- a Minecraft hit on a Dota unit. Allies can only be denied like in Dota: creeps below half health, towers below 10%,
 -- heroes never, and only with a direct hit (a sword's sweep and other splash never touch allies).
-MELEE_REACH = 3.5 -- blocks from Steve to the target's edge (Minecraft's reach is 3)
+MELEE_REACH = 3 -- blocks from Steve to the target's edge: Minecraft's reach for hitting an entity
 -- a melee swing Dota landed: the hit, Minecraft's crit/sweep effects on it, and the sweep's splash around it (enemies
 -- within a block of the target; never during a deny)
 function MCBridge:Swing( target, amount, crit, sweep, fire )
@@ -435,14 +437,16 @@ function MCBridge:Control( u )
 	local stun = u:IsStunned() or u:IsFrozen() or u:IsNightmared() or u:HasModifier( "modifier_bane_nightmare" )
 		or u:HasModifier( "modifier_bane_fiends_grip" )
 	local root = stun or u:IsRooted()
-	local ratio = math.min( 1, u:GetIdealSpeed() / math.max( 1, u:GetBaseMoveSpeed() ) )
-	if u:IsHexed() then ratio = math.min( ratio, 140 / math.max( 1, u:GetBaseMoveSpeed() ) ) end -- (a hex: Dota's 140 speed)
+	if not u:IsHexed() then self.normalSpeed = u:GetBaseMoveSpeed() end
+	local base = math.max( 1, self.normalSpeed or u:GetBaseMoveSpeed() )
+	local ratio = math.min( 1, u:GetIdealSpeed() / base )
+	if u:IsHexed() then ratio = math.min( ratio, 140 / base ) end -- (a hex: Dota's 140 speed)
 	if u:IsHexed() ~= ( self.wasHexed or false ) then
 		self.wasHexed = u:IsHexed()
 		print( "[mc] steve hexed " .. tostring( self.wasHexed ) .. " speed ratio " .. ratio )
 	end
 	local disarmed = stun or u:IsDisarmed() or u:IsHexed()
-	local line = string.format( "cc %d %d %.2f %d", stun and 1 or 0, root and 1 or 0, ratio, disarmed and 1 or 0 )
+	local line = string.format( "cc %d %d %.2f %d %d", stun and 1 or 0, root and 1 or 0, ratio, disarmed and 1 or 0, u:IsHexed() and 1 or 0 )
 	if line ~= self.ccLine then self.ccLine = line self:Send( line ) end
 end
 
@@ -484,7 +488,7 @@ function MCBridge:Puppet( u, pos, feetY, yaw, moved )
 	local walking = now - ( self.movedAt or -10 ) < 0.4
 	local kind = not ( alive and u:CanBeSeenByAnyOpposingTeam() ) and "" or self.pose == "fly" and "fly" or self.pose == "bow" and "bow"
 		or self.pose == "sneak" and ( walking and "sneak_run" or "sneak_idle" )
-		or now - ( self.swingAt or -10 ) < 0.35 and "attack" or walking and "run" or "idle"
+		or now - ( self.swingAt or -10 ) < 0.28 and "attack" or walking and "run" or "idle"
 	if kind ~= "" then
 		-- drawing a bow: its string in Minecraft's three steps
 		if self.pose == "bow" then self.bowAt = self.bowAt or now else self.bowAt = nil end

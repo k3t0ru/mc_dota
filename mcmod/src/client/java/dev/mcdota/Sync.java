@@ -99,14 +99,51 @@ public final class Sync {
 			if (start.getY() <= Hybrid.surfaceAt(start.getX(), start.getZ())) grounded = true;
 			done.addAll(part);
 			if (grounded) continue;
+			// waves: the blocks next to the gone one first, then theirs, a wave every 3 ticks
+			java.util.Map<BlockPos, Integer> wave = new java.util.HashMap<>();
+			java.util.ArrayDeque<BlockPos> q = new java.util.ArrayDeque<>();
+			wave.put(start, 0);
+			q.add(start);
+			while (!q.isEmpty()) {
+				BlockPos a = q.poll();
+				for (var e : net.minecraft.core.Direction.values()) {
+					BlockPos n = a.relative(e);
+					if (part.contains(n) && !wave.containsKey(n)) { wave.put(n, wave.get(a) + 1); q.add(n); }
+				}
+			}
+			int now = server.getTickCount();
+			for (BlockPos b : part) falling.putIfAbsent(b, now + 3 * wave.getOrDefault(b, 0));
+		}
+	}
+
+	// blocks coming down: their start tick; cracks over 10 ticks (Minecraft's 10 stages, shown in both games), then gone
+	private static final java.util.Map<BlockPos, Integer> falling = new java.util.HashMap<>();
+
+	public static void fallTick(net.minecraft.server.MinecraftServer server) {
+		if (falling.isEmpty()) return;
+		var level = server.overworld();
+		int now = server.getTickCount();
+		var it = falling.entrySet().iterator();
+		while (it.hasNext()) {
+			var en = it.next();
+			BlockPos b = en.getKey();
+			int age = now - en.getValue();
+			if (age < 0) continue;
+			var st = level.getBlockState(b);
+			if (st.isAir()) { it.remove(); continue; }
+			int id = -1 - (b.hashCode() & 0xffffff);
+			if (age < 10) {
+				level.destroyBlockProgress(id, b, age);
+				out.add(String.format("fcrack %d %d %d %d", b.getX(), b.getY(), b.getZ(), age));
+				continue;
+			}
+			it.remove();
+			level.destroyBlockProgress(id, b, -1);
 			collapsing = true;
 			try {
-				for (BlockPos q : part) {
-					var st = level.getBlockState(q);
-					level.levelEvent(2001, q, net.minecraft.world.level.block.Block.getId(st));
-					level.setBlock(q, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 2 | 16);
-					out.add(String.format("break %d %d %d", q.getX(), q.getY(), q.getZ())); // (Dota hears of each, even while applying)
-				}
+				level.levelEvent(2001, b, net.minecraft.world.level.block.Block.getId(st));
+				level.setBlock(b, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 2 | 16);
+				out.add(String.format("break %d %d %d", b.getX(), b.getY(), b.getZ())); // (Dota hears of each, even while applying)
 			} finally {
 				collapsing = false;
 			}
@@ -458,6 +495,10 @@ public final class Sync {
 					case "block" -> { protectedBlocks.add(new BlockPos(Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3])));
 						column(server, Integer.parseInt(p[1]), Integer.parseInt(p[3]), () ->
 						run(server, String.format("setblock %s %s %s minecraft:%s", p[1], p[2], p[3], p[4]))); }
+					case "crack" -> {
+						BlockPos cp = new BlockPos(Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
+						server.overworld().destroyBlockProgress(-1 - (cp.hashCode() & 0xffffff), cp, Integer.parseInt(p[4]));
+					}
 					case "unblock" -> Progress.unblock(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]));
 					case "sign" -> { // "sign x y z <block[state]> line|line|...": the stalls' signs (after their blocks: same queue)
 						protectedBlocks.add(new BlockPos(Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3])));

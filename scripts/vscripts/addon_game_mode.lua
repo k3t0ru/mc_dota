@@ -195,7 +195,10 @@ function MC:Init()
 	-- Steve has no use for Dota gold (his money is emeralds, MC:LootFor): none, so no yellow "+45" over his kills either
 	mode:SetModifyGoldFilter( function( _, f )
 		local mine = MCBridge.steve and f.player_id_const == MCBridge.steve:GetPlayerOwnerID()
-		if mine and f.reason_const == DOTA_ModifyGold_BountyRune then MC:Emeralds( f.gold ) end -- a bounty rune: emeralds
+		if mine and ( f.reason_const == DOTA_ModifyGold_BountyRune or GameRules:GetGameTime() - ( MC.bountyAt or -10 ) < 1 ) then
+			MC.bountyAt = nil
+			MC:Emeralds( f.gold ) -- a bounty rune: emeralds
+		end
 		return not mine
 	end, MC )
 	mode:SetExecuteOrderFilter( Dynamic_Wrap( MC, "OrderFilter" ), MC )
@@ -682,7 +685,8 @@ function MC:ColumnChanged( bx, bz )
 	b.mc_y = low and g or g + 1 -- what a Dota hero mines out of this column
 	b.mc_protected = MC.protected[ bx .. "," .. bz ] or MC:NearFountain( b:GetAbsOrigin() )
 	local m = b:FindModifierByName( "modifier_mc_block" )
-	if m then m:SetStackCount( ( low and not high ) and 1 or 0 ) end -- 1 = walkable: no collision
+	if m then m:SetStackCount( ( ( low and not high ) and 1 or 0 ) + ( b.mc_mined and 2 or 0 ) ) end -- (modifier_mc_block)
+	b:SetAbsOrigin( MC:CellPos( bx, bz ) ) -- (on its own cell, whatever moved it)
 end
 
 -- A wall (a block at head height) is an obstacle in Dota's grid like a tree: point_simple_obstruction in each of Dota's
@@ -1064,8 +1068,22 @@ function MC:Crack( bx, by, bz, stage )
 	MC.crack:SetModelScale( GRID / 128 * 1.02 )
 end
 
+-- cracks on a block other than the one Steve mines (MC:Crack): a Dota hero's blows, a falling build's (stage -1: none)
+MC.cracks = {}
+function MC:CrackAt( bx, by, bz, stage )
+	local key = bx .. "," .. by .. "," .. bz
+	local c = MC.cracks[ key ]
+	if c and not c:IsNull() then c:RemoveSelf() end
+	MC.cracks[ key ] = nil
+	if stage < 0 or stage > 9 or not MC.props[ key ] then return end
+	local pos = MC:BlockPos( bx, by, bz ) - Vector( 0, 0, 1 )
+	MC.cracks[ key ] = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/crack_" .. stage .. ".vmdl",
+		origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ), angles = string.format( "0 %f 0", GRID_ROT ) } )
+end
+
 function MC:HideBlock( bx, by, bz )
 	local key = bx .. "," .. by .. "," .. bz
+	MC:CrackAt( bx, by, bz, -1 )
 	MCWorld:Unward( bx, by, bz )
 	local p = MC.props[ key ]
 	if p and not p:IsNull() then p:RemoveSelf() end
@@ -1144,7 +1162,14 @@ function MC:DamageFilter( f )
 	local hero = attacker:IsRealHero() and attacker or ( owner and owner.IsRealHero and owner:IsRealHero() and owner ) or nil
 	if not hero and not attacker:IsHero() and attacker:GetTeamNumber() ~= DOTA_TEAM_BADGUYS then return false end -- (lane creeps don't)
 	f.damage = 1 -- a hit per blow, attack or spell, whatever its damage
-	victim:RemoveModifierByName( "modifier_mc_block" ) -- health bar becomes the breaking progress
+	victim.mc_mined = true
+	local m = victim:FindModifierByName( "modifier_mc_block" )
+	if m and m:GetStackCount() < 2 then m:SetStackCount( m:GetStackCount() + 2 ) end -- (its bar shows the breaking)
+	local bx, bz = victim.mc_cell:match( "^(%-?%d+),(%-?%d+)$" )
+	local by = victim.mc_y or MC.heights[ victim.mc_cell ] or MC_FLOOR
+	local stage = math.min( 9, math.floor( 10 * ( 1 - ( victim:GetHealth() - 1 ) / math.max( 1, victim:GetMaxHealth() ) ) ) )
+	MC:CrackAt( tonumber( bx ), by, tonumber( bz ), stage )
+	MCBridge:Send( string.format( "crack %s %d %s %d", bx, by, bz, stage ) )
 	return true
 end
 

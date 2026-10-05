@@ -4,7 +4,7 @@
 -- Torches are observer wards, soul torches sentry wards (MC:ShowBlock / MC:HideBlock call in here).
 MCWorld = MCWorld or {}
 
-USE_RANGE = 220 -- Dota units in front of Steve an object must be within
+USE_RANGE = 4.5 * GRID -- Dota units in front of Steve an object must be within: Minecraft's reach for using a block
 CAPTURE_TIME = { outpost = 3, lantern = 1.5, gate = 3.5 } -- seconds standing by it (gate: Dota's channel)
 CAPTURE_VISION = { outpost = 900, lantern = 1100 } -- what a captured one shows around it
 
@@ -58,7 +58,7 @@ local function runeAimed()
 		local d = r:GetAbsOrigin() - s:GetAbsOrigin()
 		d.z = 0
 		local len = d:Length2D()
-		if len <= 200 and ( len < 60 or d:Normalized():Dot( s:GetForwardVector() ) > 0.94 ) and ( not bd or len < bd ) then best, bd = r, len end
+		if len <= USE_RANGE and ( len < 60 or d:Normalized():Dot( s:GetForwardVector() ) > 0.94 ) and ( not bd or len < bd ) then best, bd = r, len end
 	end
 	return best
 end
@@ -82,6 +82,7 @@ end
 function MCWorld:Rune( s, rune )
 	local ok, kind = pcall( function() return rune:GetRuneType() end )
 	local water = ( ok and kind == DOTA_RUNE_WATER ) or ( rune:GetModelName() or "" ):find( "water" )
+	if ( ok and kind == DOTA_RUNE_BOUNTY ) or ( rune:GetModelName() or "" ):find( "bounty" ) then MC.bountyAt = GameRules:GetGameTime() end
 	if s.PickupRune then s:PickupRune( rune )
 	else -- (no API call in this Dota: the order, let through Steve's order filter; then a stop, so an order that
 		-- didn't reach doesn't wait to pick it up later when he walks by)
