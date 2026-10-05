@@ -210,7 +210,8 @@ function MCBridge:Apply( body, stale )
 		local name, x, z, hp, max, yaw, my, pose, elytra, held = line:match( "^steve (%S+) (%S+) (%S+) (%S+) (%S+) (%S+) ?(%S*) ?(%S*) ?(%S*) ?(%S*)" )
 		if name and not stale then
 			-- how Dota's players see him (MCBridge:Puppet): Minecraft's pose, an elytra worn, the item in his hand
-			self.pose, self.elytra, self.held = pose ~= "" and pose or "stand", elytra == "1", held
+			local bits = tonumber( elytra ) or 0 -- (1: an elytra worn, 2: a shield in the off hand)
+			self.pose, self.elytra, self.shield, self.held = pose ~= "" and pose or "stand", bits % 2 == 1, math.floor( bits / 2 ) % 2 == 1, held
 			self:MoveSteve( name, to_dota( tonumber( x ), tonumber( z ) ), tonumber( hp ) / tonumber( max ), math.rad( tonumber( yaw ) ), tonumber( my ) )
 			self:HighGround( tonumber( x ), tonumber( z ), tonumber( my ) )
 		end
@@ -608,6 +609,7 @@ function MCBridge:Puppet( u, pos, feetY, yaw, moved )
 	-- (run until it has stood still a moment: poses come in bursts, a flicker between run and idle restarted the model)
 	local walking = now - ( self.movedAt or -10 ) < 0.4
 	local kind = not ( alive and u:CanBeSeenByAnyOpposingTeam() ) and "" or self.pose == "fly" and "fly" or self.pose == "bow" and "bow"
+		or self.pose == "block" and "block"
 		or self.pose == "sneak" and ( walking and "sneak_run" or "sneak_idle" )
 		or now - ( self.swingAt or -10 ) < 0.28 and "attack" or walking and "run" or "idle"
 	if kind ~= "" then
@@ -618,7 +620,8 @@ function MCBridge:Puppet( u, pos, feetY, yaw, moved )
 			local d = now - self.bowAt
 			item = d < 0.25 and "bow_pulling_0" or d < 0.5 and "bow_pulling_1" or "bow_pulling_2"
 		end
-		local model = ( self.elytra and "steve_elytra" or "steve" ) .. ( MC_HELD and MC_HELD[ item ] and "__" .. item or "" )
+		local model = ( self.elytra and "steve_elytra" or "steve" ) .. ( self.shield and "_shield" or "" )
+			.. ( MC_HELD and MC_HELD[ item ] and "__" .. item or "" )
 		if u:IsHexed() then
 			model = u:HasModifier( "modifier_shadow_shaman_voodoo" ) and "chicken" or "pig"
 			kind = walking and "run" or "idle"

@@ -41,13 +41,13 @@ function Precache( context )
 	end
 	-- Steve as Dota's players see him: with an elytra or not, each item in his hand (MCBridge:Puppet); hexed: a pig, a chicken
 	local models = { "pig", "chicken" }
-	for _, e in ipairs( { "steve", "steve_elytra" } ) do
+	for _, e in ipairs( { "steve", "steve_elytra", "steve_shield", "steve_elytra_shield" } ) do
 		table.insert( models, e )
 		for item in pairs( MC_HELD or {} ) do table.insert( models, e .. "__" .. item ) end
 	end
 	for _, m in ipairs( models ) do
 		PrecacheResource( "model", "models/mc/mob_" .. m .. ".vmdl", context )
-		local anims = m:find( "^steve" ) and { "idle", "run", "attack", "sneak_idle", "sneak_run", "fly", "bow" } or { "idle", "run" }
+		local anims = m:find( "^steve" ) and { "idle", "run", "attack", "sneak_idle", "sneak_run", "fly", "bow", "block" } or { "idle", "run" }
 		for _, a in ipairs( anims ) do PrecacheResource( "particle", "particles/mc/steve/" .. m .. "_" .. a .. ".vpcf", context ) end
 	end
 	PrecacheResource( "model", "models/mc/mob_steve.vmdl", context )

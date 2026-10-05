@@ -260,11 +260,11 @@ public final class Sync {
 		var p = mc.player;
 		var use = p.isUsingItem() ? p.getUseItem().getItem() : null;
 		String pose = p.isFallFlying() ? "fly" : use instanceof net.minecraft.world.item.BowItem || use instanceof net.minecraft.world.item.CrossbowItem
-			? "bow" : p.isCrouching() ? "sneak" : "stand";
+			? "bow" : p.isBlocking() ? "block" : p.isCrouching() ? "sneak" : "stand";
 		boolean elytra = p.getItemBySlot(net.minecraft.world.entity.EquipmentSlot.CHEST).getItem() == net.minecraft.world.item.Items.ELYTRA;
 		String held = p.getMainHandItem().isEmpty() ? "air" : BuiltInRegistries.ITEM.getKey(p.getMainHandItem().getItem()).getPath();
 		StringBuilder body = new StringBuilder(String.format(Locale.ROOT, "me %s %.2f %.2f %.2f %.1f %.1f %.1f %s %d %s\n",
-			p.getName().getString(), p.getX(), p.getY(), p.getZ(), p.getYRot(), p.getHealth(), p.getMaxHealth(), pose, elytra ? 1 : 0, held));
+			p.getName().getString(), p.getX(), p.getY(), p.getZ(), p.getYRot(), p.getHealth(), p.getMaxHealth(), pose, (elytra ? 1 : 0) | (p.getOffhandItem().is(net.minecraft.world.item.Items.SHIELD) ? 2 : 0), held));
 		for (String l; (l = out.poll()) != null; ) body.append(l).append('\n');
 		busy = true;
 		HTTP.sendAsync(HttpRequest.newBuilder(BRIDGE).POST(HttpRequest.BodyPublishers.ofString(body.toString())).build(),

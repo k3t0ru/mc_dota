@@ -127,7 +127,7 @@ def held_transform(pivot):
     return tuple(p + q for p, q in zip(pivot, c)), rot
 
 
-def steve(leg, arm, mode="stand", elytra=False, item=None):
+def steve(leg, arm, mode="stand", elytra=False, item=None, shield=False):
     # Minecraft's PlayerModel (wide arms) with its outer layers, in its poses (the Dota players' view of Steve,
     # MCBridge:Puppet): walking (arms swing against the legs), a hit (the right arm swings), sneaking (bent forward,
     # Minecraft's crouch offsets), drawing a bow (both arms forward), elytra flight (lying forward, wings spread).
@@ -148,6 +148,7 @@ def steve(leg, arm, mode="stand", elytra=False, item=None):
         rx, lx = math.sin(by_) * 5, -math.sin(by_) * 5  # (the shoulders turn with the body: their z)
     if mode == "bow": rarm, larm = (FWD, -0.1, 0), (FWD, 0.5, 0)
     if mode == "fly": rarm, larm = 0.0, 0.0
+    if mode == "block": larm = (-0.94, 0.5236, 0)  # (Minecraft's blocking arm: forward, turned in)
     b = [(t, (0, 0), (-4, -8, -4), (8, 8, 8), 0, (0, hy, 0), 0, "head"),
          (t, (32, 0), (-4, -8, -4), (8, 8, 8), 0.5, (0, hy, 0), 0, "head"),
          (t, (16, 16), (-4, 0, -2), (8, 12, 4), 0, (0, by, 0), body_rot, "body"),
@@ -163,6 +164,10 @@ def steve(leg, arm, mode="stand", elytra=False, item=None):
     if item:  # the item in his right hand: its picture upright along the arm's side, the handle in the hand, pointing forward
         off, rot = held_transform((-5, ay, rx))
         b.append(("item:" + item, None, (0, -8, -8), (0, 16, 16), 0, off, rot, "arm_r"))
+    if shield:  # Minecraft's ShieldModel in the left hand: the plate upright in front of the fist, the handle in it
+        sc = [[0.6, 0, 0], [0, 0.6, 0], [0, 0, 0.6]]
+        b += [("shield", (0, 0), (-6, -11, -2), (12, 22, 1), 0, (6, ay + 10, -1 + lx), sc, "arm_l"),
+              ("shield", (26, 0), (-1, -3, -1), (2, 6, 6), 0, (6, ay + 10, -1 + lx), sc, "arm_l")]
     if elytra:  # Minecraft's ElytraModel, on the back (2 px behind the body)
         x, z = (0.349, -math.pi / 2) if mode == "fly" else (0.2618 + bend, -0.2618)
         b += [("elytra", (22, 0), (-10, 0, 0), (10, 20, 2), 1.0, (5, by, 2), (x, 0, z), "wing_l"),
@@ -181,7 +186,7 @@ MOB_BUILD = {"pig": lambda leg, arm: pig(leg), "chicken": lambda leg, arm: chick
              "zombie_gold": zombie_gold}
 TEXTURES = {"zombie": "zombie/zombie.png", "skeleton": "skeleton/skeleton.png", "spider": "spider/spider.png",
             "gold": "equipment/humanoid/gold.png", "item:bow": "../item/bow.png", "steve": "player/wide/steve.png",
-            "elytra": "equipment/wings/elytra.png", "pig": "pig/temperate_pig.png", "chicken": "chicken/temperate_chicken.png",
+            "elytra": "equipment/wings/elytra.png", "shield": "shield_base_nopattern.png", "pig": "pig/temperate_pig.png", "chicken": "chicken/temperate_chicken.png",
             "item:bow_pulling_0": "../item/bow_pulling_0.png", "item:bow_pulling_1": "../item/bow_pulling_1.png",
             "item:bow_pulling_2": "../item/bow_pulling_2.png"}
 # what Steve may hold, shown in his hand to Dota's players (Minecraft's item pictures): his tools and weapons, what the
@@ -200,9 +205,10 @@ HELD = {k: v for k, v in HELD.items() if f"assets/minecraft/textures/item/{v}.pn
 for k, v in HELD.items():
     TEXTURES["item:" + k] = "../" + ("item/" + v if not v.startswith("../") else v[3:]) + ".png"
 for elytra in (False, True):
-    for item in [None] + list(HELD):
-        MOB_BUILD["steve" + ("_elytra" if elytra else "") + (f"__{item}" if item else "")] = \
-            (lambda e, it: lambda leg, arm, mode="stand": steve(leg, arm, mode, e, it))(elytra, item)
+    for shield in (False, True):
+        for item in [None] + list(HELD):
+            MOB_BUILD["steve" + ("_elytra" if elytra else "") + ("_shield" if shield else "") + (f"__{item}" if item else "")] = \
+                (lambda e, sh, it: lambda leg, arm, mode="stand": steve(leg, arm, mode, e, it, sh))(elytra, shield, item)
 
 # animations: (activity, seconds, looping, pose at a moment 0..1) -- like Minecraft's: a walk is a sine of the legs (arms
 # swaying with them for zombies), idle arms bob slowly, an attack swings the arms down (zombies) or draws the bow
@@ -219,6 +225,7 @@ STEVE_ANIMS = [
     ("sneak_run", "", 1.2, True, lambda k: (0.5 * math.sin(2 * math.pi * k), 0, "sneak")),
     ("fly", "", 1.0, True, lambda k: (0.08 * math.sin(2 * math.pi * k), 0, "fly")),
     ("bow", "", 1.0, True, lambda k: (0, 0, "bow")),
+    ("block", "", 1.0, True, lambda k: (0, 0, "block")),
     # (Minecraft's swing takes 0.3 s; then it holds still: Dota's particle ran it twice in the time Lua shows it)
     ("attack", "ACT_DOTA_ATTACK", 0.6, False, lambda k: (0, min(1, 2 * k), "swing")),
 ]
