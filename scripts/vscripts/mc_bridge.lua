@@ -67,7 +67,7 @@ function MCBridge:Projectile( id, kind, x, y, z, vx, vz )
 	self.projAt[ id ] = p
 end
 
-function MCBridge:Blast( kind, x, y, z, dmg )
+function MCBridge:Blast( kind, x, y, z, dmg, heavy )
 	if not MC.anchor then return end
 	local p = to_dota( x, z )
 	if kind ~= "smash" then p.z = MC.anchor.z + ( y - MC_FLOOR ) * GRID end -- (a smash: on the ground)
@@ -85,6 +85,8 @@ function MCBridge:Blast( kind, x, y, z, dmg )
 		ParticleManager:ReleaseParticleIndex( fx )
 	end
 	local radius, dist = kind == "smash" and 3.5 * GRID or 2.5 * GRID, kind == "smash" and 160 or 280
+	local up = 60
+	if kind == "smash" and heavy then dist, up = dist * 2, up * 2 end -- (from over 5 blocks: the wave twice as fast and strong)
 	for _, u in ipairs( FindUnitsInRadius( DOTA_TEAM_GOODGUYS, p, nil, radius, DOTA_UNIT_TARGET_TEAM_BOTH,
 		DOTA_UNIT_TARGET_HERO + DOTA_UNIT_TARGET_BASIC, DOTA_UNIT_TARGET_FLAG_NONE, FIND_ANY_ORDER, false ) ) do
 		if not u.mc_player and not u.mc_puppet and not u.mc_block and not u:IsBuilding() and u:IsAlive() then
@@ -92,7 +94,7 @@ function MCBridge:Blast( kind, x, y, z, dmg )
 				self:HitUnit( u, dmg * 0.5, false, "melee" )
 			end
 			u:AddNewModifier( self.steve or u, nil, "modifier_knockback", { center_x = p.x, center_y = p.y, center_z = p.z,
-				duration = 0.4, knockback_duration = 0.4, knockback_distance = dist, knockback_height = 60, should_stun = 0 } )
+				duration = 0.4, knockback_duration = 0.4, knockback_distance = dist, knockback_height = up, should_stun = 0 } )
 		end
 	end
 end
@@ -374,8 +376,8 @@ function MCBridge:Apply( body, stale )
 			ParticleManager:ReleaseParticleIndex( self.projs[ pend ] )
 			self.projs[ pend ] = nil
 		end
-		local kk, kx, ky, kz, _, kd = line:match( "^(%a+) (%S+) (%S+) (%S+) ?(%S*) ?(%S*)" )
-		if kk == "smash" or kk == "wind" then self:Blast( kk, tonumber( kx ), tonumber( ky ), tonumber( kz ), tonumber( kd ) ) end
+		local kk, kx, ky, kz, kh, kd = line:match( "^(%a+) (%S+) (%S+) (%S+) ?(%S*) ?(%S*)" )
+		if kk == "smash" or kk == "wind" then self:Blast( kk, tonumber( kx ), tonumber( ky ), tonumber( kz ), tonumber( kd ), kh == "1" ) end
 		local fx_, fy_, fz_, fs_ = line:match( "^fcrack (%S+) (%S+) (%S+) (%S+)" ) -- a falling build's block cracking (Sync.fallTick)
 		if fx_ then MC:CrackAt( tonumber( fx_ ), tonumber( fy_ ), tonumber( fz_ ), tonumber( fs_ ) ) end
 
