@@ -584,8 +584,9 @@ function MCBridge:Puppet( u, pos, feetY, yaw, moved )
 	local p = self.puppet
 	if not p or p:IsNull() or not p:IsAlive() then
 		if p and not p:IsNull() then p:RemoveSelf() end
-		-- (a hero with nothing drawn of its own: Io's glow is the hero's, not its model's, and showed)
-		p = CreateUnitByName( "npc_dota_hero_axe", u:GetAbsOrigin(), false, nil, nil, u:GetTeamNumber() )
+		-- (a creature, npc_mc_steve: heroes as stand-ins brought their cosmetics, drawn by each client out of the server's
+		-- reach - Axe's armour, Io's glow - or the target dummy's damage readout)
+		p = CreateUnitByName( "npc_mc_steve", u:GetAbsOrigin(), false, nil, nil, u:GetTeamNumber() )
 		if not p then return end
 		p.mc_puppet = true -- (not an illusion: Dota tints illusions for their team with its own shader, and the invisible
 		-- ghost showed as a purple shape in front of Steve's camera)

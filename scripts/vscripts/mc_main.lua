@@ -54,7 +54,7 @@ function Precache( context )
 	PrecacheResource( "model", "models/mc/steve_ghost.vmdl", context )
 	PrecacheResource( "model", "models/mc/block_ghost.vmdl", context )
 	PrecacheResource( "particle", "particles/items_fx/immunity_sphere.vpcf", context ) -- (Steve's spell block)
-	PrecacheUnitByNameSync( "npc_dota_hero_axe", context ) -- (Steve's stand-in, MCBridge:Puppet)
+	PrecacheUnitByNameSync( "npc_mc_steve", context ) -- (Steve's stand-in, MCBridge:Puppet)
 	PrecacheResource( "soundfile", "soundevents/mc_sounds.vsndevts", context ) -- Minecraft's sounds (tools/gen_sounds.py)
 	PrecacheResource( "particle", "particles/units/heroes/hero_earthshaker/earthshaker_echoslam_start.vpcf", context ) -- a mace's smash
 	PrecacheResource( "particle", "particles/units/heroes/hero_brewmaster/brewmaster_cyclone.vpcf", context ) -- a wind charge

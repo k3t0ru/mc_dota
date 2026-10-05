@@ -20,6 +20,7 @@
 		"BountyGoldMax"	"0"
 		"HealthBarOffset"	"220"
 		"UnitRelationshipClass"	"DOTA_NPC_UNIT_RELATIONSHIP_TYPE_DEFAULT"
+		"ConsideredHero"	"1"	// (for spells that take heroes only)
 	}
 	"npc_mc_block_log"
 	{
