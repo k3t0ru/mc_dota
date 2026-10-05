@@ -242,7 +242,17 @@ public final class Sync {
 	}
 
 	// client thread, every tick
+	private static long sprintLog;
 	public static void tick(Minecraft mc) {
+		if (mc.player != null && mc.options.keySprint.isDown() && System.currentTimeMillis() - sprintLog > 1000) {
+			sprintLog = System.currentTimeMillis();
+			var pl = mc.player;
+			org.slf4j.LoggerFactory.getLogger("mcdota").info(String.format(java.util.Locale.ROOT,
+				"sprint key: sprinting %b, forward %.2f, food %d, using %b, crouching %b, flying %b, ground %b, hcollision %b, blind %b, speed %.3f",
+				pl.isSprinting(), pl.zza, pl.getFoodData().getFoodLevel(), pl.isUsingItem(), pl.isCrouching(), pl.isFallFlying(),
+				pl.onGround(), pl.horizontalCollision, pl.hasEffect(net.minecraft.world.effect.MobEffects.BLINDNESS),
+				pl.getAttributeValue(net.minecraft.world.entity.ai.attributes.Attributes.MOVEMENT_SPEED)));
+		}
 		MinecraftServer server = mc.getSingleplayerServer();
 		if (busy || mc.player == null || server == null) return;
 		// how Dota's players see him (MCBridge:Puppet): his pose (elytra flight, drawing a bow, sneaking), an elytra worn,

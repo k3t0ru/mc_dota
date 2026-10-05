@@ -16,7 +16,7 @@ var lastProbe = 0;
 // Dota measures the height offset from its own smoothed "camera ground", not the real terrain. Its reference = the look-at
 // height it produced minus the offset we gave it; the next offset is exactly wanted - reference (no slow feedback loop,
 // which swung up and down when stepping between high and low ground).
-var zFix = 0, lastOff = 0;
+var zFix = 0, lastOff = 0, jerkPrev = null;
 
 // calibration: what Dota really does with the pose we asked for
 function probe( v ) {
@@ -199,6 +199,12 @@ function frame() {
 		if ( !isFinite( lastOff ) || !isFinite( lz ) ) { lastOff = 0; zSmooth = null; }
 		zWant = v[7];
 		GameUI.SetCameraLookAtPositionHeightOffset( lastOff );
+		// diagnostics (the camera dips at the floor now and then): any sudden jump of the pose or the height, in full
+		if ( jerkPrev && ( Math.abs( pitch - jerkPrev[0] ) > 25 && Math.abs( pitch - jerkPrev[0] ) < 335 || Math.abs( lastOff - jerkPrev[1] ) > 80
+			|| Math.abs( lz - jerkPrev[2] ) > 80 ) )
+			$.Msg( "[mc] JERK pitch " + jerkPrev[0].toFixed( 1 ) + "->" + pitch.toFixed( 1 ) + " off " + jerkPrev[1].toFixed( 1 ) + "->" + lastOff.toFixed( 1 ) +
+				" lz " + jerkPrev[2].toFixed( 1 ) + "->" + lz.toFixed( 1 ) + " want " + v[7].toFixed( 1 ) + " poses " + poses.length + " t-lag " + ( Date.now() - v[6] ).toFixed( 0 ) );
+		jerkPrev = [ pitch, lastOff, lz ];
 		if ( Date.now() - lastProbe > 2000 ) probe( v );
 		smooth( v );
 	}

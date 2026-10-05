@@ -188,9 +188,12 @@ def assets(dota):
     for g in GENERATORS:
         say("готовлю " + g)
         subprocess.check_call([sys.executable, os.path.join(TOOLS, g)], cwd=ROOT, env=env, stdout=subprocess.DEVNULL)
-    for f, (size, mtime, md5) in before.items():
+    changed = []
+    for f in glob.glob(os.path.join(ROOT, "content", "**", "*.*"), recursive=True):
+        old = before.get(f)
         try:
-            if os.path.getsize(f) == size and hashlib.md5(open(f, "rb").read()).hexdigest() == md5: os.utime(f, (mtime, mtime))
+            if old and os.path.getsize(f) == old[0] and hashlib.md5(open(f, "rb").read()).hexdigest() == old[2]: os.utime(f, (old[1], old[1]))
+            elif old: changed.append(f)  # (a new file: compiled anyway)
         except OSError:
             pass
     say("компилирую ресурсы для Dota (первый раз ~15-20 минут)...")
@@ -198,6 +201,19 @@ def assets(dota):
         r = subprocess.run([rc, "-r", "-i", os.path.join(content, pat)], capture_output=True, text=True, errors="ignore")
         bad = [l for l in r.stdout.splitlines() if "failed" in l or "rror" in l]
         if bad: say("  " + pat + ": " + " | ".join(l.strip() for l in bad[-3:]))
+    # Dota's compiler judges a model or material by its own file: one whose texture or mesh changed (and not itself)
+    # is compiled again by force (a sign's new text stayed old)
+    croot = os.path.join(ROOT, "content")
+    rels = [os.path.relpath(f, croot).replace("\\", "/") for f in changed if not f.endswith((".vmdl", ".vmat", ".vpcf"))]
+    force = set()
+    if rels:
+        for f in glob.glob(os.path.join(croot, "**", "*.vm*"), recursive=True):
+            if f.endswith((".vmdl", ".vmat")):
+                text = open(f, encoding="utf-8", errors="ignore").read()
+                if any(r in text for r in rels): force.add(f)
+    for f in sorted(force):
+        subprocess.run([rc, "-f", "-i", os.path.join(content, os.path.relpath(f, croot))], capture_output=True)
+    if force: say(f"  пересобрано из-за изменившихся текстур/мешей: {len(force)}")
     gone = missing_compiled()
     if gone: fail("Dota не скомпилировала: " + ", ".join(gone) + " (ошибки компиляции выше)")
     os.makedirs(CACHE, exist_ok=True)

@@ -79,7 +79,7 @@ class Relay:
                     name, x, y, z, yaw, hp, mx = p[1:8]
                     pose = " ".join(p[8:11])  # pose, elytra worn, held item (MCBridge:Puppet)
                     self.me = f"steve {name} {x} {z} {hp} {mx} {yaw} {y} {pose}".rstrip()
-                elif p[0] in ("hit", "crack", "fcrack", "died", "swing", "eff", "light", "use", "chop", "boom"):
+                elif p[0] in ("hit", "crack", "fcrack", "died", "swing", "eff", "light", "use", "chop", "boom", "wind", "smash"):
                     self.to_dota.append(line)
                 elif p[0] == "set":
                     self.to_dota.append("mcblock " + " ".join(p[1:]))

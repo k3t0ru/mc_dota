@@ -54,6 +54,9 @@ function Precache( context )
 	PrecacheResource( "model", "models/mc/steve_ghost.vmdl", context )
 	PrecacheResource( "model", "models/mc/block_ghost.vmdl", context )
 	PrecacheUnitByNameSync( "npc_dota_hero_target_dummy", context ) -- (Steve's stand-in, MCBridge:Puppet)
+	PrecacheResource( "particle", "particles/units/heroes/hero_earthshaker/earthshaker_aftershock.vpcf", context ) -- a mace's smash
+	PrecacheResource( "particle", "particles/units/heroes/hero_windrunner/windrunner_windrun_burst.vpcf", context ) -- a wind charge
+	PrecacheResource( "model", "models/mc/villager_armorer.vmdl", context ) -- (Dire's secret trader)
 	PrecacheResource( "particle", "particles/units/heroes/hero_techies/techies_land_mine_explode.vpcf", context )
 	PrecacheResource( "soundfile", "soundevents/game_sounds_heroes/game_sounds_techies.vsndevts", context )
 	-- wards (torches): loading them at the first torch froze Dota for ~0.2 s (the camera jerked)
@@ -777,6 +780,33 @@ function MC:PlaceBlock( x, y, z, kind )
 	MC:ColumnChanged( x, z )
 end
 
+-- a secret trader: in the place of Dota's secret shopkeeper there (hidden), looking the way he did, his two standing
+-- signs in front of him, left and right
+function MC:SecretTrader( shop, profession )
+	local keeper, keeperD
+	for _, e in ipairs( Entities:FindAllByClassname( "ent_dota_shop" ) ) do
+		local d = ( e:GetAbsOrigin() - shop:GetAbsOrigin() ):Length2D()
+		if d < 1500 and ( not keeperD or d < keeperD ) then keeper, keeperD = e, d end
+	end
+	if not keeper then
+		local x, z = MC:CellOf( shop:GetAbsOrigin() )
+		table.insert( TRADERS, { x + 2.5, z + 0.5, profession } )
+		return
+	end
+	keeper:AddEffects( EF_NODRAW )
+	local p, f = keeper:GetAbsOrigin(), keeper:GetForwardVector()
+	local tx, tz = MC:ToMC( p )
+	local fx, fz = MC:DirToMC( f )
+	table.insert( TRADERS, { tx, tz, profession, fx, fz } )
+	for _, side in ipairs( { -1, 1 } ) do
+		local w = 1.6
+		local fo = side < 0 and 0.6 or 1.6 -- (the name sign a block nearer him, the goods one further back)
+		local x, z = math.floor( tx + fo * fx - w * side * fz ), math.floor( tz + fo * fz + w * side * fx )
+		MC:SignFacing( x, MC.heights[ x .. "," .. z ] or MC_FLOOR, z, side < 0 and "secret_1" or "secret_2", MC:DirToDota( fx, fz ) )
+	end
+	print( string.format( "[mc] secret trader %s at %.1f %.1f", profession, tx, tz ) )
+end
+
 function MC:SpawnTraders()
 	-- the basic shop: a little market ON our fountain, two rows of stalls facing each other across an aisle that runs
 	-- toward the map centre. Laid out on Minecraft's grid (the aisle along whichever axis is closer to that way).
@@ -894,46 +924,25 @@ function MC:SpawnTraders()
 		end
 	end
 	print( string.format( "[mc] market: shop %d,%d, red stall %d,%d, blue stall %d,%d, spawn %d,%d", sx, sz, rx, rz, bx, bz, MC.spawnX, MC.spawnZ ) )
-	-- Dota's shops are trigger_shop volumes (no API tells their type): the secret shop is taken as the nearest one that
-	-- is well away from the spawn (the fountain shop is at the spawn); a map with a single shop uses that one
-	local best, bestD, any
+	-- Dota's shops are trigger_shop volumes (no API tells their type): the two secret shops are the ones well away from
+	-- both fountains (the base shops stand by them); Radiant's is the one nearer our spawn. A map with fewer: what there is.
+	local dire
+	for _, e in ipairs( Entities:FindAllByClassname( "ent_dota_fountain" ) ) do
+		if e:GetTeamNumber() == DOTA_TEAM_BADGUYS then dire = e:GetAbsOrigin() end
+	end
+	local secrets, any = {}, nil
 	for _, e in ipairs( Entities:FindAllByClassname( "trigger_shop" ) ) do
-		local d = ( e:GetAbsOrigin() - a ):Length2D() / GRID
 		any = any or e
-		if d > 30 and ( not bestD or d < bestD ) then best, bestD = e, d end
+		local far = ( e:GetAbsOrigin() - a ):Length2D() / GRID > 30 and not ( dire and ( e:GetAbsOrigin() - dire ):Length2D() < 2500 )
+		if far then table.insert( secrets, e ) end
 	end
-	local secretShop = best or any
-	-- our secret trader takes the place of Dota's secret shopkeeper (hidden), looking the way he did
-	local keeper, keeperD
-	for _, e in ipairs( Entities:FindAllByClassname( "ent_dota_shop" ) ) do
-		local d = secretShop and ( e:GetAbsOrigin() - secretShop:GetAbsOrigin() ):Length2D()
-		if d and d < 1500 and ( not keeperD or d < keeperD ) then keeper, keeperD = e, d end
+	table.sort( secrets, function( p, q ) return ( p:GetAbsOrigin() - a ):Length2D() < ( q:GetAbsOrigin() - a ):Length2D() end )
+	if #secrets == 0 and any then secrets = { any } end
+	-- Radiant's secret trader the weaponsmith, Dire's the armorer (Progress.java: the same goods)
+	for i, shop in ipairs( secrets ) do
+		if i <= 2 then MC:SecretTrader( shop, i == 1 and "weaponsmith" or "armorer" ) end
 	end
-	if keeper then
-		keeper:AddEffects( EF_NODRAW )
-		local p, f = keeper:GetAbsOrigin(), keeper:GetForwardVector()
-		local kx, kz = MC:ToMC( p )
-		local kfx, kfz = MC:DirToMC( f )
-		table.insert( TRADERS, { kx, kz, "weaponsmith", kfx, kfz } )
-		-- his two standing signs in front of him, left and right, facing where he looks
-		local tx, tz = MC:ToMC( p )
-		local fx, fz = MC:DirToMC( f )
-		local rot = math.floor( ( math.deg( math.atan2( -fx, fz ) ) % 360 ) / 22.5 + 0.5 ) % 16
-		for _, side in ipairs( { -1, 1 } ) do
-			-- (the name sign: a block nearer him and turned a quarter, by hand)
-			local w = 1.6
-			local f = side < 0 and 0.6 or 1.6 -- (and a block further back)
-			local x, z = math.floor( tx + f * fx - w * side * fz ), math.floor( tz + f * fz + w * side * fx )
-			-- the goods sign looks where he looks; the name sign a quarter turned, outward
-			local d = MC:DirToDota( fx, fz ) -- (both look where he looks)
-			MC:SignFacing( x, MC.heights[ x .. "," .. z ] or MC_FLOOR, z, side < 0 and "secret_1" or "secret_2", d )
-			print( string.format( "[mc] secret sign at %d %d rot %d (trader %.1f %.1f facing %.2f %.2f)", x, z, rot, tx, tz, fx, fz ) )
-		end
-	else
-		local x, z = 20, 0
-		if secretShop then x, z = MC:CellOf( secretShop:GetAbsOrigin() ) end
-		table.insert( TRADERS, { x + 2.5, z + 0.5, "weaponsmith" } )
-	end
+	if #secrets == 0 then table.insert( TRADERS, { 22.5, 0.5, "weaponsmith" } ) end
 	-- the witch (potions): standing on the square, facing the spawn
 	table.insert( TRADERS, { MC.witchX + 0.5, MC.witchZ + 0.5, "cleric", MC.witchF[1], MC.witchF[2] } )
 	do -- her sign on one side, a brewing stand on the other (just for the look)

@@ -31,6 +31,25 @@ function MCBridge:PuppetGlide()
 	if ( g - at ):Length() > 400 then p:SetAbsOrigin( g ) else p:SetAbsOrigin( at + ( g - at ) * 0.5 ) end
 end
 
+function MCBridge:Blast( kind, x, y, z )
+	if not MC.anchor then return end
+	local p = to_dota( x, z )
+	p.z = MC.anchor.z + ( y - MC_FLOOR ) * GRID
+	local fx = ParticleManager:CreateParticle( kind == "smash" and "particles/units/heroes/hero_earthshaker/earthshaker_aftershock.vpcf"
+		or "particles/units/heroes/hero_windrunner/windrunner_windrun_burst.vpcf", PATTACH_WORLDORIGIN, nil )
+	ParticleManager:SetParticleControl( fx, 0, p )
+	ParticleManager:SetParticleControl( fx, 1, Vector( 350, 350, 350 ) )
+	ParticleManager:ReleaseParticleIndex( fx )
+	local radius, dist = kind == "smash" and 3.5 * GRID or 2.5 * GRID, kind == "smash" and 160 or 280
+	for _, u in ipairs( FindUnitsInRadius( DOTA_TEAM_GOODGUYS, p, nil, radius, DOTA_UNIT_TARGET_TEAM_BOTH,
+		DOTA_UNIT_TARGET_HERO + DOTA_UNIT_TARGET_BASIC, DOTA_UNIT_TARGET_FLAG_NONE, FIND_ANY_ORDER, false ) ) do
+		if not u.mc_player and not u.mc_puppet and not u.mc_block and not u:IsBuilding() and u:IsAlive() then
+			u:AddNewModifier( self.steve or u, nil, "modifier_knockback", { center_x = p.x, center_y = p.y, center_z = p.z,
+				duration = 0.4, knockback_duration = 0.4, knockback_distance = dist, knockback_height = 60, should_stun = 0 } )
+		end
+	end
+end
+
 function MCBridge:Tick()
 	self:PuppetGlide()
 	if not MC.anchor then return 0.1 end
@@ -290,6 +309,10 @@ function MCBridge:Apply( body, stale )
 
 		local cx, cy, cz, stage = line:match( "^crack (%S+) (%S+) (%S+) (%S+)" )
 		if cx then MC:Crack( tonumber( cx ), tonumber( cy ), tonumber( cz ), tonumber( stage ) ) end
+		-- a mace's smash, a wind charge's burst: Dota's look of it, and the units around knocked away (Minecraft's own
+		-- knockback, on Dota's side)
+		local kk, kx, ky, kz = line:match( "^(%a+) (%S+) (%S+) (%S+)" )
+		if kk == "smash" or kk == "wind" then self:Blast( kk, tonumber( kx ), tonumber( ky ), tonumber( kz ) ) end
 		local fx_, fy_, fz_, fs_ = line:match( "^fcrack (%S+) (%S+) (%S+) (%S+)" ) -- a falling build's block cracking (Sync.fallTick)
 		if fx_ then MC:CrackAt( tonumber( fx_ ), tonumber( fy_ ), tonumber( fz_ ), tonumber( fs_ ) ) end
 

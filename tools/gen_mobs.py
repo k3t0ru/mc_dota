@@ -192,7 +192,8 @@ for tier in ("wooden", "stone", "iron", "golden", "diamond", "netherite"):
         HELD[f"{tier}_{tool}"] = f"{tier}_{tool}"
 for i in ("bow", "bow_pulling_0", "bow_pulling_1", "bow_pulling_2", "flint_and_steel", "ender_pearl", "firework_rocket", "potion", "splash_potion", "golden_apple",
           "bread", "cooked_beef", "golden_carrot", "emerald", "arrow", "elytra", "stick", "diamond", "iron_ingot", "flint",
-          "book", "enchanted_book", "feather", "string", "paper", "leather", "gunpowder", "lapis_lazuli", "netherite_ingot"):
+          "book", "enchanted_book", "feather", "string", "paper", "leather", "gunpowder", "lapis_lazuli", "netherite_ingot",
+          "mace", "wind_charge", "shield"):
     HELD[i] = i
 HELD.update({"torch": "../block/torch", "soul_torch": "../block/soul_torch", "crossbow": "crossbow_standby", "clock": "clock_00"})
 HELD = {k: v for k, v in HELD.items() if f"assets/minecraft/textures/item/{v}.png".replace("item/../", "") in jar.namelist()}

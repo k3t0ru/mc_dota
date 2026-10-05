@@ -17,15 +17,15 @@ FONT_PX = 10  # texture pixels per font pixel: 4 lines of 10 fill the board
 
 SIGNS = {  # id -> kind, 4 lines (keep in step with SIGNS in addon_game_mode.lua)
 	"fletcher_name": ("wall", ["", "Лучник", "", ""]),
-	"fletcher_goods": ("wall", ["Материалы", "Еда", "Динамит, часы", ""]),
+	"fletcher_goods": ("wall", ["Луки, стрелы", "Еда", "", ""]),
 	"mason_name": ("wall", ["", "Каменщик", "", ""]),
-	"mason_goods": ("wall", ["Строительные", "блоки", "", ""]),
+	"mason_goods": ("wall", ["Блоки", "Динамит", "Факелы", ""]),
 	"librarian_name": ("wall", ["", "Библиотекарь", "", ""]),
 	"librarian_goods": ("wall", ["Зачарования", "книги, столы", "", ""]),
 	"toolsmith_name": ("wall", ["", "Инструменты", "", ""]),
-	"toolsmith_goods": ("wall", ["Кузня", "Ремонт:", "присесть + ПКМ", ""]),
+	"toolsmith_goods": ("wall", ["Кузня, железо", "Ремонт:", "присесть + ПКМ", ""]),
 	"secret_1": ("stand", ["", "Сикрет", "шоп", ""]),
-	"secret_2": ("stand", ["Алмазы", "Незерит", "Элитры", ""]),
+	"secret_2": ("stand", ["Алмазы", "Незерит", "Элитры", "Булава, ветер"]),
 	"witch": ("stand", ["", "Зелья", "", ""]),
 }
 

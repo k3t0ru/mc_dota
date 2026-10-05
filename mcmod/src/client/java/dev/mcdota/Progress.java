@@ -542,32 +542,37 @@ public final class Progress {
 	static {
 		// income: a lane creep ~1-2 emeralds, a neutral camp ~4-8 plus materials, a hero 6-17, a tower 10 (EMERALD_GOLD in Lua)
 		// craft costs that follow: iron sword 4, iron armour 46, diamond sword 8, diamond armour 96, netherite +25 a piece
-		TRADERS.add(new Trader("Лучник", "fletcher", List.of( // basic shop: the everyday materials
-			buy(1, "oak_log", 8), buy(1, "cobblestone", 32), buy(1, "string", 2), buy(1, "flint", 4), buy(1, "feather", 8),
-			buy(1, "leather", 2), buy(2, "iron_ingot"), buy(1, "gunpowder", 2), buy(1, "paper", 6),
-			buy(1, "arrow", 16), buy(1, "bread", 4), buy(1, "cooked_beef", 2), buy(6, "tnt"), buy(2, "flint_and_steel"),
-			buy(2, "clock"), // the clock shows Dota's game time (ClockHud)
-			buy(2, "torch"), buy(3, "soul_torch")))); // wards: a torch is an observer, a soul torch a sentry
+		TRADERS.add(new Trader("Лучник", "fletcher", List.of( // basic shop: bows, arrows, food
+			buy(3, "bow"), buy(5, "crossbow"), buy(1, "arrow", 16), buy(1, "string", 2), buy(1, "flint", 4),
+			buy(1, "feather", 8), buy(1, "bread", 4), buy(1, "cooked_beef", 2), buy(4, "golden_carrot", 2))));
 		TRADERS.add(new Trader("Библиотекарь", "librarian", List.of( // basic shop: enchanting
-			buy(12, "enchanting_table"), buy(2, "bookshelf"), buy(1, "lapis_lazuli", 8), buy(1, "book", 3), buy(8, "anvil"),
+			buy(12, "enchanting_table"), buy(2, "bookshelf"), buy(1, "lapis_lazuli", 8), buy(1, "book", 3), buy(1, "paper", 6),
+			buy(8, "anvil"),
 			book(15, "sharpness", 3), book(15, "protection", 3), book(12, "power", 3), book(10, "quick_charge", 2),
 			book(10, "multishot", 1), book(8, "piercing", 3), book(12, "fire_aspect", 2), book(12, "flame", 1),
 			book(8, "unbreaking", 3), book(6, "feather_falling", 4))));
 		TRADERS.add(new Trader("Инструментальщик (присесть + ПКМ: ремонт)", "toolsmith", List.of( // basic shop: smithing
-			buy(1, "crafting_table"), buy(3, "smithing_table"), buy(3, "shield"))));
+			buy(1, "crafting_table"), buy(3, "smithing_table"), buy(2, "iron_ingot"), buy(1, "leather", 2), buy(3, "shield"),
+			buy(2, "flint_and_steel"), buy(2, "clock")))); // the clock shows Dota's game time (ClockHud)
 		TRADERS.add(new Trader("Каменщик", "mason", List.of( // basic shop: building blocks (nothing to mine on Dota's map)
 			buy(1, "cobblestone", 64), buy(1, "stone", 48), buy(1, "oak_planks", 64), buy(1, "oak_log", 16), buy(1, "dirt", 64),
-			buy(1, "sand", 64), buy(1, "cobweb", 2))));
+			buy(1, "sand", 64), buy(1, "cobweb", 2), buy(6, "tnt"), buy(1, "gunpowder", 2),
+			buy(2, "torch"), buy(3, "soul_torch")))); // wards: a torch is an observer, a soul torch a sentry
 		TRADERS.add(new Trader("Ведьма", "cleric", List.of( // potions: for Steve (drink or splash) and against enemies (splash)
 			potion(3, "potion", "healing"), potion(5, "potion", "strong_healing"), potion(4, "potion", "regeneration"),
 			potion(3, "potion", "swiftness"), potion(5, "potion", "strength"), potion(4, "potion", "fire_resistance"),
 			potion(2, "potion", "leaping"), potion(4, "splash_potion", "healing"), potion(5, "splash_potion", "regeneration"),
 			potion(4, "splash_potion", "harming"), potion(7, "splash_potion", "strong_harming"), potion(4, "splash_potion", "poison"),
 			potion(3, "splash_potion", "slowness"), potion(3, "splash_potion", "weakness"))));
-		TRADERS.add(new Trader("Тайная лавка", "weaponsmith", List.of( // far from the spawn: the rare stuff
+		// far from the spawn, at both of Dota's secret shops: the rare stuff
+		List<String> secret = List.of(
 			buy(4, "diamond"), buy(20, "netherite_ingot"), buy(5, "netherite_upgrade_smithing_template"),
 			buy(60, "elytra"), buy(1, "firework_rocket", 4), buy(8, "golden_apple"), buy(2, "ender_pearl"),
-			book(25, "mending", 1), book(40, "sharpness", 5), book(30, "protection", 4), book(30, "power", 5))));
+			buy(40, "mace"), buy(1, "wind_charge", 4),
+			book(25, "mending", 1), book(40, "sharpness", 5), book(30, "protection", 4), book(30, "power", 5),
+			book(15, "density", 3), book(15, "breach", 3), book(20, "wind_burst", 1));
+		TRADERS.add(new Trader("Тайная лавка", "weaponsmith", secret));
+		TRADERS.add(new Trader("Тайная лавка", "armorer", secret)); // (Dire's side)
 	}
 
 	private static int ticks;
