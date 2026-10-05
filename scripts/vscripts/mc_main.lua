@@ -1194,6 +1194,7 @@ end
 function MC:DamageFilter( f )
 	if not f.entindex_victim_const or not f.entindex_attacker_const then return true end
 	local victim = EntIndexToHScript( f.entindex_victim_const )
+	if victim.mc_player and MCBridge.steveDamageOk then return true end -- (his death from Minecraft, credited: MCBridge "died")
 	if victim.mc_player then
 		MCBridge:OnSteveDamaged( victim, f.damage, f.entindex_attacker_const, f.entindex_inflictor_const and "spell" or "attack" )
 		return false

@@ -360,10 +360,20 @@ function MCBridge:Apply( body, stale )
 
 		local lost = line:match( "^died (%S+)" ) -- the Minecraft player died: so does his Dota hero (the killer gets the bounty)
 		if lost and self.steve and self.steve:IsAlive() then
-			local killer = self.lastAttacker and not self.lastAttacker:IsNull() and self.lastAttacker or self.steve
+			-- the kill: a hero who hit him in the last 15 s (Dota's rule for credit), else whoever hit him last; dealt as real
+			-- damage, so Dota counts it (the kill feed, the score, the bounty). Kill() alone credited no one.
+			local h = self.lastHeroAttacker
+			local killer = h and not h:IsNull() and GameRules:GetGameTime() - ( self.lastHeroAt or -99 ) < 15 and h
+				or self.lastAttacker and not self.lastAttacker:IsNull() and self.lastAttacker or nil
 			self.steve.mc_dead = true
-			self.steve:Kill( nil, killer )
-			if self.steve:IsAlive() then self.steve:ForceKill( false ) end -- no attacker (the void, /kill): Kill by himself does nothing
+			if killer then
+				self.steveDamageOk = true
+				ApplyDamage( { victim = self.steve, attacker = killer, damage = self.steve:GetHealth() + 10, damage_type = DAMAGE_TYPE_PURE,
+					damage_flags = DOTA_DAMAGE_FLAG_HPLOSS + DOTA_DAMAGE_FLAG_NO_DAMAGE_MULTIPLIERS + DOTA_DAMAGE_FLAG_BYPASSES_INVULNERABILITY } )
+				self.steveDamageOk = false
+			end
+			if self.steve:IsAlive() then self.steve:Kill( nil, killer or self.steve ) end
+			if self.steve:IsAlive() then self.steve:ForceKill( false ) end -- no attacker (the void, /kill)
 			-- (the respawn time is 0 until the next frame)
 			local steve = self.steve
 			steve:SetContextThink( "mc_dead", function()
@@ -698,6 +708,11 @@ end
 function MCBridge:OnSteveDamaged( victim, damage, attacker, kind )
 	local unit = attacker and EntIndexToHScript( attacker )
 	if unit and unit.GetUnitName then self.lastAttacker = unit end -- credited if Steve dies
+	local owner = unit and unit.GetPlayerOwner and unit:GetPlayerOwner()
+	local hero = unit and unit.IsRealHero and unit:IsRealHero() and unit or ( owner and owner.GetAssignedHero and owner:GetAssignedHero() )
+	if hero and hero.GetTeamNumber and self.steve and hero:GetTeamNumber() ~= self.steve:GetTeamNumber() then
+		self.lastHeroAttacker, self.lastHeroAt = hero, GameRules:GetGameTime()
+	end
 	local amount = damage * DOTA_TO_MC
 	if amount < 0.01 then return end
 	if GameRules:GetGameTime() - ( self.hurtSoundAt or 0 ) > 0.4 and self.steve then
