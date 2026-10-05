@@ -32,6 +32,9 @@ function MCBridge:PuppetGlide()
 	if GameRules:GetGameTime() - ( self.puppetHidAt or 0 ) > 1 then -- (its wearables, whenever they show up)
 		self.puppetHidAt = GameRules:GetGameTime()
 		MC:HideAttached( p )
+		for _, w in ipairs( Entities:FindAllByClassname( "dota_item_wearable" ) ) do
+			if w:GetMoveParent() == p or w:GetOwnerEntity() == p then w:RemoveSelf() end
+		end
 		if p:GetModelName() ~= "models/mc/steve_ghost.vmdl" then p:SetModel( "models/mc/steve_ghost.vmdl" ) end
 	end
 	if self.modelFx and self.puppetYaw then
@@ -64,13 +67,13 @@ function MCBridge:Projectile( id, kind, x, y, z, vx, vz )
 	self.projAt[ id ] = p
 end
 
-function MCBridge:Blast( kind, x, y, z )
+function MCBridge:Blast( kind, x, y, z, dmg )
 	if not MC.anchor then return end
 	local p = to_dota( x, z )
 	if kind ~= "smash" then p.z = MC.anchor.z + ( y - MC_FLOOR ) * GRID end -- (a smash: on the ground)
 	print( "[mc] " .. kind .. " at " .. tostring( p ) )
 	MC:DireSound( kind == "smash" and "MC.item.mace.smash_ground_heavy" or "MC.entity.wind_charge.wind_burst", p )
-	local fx = ParticleManager:CreateParticle( kind == "smash" and "particles/units/heroes/hero_earthshaker/earthshaker_aftershock.vpcf"
+	local fx = ParticleManager:CreateParticle( kind == "smash" and "particles/units/heroes/hero_earthshaker/earthshaker_echoslam_start.vpcf"
 		or "particles/units/heroes/hero_brewmaster/brewmaster_cyclone.vpcf", PATTACH_WORLDORIGIN, nil )
 	ParticleManager:SetParticleControl( fx, 0, p )
 	ParticleManager:SetParticleControl( fx, 1, Vector( 350, 350, 350 ) )
@@ -85,6 +88,9 @@ function MCBridge:Blast( kind, x, y, z )
 	for _, u in ipairs( FindUnitsInRadius( DOTA_TEAM_GOODGUYS, p, nil, radius, DOTA_UNIT_TARGET_TEAM_BOTH,
 		DOTA_UNIT_TARGET_HERO + DOTA_UNIT_TARGET_BASIC, DOTA_UNIT_TARGET_FLAG_NONE, FIND_ANY_ORDER, false ) ) do
 		if not u.mc_player and not u.mc_puppet and not u.mc_block and not u:IsBuilding() and u:IsAlive() then
+			if kind == "smash" and dmg and u ~= self.aim and self.steve and u:GetTeamNumber() ~= self.steve:GetTeamNumber() then
+				self:HitUnit( u, dmg * 0.5, false, "melee" )
+			end
 			u:AddNewModifier( self.steve or u, nil, "modifier_knockback", { center_x = p.x, center_y = p.y, center_z = p.z,
 				duration = 0.4, knockback_duration = 0.4, knockback_distance = dist, knockback_height = 60, should_stun = 0 } )
 		end
@@ -368,8 +374,8 @@ function MCBridge:Apply( body, stale )
 			ParticleManager:ReleaseParticleIndex( self.projs[ pend ] )
 			self.projs[ pend ] = nil
 		end
-		local kk, kx, ky, kz = line:match( "^(%a+) (%S+) (%S+) (%S+)" )
-		if kk == "smash" or kk == "wind" then self:Blast( kk, tonumber( kx ), tonumber( ky ), tonumber( kz ) ) end
+		local kk, kx, ky, kz, _, kd = line:match( "^(%a+) (%S+) (%S+) (%S+) ?(%S*) ?(%S*)" )
+		if kk == "smash" or kk == "wind" then self:Blast( kk, tonumber( kx ), tonumber( ky ), tonumber( kz ), tonumber( kd ) ) end
 		local fx_, fy_, fz_, fs_ = line:match( "^fcrack (%S+) (%S+) (%S+) (%S+)" ) -- a falling build's block cracking (Sync.fallTick)
 		if fx_ then MC:CrackAt( tonumber( fx_ ), tonumber( fy_ ), tonumber( fz_ ), tonumber( fs_ ) ) end
 

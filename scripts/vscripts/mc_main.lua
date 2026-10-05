@@ -55,7 +55,7 @@ function Precache( context )
 	PrecacheResource( "model", "models/mc/block_ghost.vmdl", context )
 	PrecacheUnitByNameSync( "npc_dota_hero_axe", context ) -- (Steve's stand-in, MCBridge:Puppet)
 	PrecacheResource( "soundfile", "soundevents/mc_sounds.vsndevts", context ) -- Minecraft's sounds (tools/gen_sounds.py)
-	PrecacheResource( "particle", "particles/units/heroes/hero_earthshaker/earthshaker_aftershock.vpcf", context ) -- a mace's smash
+	PrecacheResource( "particle", "particles/units/heroes/hero_earthshaker/earthshaker_echoslam_start.vpcf", context ) -- a mace's smash
 	PrecacheResource( "particle", "particles/units/heroes/hero_brewmaster/brewmaster_cyclone.vpcf", context ) -- a wind charge
 	for _, k in ipairs( { "wind_charge", "ender_pearl", "arrow" } ) do -- Steve's projectiles in flight (MCBridge:Projectile)
 		PrecacheResource( "particle", "particles/mc/steve/proj_" .. k .. ".vpcf", context )
@@ -186,6 +186,13 @@ function MC:Init()
 	mode:SetDaynightCycleDisabled( true )
 	GameRules:SetTimeOfDay( 0.5 )
 	mode:SetDamageFilter( Dynamic_Wrap( MC, "DamageFilter" ), MC )
+	-- Steve's stand-in takes no effects but ours (it stands where his camera is: an aura's look on it filled his view;
+	-- the real effect is on his hero)
+	mode:SetModifierGainedFilter( function( _, f )
+		local u = f.entindex_parent_const and EntIndexToHScript( f.entindex_parent_const )
+		if u and u.mc_puppet and not ( f.name_const or "" ):find( "^modifier_mc_" ) then return false end
+		return true
+	end, MC )
 	-- (Dire bots, for testing without a second player, walk and fight; only in the tools: in a real game Dota's team AI
 	-- then pressed the glyph over and over, "buildings fortified" for one team, then the other)
 	if IsInToolsMode() then mode:SetBotThinkingEnabled( true ) end
