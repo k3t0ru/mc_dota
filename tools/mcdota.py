@@ -330,6 +330,9 @@ def host(cfg, dota):
     for _ in range(10): # (the ports free)
         if not port_pids(): break
         time.sleep(0.5)
+    if port_pids():
+        fail(f"порты моста держит процесс {', '.join(map(str, port_pids()))}, и Windows не даёт его закрыть: закрой его в "
+             f"диспетчере задач (Подробности -> python, этот ИД -> Снять задачу, при нужде от администратора) или перезагрузи ПК")
     spawn([sys.executable, "-u", os.path.join(ROOT, "bridge", "bridge.py")], cwd=ROOT, stdout=log, stderr=log)
     time.sleep(2)
     blog = open(os.path.join(ROOT, "bridge", "bridge.log"), encoding="utf-8", errors="ignore").read()
