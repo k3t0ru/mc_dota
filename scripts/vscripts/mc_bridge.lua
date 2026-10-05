@@ -509,13 +509,14 @@ end
 function MCBridge:InFront()
 	local s = self.steve
 	local best, bd
-	for _, u in ipairs( FindUnitsInRadius( s:GetTeamNumber(), s:GetAbsOrigin(), nil, MELEE_REACH * GRID + 80, DOTA_UNIT_TARGET_TEAM_BOTH,
-		DOTA_UNIT_TARGET_HERO + DOTA_UNIT_TARGET_BASIC, DOTA_UNIT_TARGET_FLAG_NONE, FIND_CLOSEST, false ) ) do
+	-- (buildings too, measured to their edge: towers are wide; third person's crosshair met his own stand-in first)
+	for _, u in ipairs( FindUnitsInRadius( s:GetTeamNumber(), s:GetAbsOrigin(), nil, MELEE_REACH * GRID + 300, DOTA_UNIT_TARGET_TEAM_BOTH,
+		DOTA_UNIT_TARGET_HERO + DOTA_UNIT_TARGET_BASIC + DOTA_UNIT_TARGET_BUILDING, DOTA_UNIT_TARGET_FLAG_NONE, FIND_CLOSEST, false ) ) do
 		if u ~= s and self:Hittable( u ) then
 			local d = u:GetAbsOrigin() - s:GetAbsOrigin()
 			d.z = 0
-			local len = d:Length2D()
-			if len < 40 or d:Normalized():Dot( s:GetForwardVector() ) > 0.87 then
+			local len = math.max( 0, d:Length2D() - ( u:IsBuilding() and 150 or u:GetHullRadius() ) )
+			if len <= MELEE_REACH * GRID and ( len < 40 or d:Normalized():Dot( s:GetForwardVector() ) > 0.87 ) then
 				if not bd or len < bd then best, bd = u, len end
 			end
 		end
@@ -554,6 +555,7 @@ function MCBridge:Puppet( u, pos, feetY, yaw, moved )
 		p = CreateUnitByName( "npc_dota_hero_axe", u:GetAbsOrigin(), false, u, u, u:GetTeamNumber() )
 		if not p then return end
 		p.mc_puppet = true
+		p:SetControllableByPlayer( u:GetPlayerOwnerID(), true ) -- (owned by Steve's player: his crosshair skips it, fpcam.js)
 		p:SetOriginalModel( "models/mc/steve_ghost.vmdl" )
 		p:SetModel( "models/mc/steve_ghost.vmdl" )
 		p:SetModelScale( 1 )

@@ -115,7 +115,9 @@ function reportAim() {
 		var hits = GameUI.FindScreenEntities( [ cx + pts[k][0], cy + pts[k][1] ] ) || [];
 		for ( var i = 0; i < hits.length; i++ ) {
 			var e = hits[i].entityIndex;
-			if ( e !== me && Entities.IsAlive( e ) && !Entities.IsInvulnerable( e ) ) { aim = e; break; }
+			// (not his own stand-in, owned by him, in front of the camera in third person; not the blocks' units)
+			if ( e !== me && Entities.IsAlive( e ) && !Entities.IsInvulnerable( e ) && Entities.GetPlayerOwnerID( e ) !== Players.GetLocalPlayer()
+				&& ( Entities.GetUnitName( e ) || "" ).indexOf( "npc_mc_" ) !== 0 ) { aim = e; break; }
 		}
 	}
 	if ( aim === aimSent && now - aimAt < 500 ) return;
