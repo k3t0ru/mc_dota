@@ -205,6 +205,8 @@ function MC:Init()
 	-- only his Minecraft max health. A deny gives the denier nothing.
 	mode:SetModifyExperienceFilter( function( _, f )
 		local s = MCBridge.steve
+		-- (his stand-in is a hero of no player's, at his side: its share of a kill's XP is his)
+		if s and ( f.player_id_const == nil or f.player_id_const < 0 ) then MC:SteveXP( f.experience ) return false end
 		if not s or f.player_id_const ~= s:GetPlayerOwnerID() then return true end
 		if not s.mc_denying then MC:SteveXP( f.experience ) end
 		return false

@@ -577,8 +577,8 @@ function MCBridge:Puppet( u, pos, feetY, yaw, moved )
 		-- (a hero with nothing drawn of its own: Io's glow is the hero's, not its model's, and showed)
 		p = CreateUnitByName( "npc_dota_hero_axe", u:GetAbsOrigin(), false, nil, nil, u:GetTeamNumber() )
 		if not p then return end
-		p.mc_puppet = true
-		p:MakeIllusion()
+		p.mc_puppet = true -- (not an illusion: Dota tints illusions for their team with its own shader, and the invisible
+		-- ghost showed as a purple shape in front of Steve's camera)
 		self.puppetSaidAt = nil
 		p:SetOriginalModel( "models/mc/steve_ghost.vmdl" )
 		p:SetModel( "models/mc/steve_ghost.vmdl" )
