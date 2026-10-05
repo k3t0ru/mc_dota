@@ -23,7 +23,16 @@ function MCBridge:Send( line ) table.insert( self.out, line ) end
 local function to_mc( p ) return MC:ToMC( p ) end
 local function to_dota( x, z ) return GetGroundPosition( MC.anchor + MC:Offset( x, z ), nil ) end
 
+-- Steve's stand-in glides toward him every tick: half the way (his poses come in bursts: set straight, it jerked)
+function MCBridge:PuppetGlide()
+	local p, g = self.puppet, self.puppetGoal
+	if not p or p:IsNull() or not g then return end
+	local at = p:GetAbsOrigin()
+	if ( g - at ):Length() > 400 then p:SetAbsOrigin( g ) else p:SetAbsOrigin( at + ( g - at ) * 0.5 ) end
+end
+
 function MCBridge:Tick()
+	self:PuppetGlide()
 	if not MC.anchor then return 0.1 end
 	-- one request per tick without waiting for the previous answer (waiting halved the camera's pose rate to ~10 Hz);
 	-- a few may be in flight, more means the bridge is gone (a request to a dead bridge never answers)
@@ -113,7 +122,9 @@ end
 
 function MCBridge:Apply( body, stale )
 	-- a swing at an ally (a deny) first: its sweep's hit lines may come earlier in the same batch
-	if body:find( "swing" ) then self.swingAt = GameRules:GetGameTime() end -- (Dire's view of him swings: SteveModel)
+	if body:find( "swing" ) and GameRules:GetGameTime() - ( self.swingAt or -10 ) > 0.45 then -- (Dire's view of his swing:
+		self.swingAt = GameRules:GetGameTime()                    -- once per swing, a repeat restarted it)
+	end
 	if body:find( "swing " ) and self.aim and not self.aim:IsNull() and self.steve
 		and self.aim:GetTeamNumber() == self.steve:GetTeamNumber() then self.denySwingAt = GameRules:GetGameTime() end
 	for line in body:gmatch( "[^\n]+" ) do
@@ -459,9 +470,13 @@ function MCBridge:Puppet( u, pos, feetY, yaw, moved )
 	local now = GameRules:GetGameTime()
 	local p = self.puppet
 	if not p or p:IsNull() then
-		p = CreateUnitByName( "npc_mc_steve", u:GetAbsOrigin(), false, u, u, u:GetTeamNumber() )
+		p = CreateUnitByName( "npc_dota_hero_target_dummy", u:GetAbsOrigin(), false, u, u, u:GetTeamNumber() )
 		if not p then return end
 		p.mc_puppet = true
+		p:SetOriginalModel( "models/mc/steve_ghost.vmdl" )
+		p:SetModel( "models/mc/steve_ghost.vmdl" )
+		p:SetModelScale( 1 )
+		MC:HideAttached( p )
 		p:AddNewModifier( p, nil, "modifier_mc_puppet", {} )
 		self.puppet, self.modelKind = p, nil
 	end
@@ -470,7 +485,7 @@ function MCBridge:Puppet( u, pos, feetY, yaw, moved )
 	if alive then
 		local z = GetGroundHeight( pos, nil )
 		if feetY and MC.anchor then z = MC.anchor.z + ( feetY - MC_FLOOR ) * GRID end
-		p:SetAbsOrigin( Vector( pos.x, pos.y, z ) )
+		self.puppetGoal = Vector( pos.x, pos.y, z )
 		local aloft = z - GetGroundHeight( pos, nil ) > 3 * GRID
 		for _, unit in ipairs( { u, p } ) do
 			local has = unit:HasModifier( "modifier_mc_aloft" )

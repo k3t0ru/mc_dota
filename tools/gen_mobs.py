@@ -112,6 +112,21 @@ def zombie_gold(leg, arm):
          ("gold", (0, 16), (-2, 0, -2), (4, 12, 4), 0.6, (1.9, 12, 0), -leg, "leg_l")]
 
 
+def held_transform(pivot):
+    # Minecraft's third-person right hand (ItemInHandLayer + the "handheld" display): from the arm's pivot, turned
+    # -90 about x and 180 about y, moved (1, 2, -10) px, then (0, 4, 0.5) px, turned (0, -90, 55) degrees (x, y, z),
+    # scaled 0.85, the item's picture centred. The picture here: x across, y down the picture, z along it.
+    def rx(a): c, s_ = math.cos(a), math.sin(a); return [[1, 0, 0], [0, c, -s_], [0, s_, c]]
+    def ry(a): c, s_ = math.cos(a), math.sin(a); return [[c, 0, s_], [0, 1, 0], [-s_, 0, c]]
+    def rz(a): c, s_ = math.cos(a), math.sin(a); return [[c, -s_, 0], [s_, c, 0], [0, 0, 1]]
+    A = mat_mul(rx(math.radians(-90)), ry(math.radians(180)))
+    D = mat_mul(rx(0), mat_mul(ry(math.radians(-90)), rz(math.radians(55))))
+    P = [[0, 0, 1], [0, -1, 0], [1, 0, 0]]  # (picture x along, y down) -> item (x right, y up, z out)
+    rot = mat_mul(A, mat_mul(D, [[0.85 * v for v in row] for row in P]))
+    c = mat_vec(A, (1, 6, -9.5))
+    return tuple(p + q for p, q in zip(pivot, c)), rot
+
+
 def steve(leg, arm, mode="stand", elytra=False, item=None):
     # Minecraft's PlayerModel (wide arms) with its outer layers, in its poses (the Dota players' view of Steve,
     # MCBridge:Puppet): walking (arms swing against the legs), a hit (the right arm swings), sneaking (bent forward,
@@ -146,7 +161,8 @@ def steve(leg, arm, mode="stand", elytra=False, item=None):
          (t, (16, 48), (-2, 0, -2), (4, 12, 4), 0, (1.9, ly, lz), -leg, "leg_l"),
          (t, (0, 48), (-2, 0, -2), (4, 12, 4), 0.25, (1.9, ly, lz), -leg, "leg_l")]
     if item:  # the item in his right hand: its picture upright along the arm's side, the handle in the hand, pointing forward
-        b.append(("item:" + item, None, (0, -7.6, -1.4), (0, 9, 9), 0, (-6, ay + 10, -0.5 + rx), math.pi / 2, "arm_r"))
+        off, rot = held_transform((-5, ay, rx))
+        b.append(("item:" + item, None, (0, -8, -8), (0, 16, 16), 0, off, rot, "arm_r"))
     if elytra:  # Minecraft's ElytraModel, on the back (2 px behind the body)
         x, z = (0.349, -math.pi / 2) if mode == "fly" else (0.2618 + bend, -0.2618)
         b += [("elytra", (22, 0), (-10, 0, 0), (10, 20, 2), 1.0, (5, by, 2), (x, 0, z), "wing_l"),

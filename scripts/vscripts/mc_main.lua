@@ -53,6 +53,7 @@ function Precache( context )
 	PrecacheResource( "model", "models/mc/mob_steve.vmdl", context )
 	PrecacheResource( "model", "models/mc/steve_ghost.vmdl", context )
 	PrecacheResource( "model", "models/mc/block_ghost.vmdl", context )
+	PrecacheUnitByNameSync( "npc_dota_hero_target_dummy", context ) -- (Steve's stand-in, MCBridge:Puppet)
 	PrecacheResource( "particle", "particles/units/heroes/hero_techies/techies_land_mine_explode.vpcf", context )
 	PrecacheResource( "soundfile", "soundevents/game_sounds_heroes/game_sounds_techies.vsndevts", context )
 	-- wards (torches): loading them at the first torch froze Dota for ~0.2 s (the camera jerked)
@@ -1062,9 +1063,10 @@ function MC:Crack( bx, by, bz, stage )
 		return
 	end
 	if not MC.props[ bx .. "," .. by .. "," .. bz ] then return end
-	local pos = MC:BlockPos( bx, by, bz ) - Vector( 0, 0, 1 )
+	local pos = MC:BlockPos( bx, by, bz ) - Vector( 0, 0, 0.5 )
 	MC.crack = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/crack_" .. stage .. ".vmdl",
 		origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ), angles = string.format( "0 %f 0", GRID_ROT ) } )
+	MC.crack:SetModelScale( ( GRID + 1 ) / 128 ) -- (the crack cube is 128 units: on the block, a hair bigger)
 	MC.crack:SetModelScale( GRID / 128 * 1.02 )
 end
 
@@ -1076,9 +1078,10 @@ function MC:CrackAt( bx, by, bz, stage )
 	if c and not c:IsNull() then c:RemoveSelf() end
 	MC.cracks[ key ] = nil
 	if stage < 0 or stage > 9 or not MC.props[ key ] then return end
-	local pos = MC:BlockPos( bx, by, bz ) - Vector( 0, 0, 1 )
+	local pos = MC:BlockPos( bx, by, bz ) - Vector( 0, 0, 0.5 )
 	MC.cracks[ key ] = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/crack_" .. stage .. ".vmdl",
 		origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ), angles = string.format( "0 %f 0", GRID_ROT ) } )
+	MC.cracks[ key ]:SetModelScale( ( GRID + 1 ) / 128 )
 end
 
 function MC:HideBlock( bx, by, bz )

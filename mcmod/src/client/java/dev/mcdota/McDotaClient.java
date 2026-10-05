@@ -37,6 +37,7 @@ public class McDotaClient implements ClientModInitializer {
 			mc.options.getSoundSourceOptionInstance(net.minecraft.sounds.SoundSource.MASTER).set(Integer.getInteger("mcdota.volume", 40) / 100.0);
 			mc.options.framerateLimit().set(Integer.getInteger("mcdota.fps", 30)); // Dota's camera moves once per Minecraft frame (MC_FPS in tools/env.sh)
 			mc.options.ambientOcclusion().set(false); // shaded corners turn the magenta ground into dark triangles
+			mc.options.pauseOnLostFocus = false; // (the game runs on while Dota has the focus)
 			mc.options.autoJump().set(false); // (the player jumps himself, like in Minecraft)
 			mc.options.bobView().set(false); // walking bob shakes only Minecraft's layer, so blocks would swim over the map
 			// Minecraft only draws the hand, the HUD and entities here (Dota draws the world): a short view distance leaves

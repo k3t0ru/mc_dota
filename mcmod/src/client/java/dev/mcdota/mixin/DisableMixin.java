@@ -21,6 +21,12 @@ public class DisableMixin {
 		if (dev.mcdota.Progress.noAttack) ci.cancel();
 	}
 
+	// never paused (Esc's menu paused the world: Dota's hits on Steve went nowhere meanwhile)
+	@Inject(method = "isPaused", at = @At("HEAD"), cancellable = true)
+	private void mcdota$neverPaused(CallbackInfoReturnable<Boolean> cir) {
+		cir.setReturnValue(false);
+	}
+
 	@Inject(method = "startUseItem", at = @At("HEAD"), cancellable = true)
 	private void mcdota$noUse(CallbackInfo ci) {
 		if (dev.mcdota.Progress.noUse) ci.cancel();
