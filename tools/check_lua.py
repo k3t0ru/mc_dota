@@ -42,13 +42,13 @@ if not bad:
             local f = assert( loadfile( ROOT .. "/" .. name .. ".lua", "t", env ) )
             return f()
         end
-        local main = assert( loadfile( ROOT .. "/addon_game_mode.lua", "t", env ) )
+        local main = assert( loadfile( ROOT .. "/mc_main.lua", "t", env ) )
         local ok, e = pcall( main )
         if not ok then return tostring( e ) end
     ''')
     if err:
         bad += 1
-        print("ERROR running addon_game_mode.lua's top level:", err)
+        print("ERROR running mc_main.lua top level:", err)
 
 print("lua ok" if not bad else f"{bad} problem(s)")
 sys.exit(1 if bad else 0)
