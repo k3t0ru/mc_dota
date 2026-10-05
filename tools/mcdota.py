@@ -4,7 +4,7 @@
 #   python tools/mcdota.py prepare  a Dota player's part without the game: updates, checks, downloads, assets
 # (play_host.bat / play_dota.bat do the same by double click.) Settings: settings.ini next to this folder (made on the
 # first run, with comments). Windows only (Dota's tools are).
-import configparser, glob, hashlib, json, os, shutil, subprocess, sys, time, urllib.request, zipfile
+import configparser, glob, hashlib, json, os, re, shutil, subprocess, sys, time, urllib.request, zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOLS = os.path.join(ROOT, "tools")
@@ -196,24 +196,26 @@ def assets(dota):
             elif old: changed.append(f)  # (a new file: compiled anyway)
         except OSError:
             pass
+    # Dota's compiler judges a model or material by its own file: one whose texture or mesh changed (and not itself)
+    # was left old (a sign's new text). Their compiled copies go first, so the compile below makes them again.
+    croot = os.path.join(ROOT, "content")
+    rels = {os.path.relpath(f, croot).replace("\\", "/").lower() for f in changed if not f.endswith((".vmdl", ".vmat", ".vpcf"))}
+    if rels:
+        stale = 0
+        for f in glob.glob(os.path.join(croot, "**", "*.vm*"), recursive=True):
+            if not f.endswith((".vmdl", ".vmat")): continue
+            refs = set(re.findall(r'"([\w/.\-]+\.(?:png|tga|smd|obj|dmx|vmat))"', open(f, encoding="utf-8", errors="ignore").read().lower()))
+            if refs & rels:
+                out = os.path.join(ROOT, os.path.relpath(f, croot)) + "_c"
+                if os.path.exists(out):
+                    os.remove(out)
+                    stale += 1
+        if stale: say(f"  пересоберу из-за изменившихся текстур/мешей: {stale}")
     say("компилирую ресурсы для Dota (первый раз ~15-20 минут)...")
     for pat in ("models\\mcb\\*.vmdl", "models\\*.vmdl", "particles\\*.vpcf", "panorama\\*.xml", "panorama\\*.js"):
         r = subprocess.run([rc, "-r", "-i", os.path.join(content, pat)], capture_output=True, text=True, errors="ignore")
         bad = [l for l in r.stdout.splitlines() if "failed" in l or "rror" in l]
         if bad: say("  " + pat + ": " + " | ".join(l.strip() for l in bad[-3:]))
-    # Dota's compiler judges a model or material by its own file: one whose texture or mesh changed (and not itself)
-    # is compiled again by force (a sign's new text stayed old)
-    croot = os.path.join(ROOT, "content")
-    rels = [os.path.relpath(f, croot).replace("\\", "/") for f in changed if not f.endswith((".vmdl", ".vmat", ".vpcf"))]
-    force = set()
-    if rels:
-        for f in glob.glob(os.path.join(croot, "**", "*.vm*"), recursive=True):
-            if f.endswith((".vmdl", ".vmat")):
-                text = open(f, encoding="utf-8", errors="ignore").read()
-                if any(r in text for r in rels): force.add(f)
-    for f in sorted(force):
-        subprocess.run([rc, "-f", "-i", os.path.join(content, os.path.relpath(f, croot))], capture_output=True)
-    if force: say(f"  пересобрано из-за изменившихся текстур/мешей: {len(force)}")
     gone = missing_compiled()
     if gone: fail("Dota не скомпилировала: " + ", ".join(gone) + " (ошибки компиляции выше)")
     os.makedirs(CACHE, exist_ok=True)
