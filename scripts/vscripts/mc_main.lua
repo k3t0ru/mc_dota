@@ -1223,6 +1223,7 @@ function MC:OnKilled( e )
 end
 
 -- each Dota script file has its own environment; share these with abilities and mc_bridge.lua
+_G.Precache, _G.Activate = Precache, Activate -- (addon_game_mode.lua hands them to Dota)
 _G.CALIBRATE = CALIBRATE
 _G.EMERALD_GOLD, _G.TRADERS, _G.XP_TABLE = EMERALD_GOLD, TRADERS, XP_TABLE
 _G.SIGN_MODELS = SIGN_MODELS
