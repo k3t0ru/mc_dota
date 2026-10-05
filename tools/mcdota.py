@@ -38,8 +38,9 @@ java_home = auto
 window = fullscreen
 ; Dota's resolution, e.g. 1920x1080; auto = the screen's own
 resolution = auto
-; the host's address (same network, or a VPN like ZeroTier/Radmin; the host's UDP port 27015 must be reachable)
-host_ip = 192.168.0.10
+; the host's address; auto = found by itself on the local network (the host announces its game; its address may
+; change after a restart). The host's UDP port 27015 must be reachable
+host_ip = auto
 """
 
 
@@ -300,6 +301,7 @@ def host(cfg, dota):
     except OSError: pass
     dstart = os.path.getsize(dlog) if os.path.exists(dlog) else 0 # (a log still held open: read past its old end)
     say("запускаю Dota: когда все подключатся, нажми в лобби кнопку старта (Minecraft запустится после неё)")
+    announce(dlog, dstart) # (Dota players' launchers find this game on the network)
     subprocess.Popen([os.path.join(dota, "game", "bin", "win64", "dota2.exe"), "-novid", "-console", "-condebug", "-windowed",
                       "-noborder", "-w", w, "-h", h, "+dota_camera_edgemove", "0", "+dota_camera_speed", "0", "+dota_camera_lock", "0",
                       "+dota_camera_fov_min", "90", "+dota_camera_fov_max", "90", "+dota_camera_z_interp_speed", "4",
@@ -332,8 +334,65 @@ def host(cfg, dota):
     kill(dota_pids() + bridge_pids() + mc_pids())
 
 
+# The host announces its game on the local network (UDP broadcast, once a second, from when its Dota accepts players):
+# a Dota player's launcher finds it there, whatever address the router gave the host this time.
+ANNOUNCE_PORT = 27199
+
+
+def commit():
+    return subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip() or "?"
+
+
+def announce(dlog, dstart):
+    import socket, threading
+    def run():
+        wait_for(dlog, ["[mc] loaded"], 3600, dstart)
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        msg = f"MCDOTA {commit()}".encode()
+        while True:
+            targets = {"255.255.255.255"}
+            try:
+                for ip in socket.gethostbyname_ex(socket.gethostname())[2]:
+                    if not ip.startswith("127."): targets.add(ip.rsplit(".", 1)[0] + ".255")
+            except OSError:
+                pass
+            for t in targets:
+                try: s.sendto(msg, (t, ANNOUNCE_PORT))
+                except OSError: pass
+            time.sleep(1)
+    threading.Thread(target=run, daemon=True).start()
+
+
+def find_host(cfg):
+    import socket
+    want = cfg["player"]["host_ip"].strip().lower()
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    s.bind(("", ANNOUNCE_PORT))
+    s.settimeout(1)
+    say("ищу хоста в сети (он должен быть запущен и дойти до лобби Доты)...")
+    start, told = time.time(), 0
+    while True:
+        try:
+            data, (ip, _) = s.recvfrom(256)
+            if data.startswith(b"MCDOTA"):
+                v = data.decode(errors="ignore").split()[1:2]
+                if v and v[0] != commit(): say(f"у хоста другая версия игры ({v[0]}, у тебя {commit()}): пусть он перезапустит play_host.bat")
+                return ip
+        except socket.timeout:
+            pass
+        waited = time.time() - start
+        if want not in ("", "auto") and waited > 5:  # (an address in settings.ini, and no host heard: that one)
+            say(f"хост не отозвался, пробую адрес из settings.ini: {want}")
+            return want
+        if waited - told > 30:
+            told = waited
+            say("всё ещё жду хоста (запущен ли play_host.bat? одна ли сеть?)")
+
+
 def player(cfg, dota):
-    ip = cfg["player"]["host_ip"].strip()
+    ip = find_host(cfg)
     say(f"подключаюсь к хосту {ip}")
     mode = cfg["player"]["window"].strip().lower()
     args = {"fullscreen": ["-fullscreen"], "windowed": ["-windowed"]}.get(mode, ["-windowed", "-noborder"])
@@ -346,6 +405,7 @@ def player(cfg, dota):
         args += ["-w", str(u.GetSystemMetrics(0)), "-h", str(u.GetSystemMetrics(1))]
     subprocess.Popen([os.path.join(dota, "game", "bin", "win64", "dota2.exe"), "-novid", "-console", "-condebug"] + args + ["+connect", ip])
     say("Dota запускается. Если что-то не так: пришли хосту " + os.path.join(dota, "game", "dota", "console.log"))
+    input("Enter - закрыть это окно") # (it closed by itself before: nothing could be read)
 
 
 def main():
