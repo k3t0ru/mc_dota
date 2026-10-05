@@ -258,6 +258,18 @@ def kill(pids):
 
 def dota_pids(): return ps("(Get-Process dota2 -ErrorAction SilentlyContinue).Id")
 def mc_pids(): return ps("Get-CimInstance Win32_Process -Filter \"name='java.exe'\" | Where-Object { $_.CommandLine -like '*fabric.dli*' } | ForEach-Object { $_.ProcessId }")
+def port_pids():
+    # whoever holds the bridge's ports (a bridge from before: Microsoft Store's Python hides its command line, so it
+    # wasn't found by it, kept the ports, and the new bridge died: new messages went nowhere)
+    out = subprocess.run(["netstat", "-ano"], capture_output=True, text=True, errors="ignore").stdout
+    pids = set()
+    for line in out.splitlines():
+        cols = line.split()
+        if len(cols) >= 4 and (cols[1].endswith(":27100") and "LISTEN" in line or cols[1].endswith(":27101")) and cols[-1].isdigit():
+            pids.add(int(cols[-1]))
+    return [p for p in pids if p > 0]
+
+
 def bridge_pids(): return ps("Get-CimInstance Win32_Process -Filter \"name like 'python%.exe'\" | Where-Object { $_.CommandLine -like '*bridge.py*' } | ForEach-Object { $_.ProcessId }")
 
 
@@ -306,7 +318,7 @@ def host(cfg, dota):
     # Lua first: an error in it silently drops the whole game mode
     if subprocess.run([sys.executable, os.path.join(TOOLS, "check_lua.py")], cwd=ROOT).returncode:
         fail("ошибка в Lua-скриптах (см. выше)")
-    kill(mc_pids() + dota_pids() + bridge_pids())
+    kill(mc_pids() + dota_pids() + bridge_pids() + port_pids())
     for i in range(60): # a Dota that hung can take a while to go
         if not dota_pids(): break
         if i == 5: say("жду, пока закроется старая Dota...")
@@ -315,7 +327,13 @@ def host(cfg, dota):
         fail("старая Dota не закрывается: закрой её в диспетчере задач (или перезагрузи ПК) и запусти снова")
     say("мост Minecraft <-> Dota")
     log = open(os.path.join(ROOT, "bridge", "bridge.log"), "w")
+    for _ in range(10): # (the ports free)
+        if not port_pids(): break
+        time.sleep(0.5)
     spawn([sys.executable, "-u", os.path.join(ROOT, "bridge", "bridge.py")], cwd=ROOT, stdout=log, stderr=log)
+    time.sleep(2)
+    blog = open(os.path.join(ROOT, "bridge", "bridge.log"), encoding="utf-8", errors="ignore").read()
+    if "Error" in blog or "Traceback" in blog: fail("мост не запустился (порт занят?): см. bridge/bridge.log")
     dlog = os.path.join(dota, "game", "dota", "console.log")
     try: os.remove(dlog)
     except OSError: pass
@@ -351,7 +369,7 @@ def host(cfg, dota):
     say("готово: играем. Это окно закроется само, когда закроется Minecraft")
     mc.wait()
     # Minecraft closed: the game is over for the host (Steve): Dota and the bridge go too
-    kill(dota_pids() + bridge_pids() + mc_pids())
+    kill(dota_pids() + bridge_pids() + port_pids() + mc_pids())
 
 
 # The host announces its game on the local network (UDP broadcast, once a second, from when its Dota accepts players):

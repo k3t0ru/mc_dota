@@ -67,7 +67,7 @@ end
 function MCBridge:Blast( kind, x, y, z )
 	if not MC.anchor then return end
 	local p = to_dota( x, z )
-	p.z = MC.anchor.z + ( y - MC_FLOOR ) * GRID
+	if kind ~= "smash" then p.z = MC.anchor.z + ( y - MC_FLOOR ) * GRID end -- (a smash: on the ground)
 	print( "[mc] " .. kind .. " at " .. tostring( p ) )
 	MC:DireSound( kind == "smash" and "MC.item.mace.smash_ground_heavy" or "MC.entity.wind_charge.wind_burst", p )
 	local fx = ParticleManager:CreateParticle( kind == "smash" and "particles/units/heroes/hero_earthshaker/earthshaker_aftershock.vpcf"

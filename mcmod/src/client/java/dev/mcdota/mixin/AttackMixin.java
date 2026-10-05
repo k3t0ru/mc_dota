@@ -61,8 +61,11 @@ public class AttackMixin {
 				dmg += bonus * s;
 				boolean heavy = clientFall > 5;
 				var lv = sp.level();
-				lv.levelEvent(2013, sp.blockPosition(), 750);
-				lv.playSound(null, sp.getX(), sp.getY(), sp.getZ(), heavy ? net.minecraft.sounds.SoundEvents.MACE_SMASH_GROUND_HEAVY
+				// (on the ground he comes down on, like Minecraft's: the target's feet)
+				var ground = sp.blockPosition();
+				for (int i = 0; i < 40 && lv.getBlockState(ground.below()).isAir(); i++) ground = ground.below();
+				lv.levelEvent(2013, ground, 750);
+				lv.playSound(null, ground.getX() + 0.5, ground.getY(), ground.getZ() + 0.5, heavy ? net.minecraft.sounds.SoundEvents.MACE_SMASH_GROUND_HEAVY
 					: net.minecraft.sounds.SoundEvents.MACE_SMASH_GROUND, net.minecraft.sounds.SoundSource.PLAYERS, 1f, 1f);
 				sp.resetFallDistance();
 				dev.mcdota.Sync.out(String.format(java.util.Locale.ROOT, "smash %.2f %.2f %.2f %d", sp.getX(), sp.getY(), sp.getZ(), heavy ? 1 : 0));

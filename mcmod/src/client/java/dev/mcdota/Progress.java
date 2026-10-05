@@ -144,6 +144,9 @@ public final class Progress {
 				return;
 			}
 		}
+		// (Dota's hits come one after another, several creeps at once: Minecraft's half second of immunity after a hit
+		// dropped all but the first)
+		player.invulnerableTime = 0;
 		String cmd = String.format(Locale.ROOT, "damage @p %.2f minecraft:mob_attack", amount);
 		if (from == null || !Sync.run(server, cmd + " by @e[tag=dota_" + attacker + ",limit=1]", false)) Sync.run(server, cmd);
 	}
