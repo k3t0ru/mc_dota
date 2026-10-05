@@ -29,6 +29,11 @@ function MCBridge:PuppetGlide()
 	if not p or p:IsNull() or not g then return end
 	local at = p:GetAbsOrigin()
 	if ( g - at ):Length() > 400 then p:SetAbsOrigin( g ) else p:SetAbsOrigin( at + ( g - at ) * 0.5 ) end
+	if GameRules:GetGameTime() - ( self.puppetHidAt or 0 ) > 1 then -- (its wearables, whenever they show up)
+		self.puppetHidAt = GameRules:GetGameTime()
+		MC:HideAttached( p )
+		if p:GetModelName() ~= "models/mc/steve_ghost.vmdl" then p:SetModel( "models/mc/steve_ghost.vmdl" ) end
+	end
 	if self.modelFx and self.puppetYaw then
 		ParticleManager:SetParticleControlForward( self.modelFx, 1, MC:DirToDota( -math.sin( self.puppetYaw ), math.cos( self.puppetYaw ) ) )
 	end
@@ -545,7 +550,8 @@ function MCBridge:Puppet( u, pos, feetY, yaw, moved )
 	local now = GameRules:GetGameTime()
 	local p = self.puppet
 	if not p or p:IsNull() then
-		p = CreateUnitByName( "npc_dota_hero_wisp", u:GetAbsOrigin(), false, u, u, u:GetTeamNumber() )
+		-- (a hero with nothing drawn of its own: Io's glow is the hero's, not its model's, and showed)
+		p = CreateUnitByName( "npc_dota_hero_axe", u:GetAbsOrigin(), false, u, u, u:GetTeamNumber() )
 		if not p then return end
 		p.mc_puppet = true
 		p:SetOriginalModel( "models/mc/steve_ghost.vmdl" )
