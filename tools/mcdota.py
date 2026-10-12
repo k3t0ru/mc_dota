@@ -452,11 +452,22 @@ def player(cfg, dota):
             if not dota_pids(): break
             time.sleep(1)
         if dota_pids(): fail("старая Dota не закрывается: закрой dota2.exe в диспетчере задач (или перезагрузи ПК) и запусти снова")
-    subprocess.Popen([os.path.join(dota, "game", "bin", "win64", "dota2.exe"), "-novid", "-console", "-condebug"] + args + ["+connect", ip])
-    for _ in range(40): # (did it come up?)
+    # through Steam (it updates Dota first when Valve has a new version: dota2.exe started directly then just quit);
+    # Steam may ask once whether to allow these launch options: allow
+    import urllib.parse
+    line = " ".join(["-novid", "-console", "-condebug"] + args + ["+connect", ip])
+    os.startfile("steam://rungameid/570//" + urllib.parse.quote(line))
+    say("Steam запускает Доту (если Steam спросит про параметры запуска - разреши; если идёт обновление - дождись)")
+    for _ in range(180): # (did it come up? an update can take a while)
         time.sleep(1)
         if dota_pids(): break
-    if not dota_pids(): fail("Dota не запустилась: открой Steam (он должен быть запущен и войден) и попробуй снова")
+    if not dota_pids():
+        say("Steam не запустил Доту, пробую напрямую")
+        subprocess.Popen([os.path.join(dota, "game", "bin", "win64", "dota2.exe"), "-novid", "-console", "-condebug"] + args + ["+connect", ip])
+        for _ in range(40):
+            time.sleep(1)
+            if dota_pids(): break
+    if not dota_pids(): fail("Dota не запустилась: открой Steam, проверь, что Dota 2 обновлена (запусти её из Steam один раз), и попробуй снова")
     say("Dota запускается. Если что-то не так: пришли хосту " + os.path.join(dota, "game", "dota", "console.log"))
     input("Enter - закрыть это окно") # (it closed by itself before: nothing could be read)
 
