@@ -1,5 +1,6 @@
 package dev.mcdota;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -507,6 +508,25 @@ public final class Progress {
 	private record Trader(String name, String profession, List<String> offers) { }
 	private static final Map<String, double[]> spots = new java.util.concurrent.ConcurrentHashMap<>(); // profession -> x, z (exact), feet y
 
+	// --- the trash bin: a barrel on our fountain's square (Dota places it: MC:SpawnTraders); whatever goes in is gone
+	private static volatile BlockPos trash;
+	private static boolean trashNamed;
+
+	// sync thread
+	public static void trash(BlockPos at) { trash = at; trashNamed = false; }
+
+	private static void trashTick(MinecraftServer server) {
+		BlockPos at = trash;
+		if (at == null) return;
+		var be = server.overworld().getBlockEntity(at);
+		if (!(be instanceof net.minecraft.world.Container c)) return; // (not built yet: queued behind its column)
+		if (!trashNamed) {
+			trashNamed = true;
+			Sync.run(server, String.format("data merge block %d %d %d {CustomName:\"Мусорка\"}", at.getX(), at.getY(), at.getZ()), false);
+		}
+		if (!c.isEmpty()) c.clearContent();
+	}
+
 	// sync thread: Dota placed a trader
 	public static void trader(double x, double z, String profession, double y) { spots.put(profession, new double[] { x, z, y }); }
 
@@ -644,6 +664,7 @@ public final class Progress {
 		numbersTick(server);
 		Sync.fallTick(server);
 		projectiles(server);
+		trashTick(server);
 		if (!server.getPlayerList().getPlayers().isEmpty()) {
 			ServerPlayer pl = server.getPlayerList().getPlayers().get(0);
 			if (noFly && pl.isFallFlying()) pl.stopFallFlying(); // (stunned, hexed: down he comes)

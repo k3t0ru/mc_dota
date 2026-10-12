@@ -2,6 +2,13 @@
 
 Things Claude could not check alone (they need a real person playing), newest first. Strike them out or tell Claude.
 
+## 2026-10-12 (crash while building, beds, chests, trash bin)
+- [ ] Build a house again with a friend connected: no "GetBitRange" crash (fewer entity updates per tick: Steve's
+      stand-in, cracks, fire frames).
+- [ ] Beds and chests (normal, trapped, ender, copper; double chests) look like Minecraft's in Dota, turned the right
+      way; the bed's pillow at the head end.
+- [ ] An open barrel "Мусорка" by the spawn on our fountain: whatever you put in disappears.
+
 ## 2026-10-04 (Dota objects)
 - [ ] Right click on a rune in front of you: picked up, its effect in Minecraft (bounty: emeralds, wisdom: XP).
 - [ ] Outpost / watcher: right click, stay next to it 3 / 1.5 s -> yours. Twin gate: right click, wait 3 s -> other gate.

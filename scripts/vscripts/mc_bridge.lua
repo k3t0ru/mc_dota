@@ -31,9 +31,13 @@ function MCBridge:PuppetGlide()
 	local s = self.steve
 	if s and not s:IsNull() then -- his health on its bar (Dota's players see it; Steve's own client shows no Dota bars)
 		if p:GetMaxHealth() ~= s:GetMaxHealth() then p:SetBaseMaxHealth( s:GetMaxHealth() ) p:SetMaxHealth( s:GetMaxHealth() ) end
-		p:SetHealth( math.max( 1, s:GetHealth() ) )
+		-- (only what changed: every field set every tick is sent to every client, and a lagging host's network
+		-- overflowed - "recv queue overflow", then a crash in Dota's entity decoding)
+		local hp = math.max( 1, s:GetHealth() )
+		if p:GetHealth() ~= hp then p:SetHealth( hp ) end
 	end
-	if ( g - at ):Length() > 400 then p:SetAbsOrigin( g ) else p:SetAbsOrigin( at + ( g - at ) * 0.5 ) end
+	local d = ( g - at ):Length()
+	if d > 400 then p:SetAbsOrigin( g ) elseif d > 1 then p:SetAbsOrigin( at + ( g - at ) * 0.5 ) end
 	if GameRules:GetGameTime() - ( self.puppetHidAt or 0 ) > 1 then -- (its wearables, whenever they show up)
 		self.puppetHidAt = GameRules:GetGameTime()
 		MC:HideAttached( p )
@@ -48,7 +52,8 @@ function MCBridge:PuppetGlide()
 		local pl = s and not s:IsNull() and PlayerResource:GetPlayer( s:GetPlayerOwnerID() )
 		if pl then CustomGameEventManager:Send_ServerToPlayer( pl, "mc_puppet", { e = p:entindex() } ) end
 	end
-	if self.modelFx and self.puppetYaw then
+	if self.modelFx and self.puppetYaw and ( self.modelFx ~= self.fxYawFx or math.abs( self.puppetYaw - ( self.fxYaw or 1e9 ) ) > 0.01 ) then
+		self.fxYawFx, self.fxYaw = self.modelFx, self.puppetYaw
 		ParticleManager:SetParticleControlForward( self.modelFx, 1, MC:DirToDota( -math.sin( self.puppetYaw ), math.cos( self.puppetYaw ) ) )
 	end
 end

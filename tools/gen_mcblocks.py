@@ -282,6 +282,97 @@ for path in sorted(n for n in names if n.startswith("assets/minecraft/blockstate
     if out:
         table[block] = out
 
+
+# --- block entities Minecraft draws in code (no model elements): chests and beds, rebuilt here from their renderers'
+# boxes (ChestModel, BedRenderer) with their entity textures (64x64, Minecraft's box UV layout)
+def mc_box(x0, y0, z0, w, h, d, u, v):
+    """A ModelPart cube: (direction, 4 corners, 4 UVs in texture pixels), Minecraft's own corner/UV order."""
+    x1, y1, z1 = x0 + w, y0 + h, z0 + d
+    c = [(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0), (x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)]
+    f7, f8, f9, f10 = u, u + d, u + d + w, u + d + w + w
+    f11, f12, f13, f14, f15 = u + d + w + d, u + d + w + d + w, v, v + d, v + d + h
+    polys = [("down", (5, 4, 0, 1), (f8, f13, f9, f14)), ("up", (2, 3, 7, 6), (f9, f14, f10, f13)),
+             ("west", (4, 0, 3, 7), (f7, f14, f8, f15)), ("north", (0, 1, 2, 3), (f8, f14, f9, f15)),
+             ("east", (1, 5, 6, 2), (f9, f14, f11, f15)), ("south", (5, 4, 7, 6), (f11, f14, f12, f15))]
+    out = []
+    for dname, idx, (u1, v1, u2, v2) in polys:
+        out.append((dname, [c[i] for i in idx], [(u2, v1), (u1, v1), (u1, v2), (u2, v2)]))
+    return out
+
+
+NL, TABS = chr(10), chr(9) * 7
+
+
+def entity_model(fname, tex, boxes, size=64):
+    """boxes: (box args, transform model point -> block point 0..16). Writes the model like build() does."""
+    mat = texture(tex, None)[0]
+    verts, uvs, quads = [], [], []
+    for args, tf in boxes:
+        x0, y0, z0, w, h, d = args[:6]
+        mid = tf((x0 + w / 2, y0 + h / 2, z0 + d / 2))
+        for _, corners, uv in mc_box(*args):
+            pts = [tf(q) for q in corners]
+            if w == 0 or h == 0 or d == 0:
+                continue
+            a, b, c3 = pts[0], pts[1], pts[2]
+            n = ((b[1] - a[1]) * (c3[2] - a[2]) - (b[2] - a[2]) * (c3[1] - a[1]),
+                 (b[2] - a[2]) * (c3[0] - a[0]) - (b[0] - a[0]) * (c3[2] - a[2]),
+                 (b[0] - a[0]) * (c3[1] - a[1]) - (b[1] - a[1]) * (c3[0] - a[0]))
+            fc = [sum(q[k] for q in pts) / 4 - mid[k] for k in range(3)]
+            order = range(4) if sum(n[k] * fc[k] for k in range(3)) > 0 else range(3, -1, -1)  # outward, counter-clockwise
+            idx = []
+            for i in order:
+                q = pts[i]
+                verts.append(((q[0] - 8) * UNIT, -(q[2] - 8) * UNIT, (q[1] - 8) * UNIT))
+                uvs.append((uv[i][0] / size, 1 - uv[i][1] / size))
+                idx.append(len(verts))
+            quads.append(idx)
+    obj = [f"v {x:.3f} {z:.3f} {-y:.3f}" for x, y, z in verts] + [f"vt {u:.5f} {v:.5f}" for u, v in uvs]
+    obj.append(f"usemtl {mat}")
+    obj += ["f " + " ".join(f"{i}/{i}" for i in q) for q in quads]
+    with open(os.path.join(MDL, fname + ".obj"), "w") as f:
+        f.write(NL.join(obj) + NL)
+    remaps = TABS + f'{{ from = "{mat}.vmat" to = "materials/mcb/{mat}.vmat" }},' + NL
+    with open(os.path.join(MDL, fname + ".vmdl"), "w") as f:
+        f.write(VMDL.replace("@REMAPS@", remaps).replace("@OBJ@", f"models/mcb/{fname}.obj").replace("@HITBOX@", ""))
+    return fname
+
+
+FACING_Y = {"north": 0, "east": 90, "south": 180, "west": 270}  # (models built facing north, like a furnace's)
+turn = lambda q: (16 - q[0], q[1], 16 - q[2])  # ChestModel faces south: turned to face north
+CHESTS = {"chest": "normal", "trapped_chest": "trapped", "ender_chest": "ender"}
+for ox in ("", "exposed_", "weathered_", "oxidized_"):
+    for wx in ("", "waxed_"):
+        CHESTS[f"{wx}{ox}copper_chest"] = "copper" + (f"_{ox[:-1]}" if ox else "")
+for block, t in CHESTS.items():
+    if f"assets/minecraft/textures/entity/chest/{t}.png" not in names or block not in table:
+        continue
+    kinds = {"single": (t, [(1, 0, 1, 14, 10, 14, 0, 19), (1, 9, 1, 14, 5, 14, 0, 0), (7, 7, 15, 2, 4, 1, 0, 0)])}
+    if f"assets/minecraft/textures/entity/chest/{t}_left.png" in names:
+        kinds["left"] = (t + "_left", [(0, 0, 1, 15, 10, 14, 0, 19), (0, 9, 1, 15, 5, 14, 0, 0), (0, 7, 15, 1, 4, 1, 0, 0)])
+        kinds["right"] = (t + "_right", [(1, 0, 1, 15, 10, 14, 0, 19), (1, 9, 1, 15, 5, 14, 0, 0), (15, 7, 15, 1, 4, 1, 0, 0)])
+    out = []
+    for kind, (tx, boxes) in kinds.items():
+        m = entity_model(f"chest_{tx}", f"entity/chest/{tx}", [(b, turn) for b in boxes])
+        for fc, y in FACING_Y.items():
+            out.append((f"facing={fc},type={kind}" if kind != "single" or len(kinds) > 1 else f"facing={fc}", m, 0, y))
+    out.sort(key=lambda e: 0 if "single" in e[0] or "type" not in e[0] else 1)
+    table[block] = out
+lay = lambda q: (q[0], 9 - q[2], q[1])  # BedRenderer lays the 16x16x6 slab flat, its top at 9 px; the head's end north
+for color in ("white", "orange", "magenta", "light_blue", "yellow", "lime", "pink", "gray", "light_gray", "cyan",
+              "purple", "blue", "brown", "green", "red", "black"):
+    block = f"{color}_bed"
+    if block not in table:
+        continue
+    out = []
+    for part, v, legs in (("head", 0, (0, 6)), ("foot", 22, (12, 18))):
+        lz = 0 if part == "head" else 13
+        boxes = [((0, 0, 0, 16, 16, 6, 0, v), lay)] + [((lx, 0, lz, 3, 3, 3, 50, legs[i]), lambda q: q) for i, lx in enumerate((0, 13))]
+        m = entity_model(f"bed_{color}_{part}", f"entity/bed/{color}", boxes)
+        for fc, y in FACING_Y.items():
+            out.append((f"facing={fc},part={part}", m, 0, y))
+    table[block] = out
+
 with open(LUA, "w") as f:
     f.write("-- Generated by tools/gen_mcblocks.py from the local Minecraft jar: blockstate variant -> Dota model + rotation.\n")
     f.write("-- MCB[block] = { { \"prop=value,...\" (all must match the block's state), model, x, y }, ... }\n")

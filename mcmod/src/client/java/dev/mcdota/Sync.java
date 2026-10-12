@@ -446,6 +446,7 @@ public final class Sync {
 					// from the attacker's stand-in, so a raised shield facing it blocks the hit (no stand-in: plain damage)
 					case "dmg" -> Progress.damage(server, Float.parseFloat(p[1]), p.length > 2 ? p[2] : "-1", p.length > 3 && p[3].equals("spell"));
 					case "sbused" -> Progress.spellBlockUsed(server);
+					case "trash" -> Progress.trash(new BlockPos(Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3])));
 					case "loot" -> Progress.loot(server, p);
 					case "dead" -> Progress.deadFor(server, Integer.parseInt(p[1]), Integer.parseInt(p[2]));
 					case "respawn" -> Progress.respawn(server);

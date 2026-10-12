@@ -710,8 +710,11 @@ function MC:Animate( p, model )
 			if q:IsNull() then MC.animated[ q ] = nil
 			else
 				local k = t % MCB_ANIM[ q.mc_anim ] -- all in step, like Minecraft's (one animated texture)
-				q:SetModel( "models/mcb/" .. q.mc_anim .. ( k > 0 and "__f" .. k or "" ) .. ".vmdl" )
-				q:SetModelScale( GRID / 128 )
+				if q.mc_frame ~= k then
+					q.mc_frame = k
+					q:SetModel( "models/mcb/" .. q.mc_anim .. ( k > 0 and "__f" .. k or "" ) .. ".vmdl" )
+					q:SetModelScale( GRID / 128 )
+				end
 			end
 		end
 		return 1 / 12
@@ -973,6 +976,20 @@ function MC:SpawnTraders()
 			MC:Sign( sx2, base, sz2, prof .. "_goods", yaw, st.F )
 		end
 	end
+	-- the trash bin: an open barrel by the spawn; Minecraft empties it every tick (Progress.trash)
+	for _, c in ipairs( { { 5, 2 }, { 3, 4 }, { 7, 4 }, { 5, 6 } } ) do
+		local x, z = rel( c[1], c[2] )
+		if free( x, z ) and not taken[ x .. "," .. z ] then
+			local y = ground( x, z )
+			MC.protected[ x .. "," .. z ] = true
+			MCBridge:Send( string.format( "block %d %d %d barrel[facing=up]", x, y, z ) )
+			MC:ShowBlock( x, y, z, "barrel", true, "facing=up,open=false" )
+			MC:ColumnChanged( x, z )
+			MCBridge:Send( string.format( "trash %d %d %d", x, y, z ) )
+			print( string.format( "[mc] trash bin at %d %d %d", x, y, z ) )
+			break
+		end
+	end
 	print( string.format( "[mc] market: shop %d,%d, red stall %d,%d, blue stall %d,%d, spawn %d,%d", sx, sz, rx, rz, bx, bz, MC.spawnX, MC.spawnZ ) )
 	-- Dota's shops are trigger_shop volumes (no API tells their type): the two secret shops are the ones well away from
 	-- both fountains (the base shops stand by them); Radiant's is the one nearer our spawn. A map with fewer: what there is.
@@ -1110,23 +1127,29 @@ end
 
 -- mining cracks (stage 0..9; anything else removes them): a slightly bigger cracked shell over the block
 function MC:Crack( bx, by, bz, stage )
+	local at = bx .. "," .. by .. "," .. bz
+	if stage >= 0 and stage <= 9 and MC.crack and not MC.crack:IsNull() and MC.crackAt == at then
+		MC.crack:SetModel( ( MC.crackTree and "models/mc/tree_crack_" or "models/mc/crack_" ) .. stage .. ".vmdl" )
+		if not MC.crackTree then MC.crack:SetModelScale( GRID / 128 * 1.02 ) end
+		return
+	end
 	if MC.crack and not MC.crack:IsNull() then MC.crack:RemoveSelf() end
-	MC.crack = nil
-	if stage < 0 or stage > 9 then return end
+	MC.crack, MC.crackAt, MC.crackTree = nil, at, nil
+	if stage < 0 or stage > 9 then MC.crackAt = nil return end
 	-- a tree's log column being chopped: the cracks wrap the Dota tree's own trunk (tools/gen_tree_crack.py)
 	local tree = MC.treeAt and MC.treeAt[ bx .. "," .. bz ]
 	if tree and not tree:IsNull() and tree:IsStanding() then
 		local p = tree:GetAbsOrigin()
 		MC.crack = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/tree_crack_" .. stage .. ".vmdl",
 			origin = string.format( "%f %f %f", p.x, p.y, GetGroundHeight( p, nil ) ) } )
+		MC.crackTree = true
 		return
 	end
 	if not MC.props[ bx .. "," .. by .. "," .. bz ] then return end
 	local pos = MC:BlockPos( bx, by, bz ) - Vector( 0, 0, 0.5 )
 	MC.crack = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/crack_" .. stage .. ".vmdl",
 		origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ), angles = string.format( "0 %f 0", GRID_ROT ) } )
-	MC.crack:SetModelScale( ( GRID + 1 ) / 128 ) -- (the crack cube is 128 units: on the block, a hair bigger)
-	MC.crack:SetModelScale( GRID / 128 * 1.02 )
+	MC.crack:SetModelScale( GRID / 128 * 1.02 ) -- (the crack cube is 128 units: on the block, a hair bigger)
 end
 
 -- cracks on a block other than the one Steve mines (MC:Crack): a Dota hero's blows, a falling build's (stage -1: none)
@@ -1134,6 +1157,10 @@ MC.cracks = {}
 function MC:CrackAt( bx, by, bz, stage )
 	local key = bx .. "," .. by .. "," .. bz
 	local c = MC.cracks[ key ]
+	if c and not c:IsNull() and stage >= 0 and stage <= 9 and MC.props[ key ] then -- (the same prop, the next stage's model)
+		if c.mc_stage ~= stage then c.mc_stage = stage c:SetModel( "models/mc/crack_" .. stage .. ".vmdl" ) c:SetModelScale( ( GRID + 1 ) / 128 ) end
+		return
+	end
 	if c and not c:IsNull() then c:RemoveSelf() end
 	MC.cracks[ key ] = nil
 	if stage < 0 or stage > 9 or not MC.props[ key ] then return end
@@ -1141,6 +1168,7 @@ function MC:CrackAt( bx, by, bz, stage )
 	MC.cracks[ key ] = SpawnEntityFromTableSynchronous( "prop_dynamic", { model = "models/mc/crack_" .. stage .. ".vmdl",
 		origin = string.format( "%f %f %f", pos.x, pos.y, pos.z ), angles = string.format( "0 %f 0", GRID_ROT ) } )
 	MC.cracks[ key ]:SetModelScale( ( GRID + 1 ) / 128 )
+	MC.cracks[ key ].mc_stage = stage
 end
 
 function MC:HideBlock( bx, by, bz )
