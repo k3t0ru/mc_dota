@@ -444,7 +444,19 @@ def player(cfg, dota):
         u = ctypes.windll.user32
         u.SetProcessDPIAware() # (the real pixels, not the scaled ones)
         args += ["-w", str(u.GetSystemMetrics(0)), "-h", str(u.GetSystemMetrics(1))]
+    # a Dota left running from before (a crash, a hang) makes a new one quit at once: closed first
+    if dota_pids():
+        say("закрываю Доту, оставшуюся с прошлого раза")
+        kill(dota_pids())
+        for _ in range(30):
+            if not dota_pids(): break
+            time.sleep(1)
+        if dota_pids(): fail("старая Dota не закрывается: закрой dota2.exe в диспетчере задач (или перезагрузи ПК) и запусти снова")
     subprocess.Popen([os.path.join(dota, "game", "bin", "win64", "dota2.exe"), "-novid", "-console", "-condebug"] + args + ["+connect", ip])
+    for _ in range(40): # (did it come up?)
+        time.sleep(1)
+        if dota_pids(): break
+    if not dota_pids(): fail("Dota не запустилась: открой Steam (он должен быть запущен и войден) и попробуй снова")
     say("Dota запускается. Если что-то не так: пришли хосту " + os.path.join(dota, "game", "dota", "console.log"))
     input("Enter - закрыть это окно") # (it closed by itself before: nothing could be read)
 
